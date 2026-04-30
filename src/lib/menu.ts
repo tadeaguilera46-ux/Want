@@ -10,18 +10,14 @@ import { getDb } from "./firebase";
 
 const db = getDb();
 
-// 🔥 SOLO PARA LÓGICA INTERNA
 export type MenuType = "food" | "drinks";
 
-// 🔥 CATEGORY AHORA ES LIBRE
 export type MenuItem = {
   id: string;
   name: string;
   price: number;
-
-  type: MenuType;        // 👈 cocina/barra
-  category: string;      // 👈 pizzas, postres, etc
-
+  type?: MenuType;
+  category: string;
   description?: string;
   image?: string;
   active: boolean;
