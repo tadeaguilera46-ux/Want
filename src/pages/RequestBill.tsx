@@ -8,7 +8,7 @@ import {
   Users,
   ChevronRight,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { getDb } from "../lib/firebase";
 import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
 import { pedirCuenta } from "../lib/bill";
@@ -45,16 +45,30 @@ const RequestBill = () => {
     location,
   });
 
+  const tableNumber = Number(table);
+
   const [selected, setSelected] = useState<MetodoPago | null>(null);
   const [splitBill, setSplitBill] = useState(false);
   const [pedidos, setPedidos] = useState<PedidoRecord[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [loadingMesa, setLoadingMesa] = useState(true);
+  const [loadingPedidos, setLoadingPedidos] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!restaurantId || !Number.isInteger(tableNumber) || tableNumber <= 0) {
+      setSessionId(null);
+      setPedidos([]);
+      setLoadingMesa(false);
+      setError("Mesa o restaurante inválido.");
+      return;
+    }
+
+    setLoadingMesa(true);
+
     const mesaUnsubscribe = onSnapshot(
-      doc(db, "restaurants", restaurantId, "mesas", String(table)),
+      doc(db, "restaurants", restaurantId, "mesas", String(tableNumber)),
       (snapshot) => {
         const data = snapshot.data();
 
@@ -64,43 +78,67 @@ const RequestBill = () => {
             : null;
 
         setSessionId(activeSessionId);
+        setLoadingMesa(false);
 
         if (!activeSessionId) {
           setPedidos([]);
         }
+      },
+      (err) => {
+        console.error("Error leyendo mesa:", err);
+        setError("No se pudo leer la mesa.");
+        setLoadingMesa(false);
       }
     );
 
     return () => mesaUnsubscribe();
-  }, [restaurantId, table]);
+  }, [restaurantId, tableNumber]);
 
   useEffect(() => {
     if (!sessionId) {
+      setPedidos([]);
+      setLoadingPedidos(false);
       return;
     }
 
+    setLoadingPedidos(true);
+
     const q = query(
       collection(db, "restaurants", restaurantId, "pedidos"),
-      where("mesa", "==", Number(table))
+      where("sessionId", "==", sessionId)
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((document) => ({
-        id: document.id,
-        ...document.data(),
-      })) as PedidoRecord[];
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const data = snapshot.docs.map((document) => ({
+          id: document.id,
+          ...document.data(),
+        })) as PedidoRecord[];
 
-      const pedidosFiltrados = data.filter(
-        (pedido) => pedido.sessionId === sessionId
-      );
+        const pedidosFiltrados = data.filter(
+          (pedido) => String(pedido.mesa) === String(tableNumber)
+        );
 
-      setPedidos(pedidosFiltrados);
-    });
+        setPedidos(pedidosFiltrados);
+        setLoadingPedidos(false);
+      },
+      (err) => {
+        console.error("Error leyendo pedidos:", err);
+        setError("No se pudieron cargar los pedidos de la mesa.");
+        setLoadingPedidos(false);
+      }
+    );
 
     return () => unsubscribe();
-  }, [restaurantId, sessionId, table]);
+  }, [restaurantId, sessionId, tableNumber]);
 
-  const total = pedidos.reduce((sum, pedido) => sum + pedido.total, 0);
+  const total = useMemo(() => {
+    return pedidos.reduce((sum, pedido) => {
+      const pedidoTotal = Number(pedido.total || 0);
+      return sum + (Number.isFinite(pedidoTotal) ? pedidoTotal : 0);
+    }, 0);
+  }, [pedidos]);
 
   const handleRequestBill = async () => {
     if (!selected || !sessionId || isSubmitting) return;
@@ -111,7 +149,7 @@ const RequestBill = () => {
 
       await pedirCuenta({
         restaurantId,
-        mesa: Number(table),
+        mesa: tableNumber,
         metodo: selected,
         total,
         splitBill,
@@ -127,6 +165,9 @@ const RequestBill = () => {
       setIsSubmitting(false);
     }
   };
+
+  const isLoading = loadingMesa || loadingPedidos;
+  const canSubmit = !!selected && !!sessionId && !isSubmitting && !isLoading;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
@@ -171,13 +212,19 @@ const RequestBill = () => {
             </p>
 
             <p className="mt-2 text-4xl font-black tracking-tight text-slate-950">
-              {formatPriceARS(total)}
+              {isLoading ? "..." : formatPriceARS(total)}
             </p>
 
             <p className="mt-2 text-sm text-slate-500">
-              Mesa {table}
+              {pedidos.length} pedido(s) cargado(s) · Mesa {table}
             </p>
           </section>
+
+          {sessionId && !isLoading && total <= 0 && (
+            <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+              Todavía no encontramos consumos cargados para esta sesión.
+            </div>
+          )}
 
           <section className="mb-5">
             <div className="mb-3">
@@ -250,7 +297,7 @@ const RequestBill = () => {
             </label>
           </section>
 
-          {!sessionId && (
+          {!sessionId && !loadingMesa && (
             <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
               No encontramos una sesión activa para esta mesa.
             </div>
@@ -262,13 +309,11 @@ const RequestBill = () => {
         <div className="mx-auto max-w-lg">
           <motion.button
             whileTap={{ scale: isSubmitting ? 1 : 0.985 }}
-            disabled={!selected || !sessionId || isSubmitting}
+            disabled={!canSubmit}
             onClick={handleRequestBill}
             className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-base font-black text-primary-foreground shadow-want disabled:opacity-40"
           >
-            <span>
-              {isSubmitting ? "Solicitando..." : "Solicitar cuenta"}
-            </span>
+            <span>{isSubmitting ? "Solicitando..." : "Solicitar cuenta"}</span>
             {!isSubmitting && <ChevronRight size={18} />}
           </motion.button>
         </div>
