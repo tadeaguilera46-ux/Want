@@ -1,9 +1,13 @@
 import { getDb } from "../lib/firebase";
 import {
+  collection,
   doc,
   getDoc,
+  getDocs,
+  query,
   runTransaction,
   serverTimestamp,
+  where,
 } from "firebase/firestore";
 import { mesaDocRef } from "./mesas";
 import { sessionDocRef } from "./sessions";
@@ -73,6 +77,55 @@ const validateCuentaInput = (data: CuentaInput) => {
   assertValidTotal(data.total);
 };
 
+const getActiveSessionIdForMesa = async (restaurantId: string, mesa: number) => {
+  const mesaSnapshot = await getDoc(mesaDocRef(restaurantId, mesa));
+
+  if (!mesaSnapshot.exists()) {
+    throw new Error("La mesa no existe");
+  }
+
+  const mesaData = mesaSnapshot.data();
+  const mesaEstado = mesaData?.estado;
+  const activeSessionId = mesaData?.activeSessionId;
+
+  if (mesaEstado !== "occupied") {
+    throw new Error("La mesa no está ocupada");
+  }
+
+  if (typeof activeSessionId !== "string" || !activeSessionId.trim()) {
+    throw new Error("La mesa no tiene una sesión activa");
+  }
+
+  return normalizeSessionId(activeSessionId);
+};
+
+const calcularTotalRealSesion = async ({
+  restaurantId,
+  mesa,
+  sessionId,
+}: {
+  restaurantId: string;
+  mesa: number;
+  sessionId: string;
+}) => {
+  const pedidosRef = collection(db, "restaurants", restaurantId, "pedidos");
+
+  const pedidosQuery = query(pedidosRef, where("sessionId", "==", sessionId));
+
+  const snapshot = await getDocs(pedidosQuery);
+
+  const pedidosSesion = snapshot.docs
+    .map((docSnap) => docSnap.data())
+    .filter((pedido) => String(pedido.mesa) === String(mesa));
+
+  const total = pedidosSesion.reduce((acc, pedido) => {
+    const pedidoTotal = Number(pedido.total || 0);
+    return acc + (Number.isFinite(pedidoTotal) ? pedidoTotal : 0);
+  }, 0);
+
+  return total;
+};
+
 export const getCuentaBySessionId = async (
   restaurantId: string,
   sessionId: string
@@ -100,6 +153,14 @@ export const pedirCuenta = async (data: CuentaInput) => {
   const restaurantId = normalizeRestaurantId(data.restaurantId);
   const mesa = data.mesa;
 
+  const activeSessionId = await getActiveSessionIdForMesa(restaurantId, mesa);
+
+  const totalReal = await calcularTotalRealSesion({
+    restaurantId,
+    mesa,
+    sessionId: activeSessionId,
+  });
+
   let cuentaId = "";
 
   await runTransaction(db, async (transaction) => {
@@ -112,24 +173,23 @@ export const pedirCuenta = async (data: CuentaInput) => {
 
     const mesaData = mesaSnapshot.data();
     const mesaEstado = mesaData?.estado;
-    const activeSessionId = mesaData?.activeSessionId;
+    const currentActiveSessionId = mesaData?.activeSessionId;
     const now = serverTimestamp();
 
     if (mesaEstado !== "occupied") {
       throw new Error("La mesa no está ocupada");
     }
 
-    if (typeof activeSessionId !== "string" || !activeSessionId.trim()) {
-      throw new Error("La mesa no tiene una sesión activa");
+    if (currentActiveSessionId !== activeSessionId) {
+      throw new Error("La sesión de la mesa cambió. Volvé a pedir la cuenta.");
     }
 
-    const normalizedSessionId = normalizeSessionId(activeSessionId);
-    const sessionRef = sessionDocRef(restaurantId, normalizedSessionId);
+    const sessionRef = sessionDocRef(restaurantId, activeSessionId);
     const sessionSnapshot = await transaction.get(sessionRef);
 
     if (!sessionSnapshot.exists()) {
       throw new Error(
-        `Inconsistencia: la mesa ${mesa} referencia una sesión inexistente (${normalizedSessionId})`
+        `Inconsistencia: la mesa ${mesa} referencia una sesión inexistente (${activeSessionId})`
       );
     }
 
@@ -137,39 +197,36 @@ export const pedirCuenta = async (data: CuentaInput) => {
 
     if (sessionData?.status !== "active") {
       throw new Error(
-        `Inconsistencia: la mesa ${mesa} referencia una sesión no activa (${normalizedSessionId})`
+        `Inconsistencia: la mesa ${mesa} referencia una sesión no activa (${activeSessionId})`
       );
     }
 
     if (sessionData?.tableNumber !== mesa) {
       throw new Error(
-        `Inconsistencia: la sesión ${normalizedSessionId} pertenece a otra mesa`
+        `Inconsistencia: la sesión ${activeSessionId} pertenece a otra mesa`
       );
     }
 
-    const ref = cuentaDocRef(restaurantId, normalizedSessionId);
+    const ref = cuentaDocRef(restaurantId, activeSessionId);
     const cuentaSnapshot = await transaction.get(ref);
 
-    cuentaId = normalizedSessionId;
+    cuentaId = activeSessionId;
 
     if (cuentaSnapshot.exists()) {
       const cuentaData = cuentaSnapshot.data() as Omit<CuentaRecord, "id">;
 
       if (
         typeof cuentaData.sessionId === "string" &&
-        cuentaData.sessionId !== normalizedSessionId
+        cuentaData.sessionId !== activeSessionId
       ) {
         throw new Error(
-          `Inconsistencia: la cuenta ${normalizedSessionId} no coincide con su sessionId`
+          `Inconsistencia: la cuenta ${activeSessionId} no coincide con su sessionId`
         );
       }
 
-      if (
-        typeof cuentaData.mesa === "number" &&
-        cuentaData.mesa !== mesa
-      ) {
+      if (typeof cuentaData.mesa === "number" && cuentaData.mesa !== mesa) {
         throw new Error(
-          `Inconsistencia: la cuenta ${normalizedSessionId} pertenece a otra mesa`
+          `Inconsistencia: la cuenta ${activeSessionId} pertenece a otra mesa`
         );
       }
 
@@ -184,9 +241,9 @@ export const pedirCuenta = async (data: CuentaInput) => {
           restaurantId,
           mesa,
           metodo: data.metodo,
-          total: data.total,
+          total: totalReal,
           splitBill: data.splitBill,
-          sessionId: normalizedSessionId,
+          sessionId: activeSessionId,
           estado: nuevoEstado,
           createdAt: cuentaData.createdAt ?? now,
           updatedAt: now,
@@ -201,9 +258,9 @@ export const pedirCuenta = async (data: CuentaInput) => {
       restaurantId,
       mesa,
       metodo: data.metodo,
-      total: data.total,
+      total: totalReal,
       splitBill: data.splitBill,
-      sessionId: normalizedSessionId,
+      sessionId: activeSessionId,
       estado: "pendiente" as EstadoCuenta,
       createdAt: now,
       updatedAt: now,
