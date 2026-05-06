@@ -1,13 +1,83 @@
+import { useEffect } from "react";
 import { CreditCard, MessageCircleWarning } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { doc, onSnapshot } from "firebase/firestore";
 
-const WHATSAPP_NUMBER = "+543546403338";
+import { getDb } from "@/lib/firebase";
+
+const db = getDb();
+
+const WHATSAPP_NUMBER = "543546403338";
+
+type SubscriptionStatus = "trial" | "active" | "past_due" | "blocked";
+
+type RestaurantData = {
+  subscriptionStatus?: SubscriptionStatus;
+  nextBillingDate?: {
+    toDate?: () => Date;
+  };
+  trialEndsAt?: {
+    toDate?: () => Date;
+  };
+};
 
 const PaymentRequired = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const restaurantId = searchParams.get("restaurantId") || "mi-restaurante";
+
+  useEffect(() => {
+    if (!restaurantId) return;
+
+    const restaurantRef = doc(db, "restaurants", restaurantId);
+
+    const unsubscribe = onSnapshot(
+      restaurantRef,
+      (restaurantSnap) => {
+        if (!restaurantSnap.exists()) return;
+
+        const data = restaurantSnap.data() as RestaurantData;
+        const status = data.subscriptionStatus || "trial";
+        const now = new Date();
+
+        if (status === "blocked") return;
+
+        if (status === "trial") {
+          const trialEndsAt = data.trialEndsAt?.toDate?.();
+
+          if (trialEndsAt && trialEndsAt < now) return;
+
+          navigate(`/staff/admin?restaurantId=${restaurantId}`, {
+            replace: true,
+          });
+          return;
+        }
+
+        if (status === "active") {
+          const nextBillingDate = data.nextBillingDate?.toDate?.();
+
+          if (nextBillingDate && nextBillingDate < now) return;
+
+          navigate(`/staff/admin?restaurantId=${restaurantId}`, {
+            replace: true,
+          });
+          return;
+        }
+
+        if (status === "past_due") {
+          navigate(`/staff/admin?restaurantId=${restaurantId}`, {
+            replace: true,
+          });
+        }
+      },
+      (error) => {
+        console.error("Payment required listener error:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [navigate, restaurantId]);
 
   const handleRetryAccess = () => {
     navigate(`/staff/admin?restaurantId=${restaurantId}`, { replace: true });
@@ -59,7 +129,9 @@ const PaymentRequired = () => {
 
         <div className="mt-7 space-y-3">
           <a
-            href={`https://wa.me/${WHATSAPP_NUMBER}?text=Hola,%20quiero%20reactivar%20mi%20suscripci%C3%B3n%20de%20WANT.%20Restaurante:%20${restaurantId}`}
+            href={`https://wa.me/${WHATSAPP_NUMBER}?text=Hola,%20quiero%20reactivar%20mi%20suscripci%C3%B3n%20de%20WANT.%20Restaurante:%20${encodeURIComponent(
+              restaurantId
+            )}`}
             target="_blank"
             rel="noreferrer"
             className="flex h-14 w-full items-center justify-center rounded-2xl bg-[#6B4423] text-sm font-extrabold text-white transition-all hover:scale-[1.01] active:scale-[0.99]"
