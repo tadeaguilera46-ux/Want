@@ -24,6 +24,9 @@ const StaffLogin = lazy(() => import("./pages/StaffLogin"));
 const StaffRoute = lazy(() => import("./components/StaffRoute"));
 const AdminAnalytics = lazy(() => import("./pages/AdminAnalytics"));
 
+// Super Admin
+const SuperAdmin = lazy(() => import("./pages/SuperAdmin"));
+
 // Otros
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -108,6 +111,9 @@ const App = () => (
               </ClientApp>
             }
           />
+
+          {/* Super Admin */}
+          <Route path="/super-admin" element={<SuperAdmin />} />
 
           {/* Staff */}
           <Route path="/staff/login" element={<StaffLogin />} />
