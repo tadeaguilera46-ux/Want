@@ -22,6 +22,7 @@ import {
   Copy,
 } from "lucide-react";
 import { getDb } from "../lib/firebase";
+import SuperAdminBillingPanel from "../components/SuperAdminBillingPanel";
 import { createStaffMember } from "../lib/staff";
 
 const db = getDb();
@@ -196,10 +197,21 @@ const SuperAdmin = () => {
         id: cleanRestaurantId,
         name: cleanName,
         active: true,
+
+        plan: "pro",
+        subscriptionStatus: "trial",
+        setupFeePaid: false,
+        monthlyPrice: 100000,
+        setupPrice: 400000,
+        billingDay: 10,
+        nextBillingDate: null,
+        trialEndsAt: null,
+        blockedAt: null,
+
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-
+      
       await createStaffMember({
         restaurantId: cleanRestaurantId,
         email: cleanOwnerEmail,
@@ -353,6 +365,10 @@ const SuperAdmin = () => {
             {message}
           </div>
         )}
+        <SuperAdminBillingPanel
+          restaurants={restaurants}
+          onMessage={setMessage}
+        />
 
         <section className="mb-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-start gap-3">
