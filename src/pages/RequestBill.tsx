@@ -173,20 +173,33 @@ const RequestBill = () => {
 
     pedidos.forEach((pedido) => {
       const items = getPedidoItems(pedido);
+      const pedidoTotal = Number(pedido.total || 0);
+      const safePedidoTotal =
+        Number.isFinite(pedidoTotal) && pedidoTotal > 0 ? pedidoTotal : 0;
 
       items.forEach((item, index) => {
         const name = String(item.nombre || item.name || "Producto");
         const quantity = Number(item.cantidad || item.quantity || 1);
-        const unitPrice = Number(item.precio || item.price || 0);
         const note = String(item.observacion || item.note || "").trim();
+
+        const rawUnitPrice = Number(item.precio || item.price || 0);
 
         const safeQuantity =
           Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+
+        const resolvedUnitPrice =
+          Number.isFinite(rawUnitPrice) && rawUnitPrice > 0
+            ? rawUnitPrice
+            : items.length === 1 && safePedidoTotal > 0
+              ? safePedidoTotal / safeQuantity
+              : 0;
+
         const safeUnitPrice =
-          Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice : 0;
+          Number.isFinite(resolvedUnitPrice) && resolvedUnitPrice > 0
+            ? resolvedUnitPrice
+            : 0;
 
         const key = `${name}-${safeUnitPrice}-${note || "sin-nota"}`;
-
         const existing = grouped.get(key);
 
         if (existing) {
