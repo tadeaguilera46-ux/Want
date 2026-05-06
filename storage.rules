@@ -1,0 +1,22 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    match /restaurants/{restaurantId}/branding/{fileName} {
+      allow read: if true;
+
+      allow write: if isSignedIn();
+    }
+
+    match /restaurants/{restaurantId}/menu/{fileName} {
+      allow read: if true;
+
+      allow write: if isSignedIn();
+    }
+  }
+}

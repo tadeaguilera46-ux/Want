@@ -1,10 +1,41 @@
-import { useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useState } from "react";
 import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
-import { Image, Paintbrush, Save } from "lucide-react";
+import {
+  getDownloadURL,
+  getStorage,
+  ref,
+  uploadBytesResumable,
+} from "firebase/storage";
+import { Image, Loader2, Paintbrush, Save, Upload } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import { useRestaurantConfig } from "../lib/restaurant-config";
 
 const db = getDb();
+const storage = getStorage();
+
+type UploadTarget = "logo" | "cover";
+
+const MAX_LOGO_SIZE_MB = 3;
+const MAX_COVER_SIZE_MB = 5;
+
+function getFileExtension(file: File) {
+  const parts = file.name.split(".");
+  return parts.length > 1 ? parts.pop()?.toLowerCase() || "jpg" : "jpg";
+}
+
+function validateImageFile(file: File, maxSizeMb: number) {
+  if (!file.type.startsWith("image/")) {
+    return "El archivo debe ser una imagen.";
+  }
+
+  const maxBytes = maxSizeMb * 1024 * 1024;
+
+  if (file.size > maxBytes) {
+    return `La imagen no puede superar los ${maxSizeMb}MB.`;
+  }
+
+  return "";
+}
 
 export function RestaurantBrandingPanel({
   restaurantId,
@@ -19,7 +50,12 @@ export function RestaurantBrandingPanel({
   const [primaryColor, setPrimaryColor] = useState("#000000");
   const [secondaryColor, setSecondaryColor] = useState("#FFFFFF");
   const [welcomeMessage, setWelcomeMessage] = useState("");
+
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [logoProgress, setLogoProgress] = useState(0);
+  const [coverProgress, setCoverProgress] = useState(0);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
@@ -38,6 +74,103 @@ export function RestaurantBrandingPanel({
 
     return () => unsub();
   }, [restaurantId]);
+
+  const handleImageUpload = async (
+    event: ChangeEvent<HTMLInputElement>,
+    target: UploadTarget
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file || !restaurantId) return;
+
+    const maxSize = target === "logo" ? MAX_LOGO_SIZE_MB : MAX_COVER_SIZE_MB;
+    const validationError = validateImageFile(file, maxSize);
+
+    if (validationError) {
+      setMessage(validationError);
+      return;
+    }
+
+    try {
+      setMessage("");
+
+      if (target === "logo") {
+        setUploadingLogo(true);
+        setLogoProgress(0);
+      } else {
+        setUploadingCover(true);
+        setCoverProgress(0);
+      }
+
+      const extension = getFileExtension(file);
+      const fileName = `${target}-${Date.now()}.${extension}`;
+      const storagePath = `restaurants/${restaurantId}/branding/${fileName}`;
+      const imageRef = ref(storage, storagePath);
+
+      const uploadTask = uploadBytesResumable(imageRef, file, {
+        contentType: file.type,
+        customMetadata: {
+          restaurantId,
+          type: target,
+        },
+      });
+
+      const downloadUrl = await new Promise<string>((resolve, reject) => {
+        uploadTask.on(
+          "state_changed",
+          (snapshot) => {
+            const progress = Math.round(
+              (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+            );
+
+            if (target === "logo") {
+              setLogoProgress(progress);
+            } else {
+              setCoverProgress(progress);
+            }
+          },
+          reject,
+          async () => {
+            const url = await getDownloadURL(uploadTask.snapshot.ref);
+            resolve(url);
+          }
+        );
+      });
+
+      if (target === "logo") {
+        setLogoUrl(downloadUrl);
+      } else {
+        setCoverUrl(downloadUrl);
+      }
+
+      await setDoc(
+        doc(db, "restaurants", restaurantId),
+        {
+          [target === "logo" ? "logoUrl" : "coverUrl"]: downloadUrl,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      setMessage(
+        target === "logo"
+          ? "Logo subido correctamente."
+          : "Portada subida correctamente."
+      );
+    } catch (error) {
+      console.error("Error subiendo imagen:", error);
+      setMessage("No se pudo subir la imagen.");
+    } finally {
+      if (target === "logo") {
+        setUploadingLogo(false);
+        setLogoProgress(0);
+      } else {
+        setUploadingCover(false);
+        setCoverProgress(0);
+      }
+    }
+  };
 
   const handleSave = async () => {
     try {
@@ -93,19 +226,77 @@ export function RestaurantBrandingPanel({
             className="h-11 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
           />
 
-          <input
-            placeholder="URL del logo"
-            value={logoUrl}
-            onChange={(e) => setLogoUrl(e.target.value)}
-            className="h-11 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
-          />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="cursor-pointer rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-4 transition hover:bg-zinc-100">
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={uploadingLogo}
+                onChange={(event) => handleImageUpload(event, "logo")}
+              />
 
-          <input
-            placeholder="URL de portada"
-            value={coverUrl}
-            onChange={(e) => setCoverUrl(e.target.value)}
-            className="h-11 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
-          />
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-zinc-700 shadow-sm">
+                  {uploadingLogo ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <Upload size={18} />
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-zinc-950">
+                    Subir logo
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    PNG, JPG o WEBP · máx. {MAX_LOGO_SIZE_MB}MB
+                  </p>
+                </div>
+              </div>
+
+              {uploadingLogo && (
+                <p className="mt-3 text-xs font-semibold text-zinc-600">
+                  Subiendo {logoProgress}%
+                </p>
+              )}
+            </label>
+
+            <label className="cursor-pointer rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-4 transition hover:bg-zinc-100">
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                disabled={uploadingCover}
+                onChange={(event) => handleImageUpload(event, "cover")}
+              />
+
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-zinc-700 shadow-sm">
+                  {uploadingCover ? (
+                    <Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <Upload size={18} />
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-sm font-bold text-zinc-950">
+                    Subir portada
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    PNG, JPG o WEBP · máx. {MAX_COVER_SIZE_MB}MB
+                  </p>
+                </div>
+              </div>
+
+              {uploadingCover && (
+                <p className="mt-3 text-xs font-semibold text-zinc-600">
+                  Subiendo {coverProgress}%
+                </p>
+              )}
+            </label>
+          </div>
 
           <textarea
             placeholder="Mensaje de bienvenida"
@@ -158,7 +349,7 @@ export function RestaurantBrandingPanel({
           <button
             type="button"
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || uploadingLogo || uploadingCover}
             className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-5 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
           >
             <Save size={16} />
@@ -178,7 +369,7 @@ export function RestaurantBrandingPanel({
             <div className="aspect-[16/6] overflow-hidden bg-zinc-100">
               <img
                 src={coverUrl}
-                alt={name}
+                alt={name || "Portada del restaurante"}
                 className="h-full w-full object-cover"
               />
             </div>
@@ -194,7 +385,7 @@ export function RestaurantBrandingPanel({
                 <div className="h-14 w-14 overflow-hidden rounded-2xl bg-white">
                   <img
                     src={logoUrl}
-                    alt={name}
+                    alt={name || "Logo del restaurante"}
                     className="h-full w-full object-cover"
                   />
                 </div>
