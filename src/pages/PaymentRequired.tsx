@@ -1,6 +1,18 @@
 import { CreditCard, MessageCircleWarning } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+
+const WHATSAPP_NUMBER = "+543546403338";
 
 const PaymentRequired = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  const restaurantId = searchParams.get("restaurantId") || "mi-restaurante";
+
+  const handleRetryAccess = () => {
+    navigate(`/staff/admin?restaurantId=${restaurantId}`, { replace: true });
+  };
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#f6f4ef] px-4">
       <div className="w-full max-w-md rounded-[32px] border border-black/5 bg-white p-8 shadow-[0_18px_50px_-18px_rgba(0,0,0,0.22)]">
@@ -12,7 +24,7 @@ const PaymentRequired = () => {
 
         <div className="mt-6 text-center">
           <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-zinc-500">
-            WANT RESTAURANT SaaS
+            WANT RESTAURANT SAAS
           </p>
 
           <h1 className="mt-3 text-3xl font-black tracking-tight text-zinc-950">
@@ -47,7 +59,7 @@ const PaymentRequired = () => {
 
         <div className="mt-7 space-y-3">
           <a
-            href="https://wa.me/5493510000000"
+            href={`https://wa.me/${WHATSAPP_NUMBER}?text=Hola,%20quiero%20reactivar%20mi%20suscripci%C3%B3n%20de%20WANT.%20Restaurante:%20${restaurantId}`}
             target="_blank"
             rel="noreferrer"
             className="flex h-14 w-full items-center justify-center rounded-2xl bg-[#6B4423] text-sm font-extrabold text-white transition-all hover:scale-[1.01] active:scale-[0.99]"
@@ -56,8 +68,9 @@ const PaymentRequired = () => {
           </a>
 
           <button
+            type="button"
+            onClick={handleRetryAccess}
             className="h-12 w-full rounded-2xl border border-black/10 bg-white text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
-            onClick={() => window.location.reload()}
           >
             Reintentar acceso
           </button>
