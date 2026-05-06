@@ -89,7 +89,8 @@ const Menu = () => {
 
   const primaryColor = config.primaryColor || "#000000";
   const secondaryColor = config.secondaryColor || "#FFFFFF";
-  const pageBackground = secondaryColor === "#FFFFFF" ? "#f6f4ef" : secondaryColor;
+  const pageBackground =
+    secondaryColor === "#FFFFFF" ? "#f6f4ef" : secondaryColor;
 
   const restaurantName = config.name || "Restaurante";
   const logoUrl = config.logoUrl || "";
@@ -275,7 +276,7 @@ const Menu = () => {
           className="sticky top-0 z-40 border-b border-black/5 backdrop-blur"
           style={{ backgroundColor: `${pageBackground}F2` }}
         >
-          <div className="px-4 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
+          <div className="px-4 pb-2 pt-[max(12px,env(safe-area-inset-top))]">
             <div className="flex items-center justify-between gap-3">
               <div
                 className="rounded-full px-3 py-1.5 text-xs font-bold text-white shadow-sm"
@@ -299,20 +300,25 @@ const Menu = () => {
               </button>
             </div>
 
-            <div className="mt-3 overflow-hidden rounded-[26px] border border-black/5 bg-white shadow-[0_10px_24px_-14px_rgba(0,0,0,0.18)]">
-              {coverUrl && (
-                <div className="aspect-[16/2] w-full overflow-hidden bg-zinc-100">
+            <div className="mt-3 overflow-hidden rounded-[24px] border border-black/5 bg-white shadow-[0_8px_24px_-14px_rgba(0,0,0,0.18)]">
+              {coverUrl ? (
+                <div className="h-[92px] w-full overflow-hidden bg-zinc-100">
                   <img
                     src={coverUrl}
                     alt={restaurantName}
                     className="h-full w-full object-cover"
                   />
                 </div>
+              ) : (
+                <div
+                  className="aspect-[92px] w-full"
+                  style={{ backgroundColor: primaryColor }}
+                />
               )}
 
-              <div className="flex items-center gap-3 px-4 py-4">
+              <div className="flex items-center gap-3 px-4 py-2.5">
                 {logoUrl && (
-                  <div className="h-14 w-14 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
+                  <div className="h-10 w-10 overflow-hidden rounded-xl border border-black/5 bg-white shadow-sm">
                     <img
                       src={logoUrl}
                       alt={restaurantName}
@@ -322,16 +328,16 @@ const Menu = () => {
                 )}
 
                 <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-zinc-500">
+                  <p className="text-[9px] font-extrabold uppercase tracking-[0.22em] text-zinc-500">
                     Menú digital
                   </p>
 
-                  <h1 className="mt-1 truncate text-2xl font-black tracking-tight text-zinc-950">
+                  <h1 className="mt-0.5 truncate text-xl font-black leading-tight tracking-tight text-zinc-950">
                     {restaurantName}
                   </h1>
 
                   {welcomeMessage && (
-                    <p className="mt-1 truncate text-sm text-zinc-500">
+                    <p className="mt-0.5 truncate text-sm leading-tight text-zinc-500">
                       {welcomeMessage}
                     </p>
                   )}
@@ -340,12 +346,12 @@ const Menu = () => {
             </div>
           </div>
 
-          <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-4">
+          <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-2 pt-0">
             {categories.map((category) => (
               <button
                 key={category.key}
                 onClick={() => setActiveCategory(category.key)}
-                className={`inline-flex h-11 shrink-0 items-center rounded-full px-4 text-sm font-semibold transition-all ${
+                className={`inline-flex h-9 shrink-0 items-center rounded-full px-4 text-sm font-semibold transition-all ${
                   activeCategory === category.key
                     ? "text-white shadow-sm"
                     : "border border-black/10 bg-white text-zinc-700 shadow-sm"
