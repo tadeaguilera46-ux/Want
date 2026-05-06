@@ -302,7 +302,7 @@ const Menu = () => {
 
             <div className="mt-3 overflow-hidden rounded-[24px] border border-black/5 bg-white shadow-[0_8px_24px_-14px_rgba(0,0,0,0.18)]">
               {coverUrl ? (
-                <div className="h-[92px] w-full overflow-hidden bg-zinc-100">
+                <div className="h-[150px] w-full overflow-hidden bg-zinc-100 sm:h-[184px]">
                   <img
                     src={coverUrl}
                     alt={restaurantName}
@@ -310,8 +310,8 @@ const Menu = () => {
                   />
                 </div>
               ) : (
-                <div
-                  className="aspect-[92px] w-full"
+               <div
+                  className="h-[184px] w-full"
                   style={{ backgroundColor: primaryColor }}
                 />
               )}
