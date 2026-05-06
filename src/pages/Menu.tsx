@@ -91,6 +91,11 @@ const Menu = () => {
   const secondaryColor = config.secondaryColor || "#FFFFFF";
   const pageBackground = secondaryColor === "#FFFFFF" ? "#f6f4ef" : secondaryColor;
 
+  const restaurantName = config.name || "Restaurante";
+  const logoUrl = config.logoUrl || "";
+  const coverUrl = config.coverUrl || "";
+  const welcomeMessage = config.welcomeMessage || "";
+
   useEffect(() => {
     let isMounted = true;
 
@@ -185,8 +190,6 @@ const Menu = () => {
     );
   }, [menuItems, activeCategory]);
 
-  const activeCategoryLabel = activeCategory || "Menú";
-
   const openNoteModal = (item: MenuItem) => {
     setSelectedItem(item);
     setNote("");
@@ -239,11 +242,9 @@ const Menu = () => {
         className="flex min-h-screen items-center justify-center px-6"
         style={{ backgroundColor: pageBackground }}
       >
-        <div className="text-center">
-          <p className="text-sm font-semibold text-zinc-500">
-            Inicializando mesa...
-          </p>
-        </div>
+        <p className="text-sm font-semibold text-zinc-500">
+          Inicializando mesa...
+        </p>
       </div>
     );
   }
@@ -274,7 +275,7 @@ const Menu = () => {
           className="sticky top-0 z-40 border-b border-black/5 backdrop-blur"
           style={{ backgroundColor: `${pageBackground}F2` }}
         >
-          <div className="px-4 pb-4 pt-[max(12px,env(safe-area-inset-top))]">
+          <div className="px-4 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
             <div className="flex items-center justify-between gap-3">
               <div
                 className="rounded-full px-3 py-1.5 text-xs font-bold text-white shadow-sm"
@@ -287,9 +288,7 @@ const Menu = () => {
                 onClick={() =>
                   navigate(
                     `/bill?restaurantId=${restaurantId}&table=${table}&total=${total}`,
-                    {
-                      state: { table, restaurantId },
-                    }
+                    { state: { table, restaurantId } }
                   )
                 }
                 className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-extrabold text-white shadow-want transition-all hover:scale-[1.03] active:scale-[0.98]"
@@ -300,46 +299,43 @@ const Menu = () => {
               </button>
             </div>
 
-            <div className="mt-4 overflow-hidden rounded-[30px] border border-black/5 bg-white shadow-[0_10px_30px_-12px_rgba(0,0,0,0.18)]">
-              {config.coverUrl && (
-                <div className="relative h-36 w-full overflow-hidden bg-zinc-100">
+            <div className="mt-3 overflow-hidden rounded-[26px] border border-black/5 bg-white shadow-[0_10px_24px_-14px_rgba(0,0,0,0.18)]">
+              {coverUrl && (
+                <div className="aspect-[16/6] w-full overflow-hidden bg-zinc-100">
                   <img
-                    src={config.coverUrl}
-                    alt={config.name}
+                    src={coverUrl}
+                    alt={restaurantName}
                     className="h-full w-full object-cover"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent" />
                 </div>
               )}
 
-              <div className="px-5 pb-5 pt-5">
-                <div className="mb-3 flex items-center gap-3">
-                  {config.logoUrl && (
-                    <div className="h-14 w-14 overflow-hidden rounded-2xl border border-black/10 bg-white">
-                      <img
-                        src={config.logoUrl}
-                        alt={config.name}
-                        className="h-full w-full object-cover"
-                      />
-                    </div>
-                  )}
-
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-zinc-500">
-                      Menú digital
-                    </p>
-                    <h2 className="truncate text-xl font-black tracking-tight text-zinc-950">
-                      {config.name}
-                    </h2>
+              <div className="flex items-center gap-3 px-4 py-4">
+                {logoUrl && (
+                  <div className="h-14 w-14 overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
+                    <img
+                      src={logoUrl}
+                      alt={restaurantName}
+                      className="h-full w-full object-cover"
+                    />
                   </div>
-                </div>
+                )}
 
-                <h1 className="mt-2 text-3xl font-black tracking-tight text-zinc-950">
-                  {activeCategoryLabel}
-                </h1>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                  {config.welcomeMessage || "Elegí productos y agregalos a tu pedido."}
-                </p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-zinc-500">
+                    Menú digital
+                  </p>
+
+                  <h1 className="mt-1 truncate text-2xl font-black tracking-tight text-zinc-950">
+                    {restaurantName}
+                  </h1>
+
+                  {welcomeMessage && (
+                    <p className="mt-1 truncate text-sm text-zinc-500">
+                      {welcomeMessage}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
