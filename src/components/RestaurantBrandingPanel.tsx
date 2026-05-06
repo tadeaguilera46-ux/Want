@@ -7,11 +7,11 @@ import {
   uploadBytesResumable,
 } from "firebase/storage";
 import { Image, Loader2, Paintbrush, Save, Upload } from "lucide-react";
-import { getDb } from "../lib/firebase";
+import { getDb, getStorageService } from "../lib/firebase";
 import { useRestaurantConfig } from "../lib/restaurant-config";
 
 const db = getDb();
-const storage = getStorage();
+const storage = getStorageService();
 
 type UploadTarget = "logo" | "cover";
 
