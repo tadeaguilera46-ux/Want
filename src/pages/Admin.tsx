@@ -21,6 +21,7 @@ import {
   type Mesa,
   type MesaEstado,
 } from "../lib/mesas";
+import { RestaurantBrandingPanel } from "../components/RestaurantBrandingPanel";
 import { actualizarEstadoCuenta } from "../lib/bill";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { useRestaurant } from "../lib/restaurant-context";
@@ -1031,6 +1032,7 @@ const Admin = () => {
         <div className="mt-8">
       <MesaManagementPanel restaurantId={restaurantId} />
 </div>
+<RestaurantBrandingPanel restaurantId={restaurantId} />
         <section className="mb-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-start gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-zinc-950 text-white">
