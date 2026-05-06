@@ -64,24 +64,41 @@ const Cart = () => {
   };
 
   const buildPedido = () => {
-    const items: PedidoItem[] = (cart as CartItem[]).map((item) => {
+    const items = (cart as CartItem[]).map((item) => {
       const observacion = normalizeObservation(item.observacion);
+      const itemName = item.name || item.nombre || "Producto";
+      const itemPrice = Number(item.price ?? item.precio ?? 0);
+      const itemQuantity = Number(item.quantity ?? item.cantidad ?? 1);
 
-      const baseItem: PedidoItem = {
-        nombre: item.name || item.nombre || "Producto",
-        cantidad: item.quantity || item.cantidad || 1,
+      const safePrice =
+        Number.isFinite(itemPrice) && itemPrice > 0 ? itemPrice : 0;
+
+      const safeQuantity =
+        Number.isFinite(itemQuantity) && itemQuantity > 0 ? itemQuantity : 1;
+
+      const baseItem = {
+        id: item.id,
+        nombre: itemName,
+        name: itemName,
+        cantidad: safeQuantity,
+        quantity: safeQuantity,
+        precio: safePrice,
+        price: safePrice,
+        subtotal: safePrice * safeQuantity,
         category: mapMenuCategoryToOrderCategory(item.category),
+        displayCategory: item.displayCategory || "",
       };
 
       if (observacion) {
         return {
           ...baseItem,
           observacion,
+          note: observacion,
         };
       }
 
       return baseItem;
-    });
+    }) as unknown as PedidoItem[];
 
     return {
       restaurantId,
@@ -212,8 +229,16 @@ const Cart = () => {
               const observation = normalizeObservation(item.observacion);
               const hasObservation = observation.length > 0;
               const itemName = item.name || item.nombre || "Producto";
-              const itemPrice = item.price || item.precio || 0;
-              const itemQuantity = item.quantity || item.cantidad || 1;
+              const itemPrice = Number(item.price ?? item.precio ?? 0);
+              const itemQuantity = Number(item.quantity ?? item.cantidad ?? 1);
+
+              const safePrice =
+                Number.isFinite(itemPrice) && itemPrice > 0 ? itemPrice : 0;
+
+              const safeQuantity =
+                Number.isFinite(itemQuantity) && itemQuantity > 0
+                  ? itemQuantity
+                  : 1;
 
               return (
                 <motion.div
@@ -248,7 +273,7 @@ const Cart = () => {
                           )}
 
                           <p className="mt-2 text-sm font-bold text-accent">
-                            {formatPriceARS(itemPrice * itemQuantity)}
+                            {formatPriceARS(safePrice * safeQuantity)}
                           </p>
                         </div>
                       </div>
@@ -274,7 +299,7 @@ const Cart = () => {
 
                       <div className="mt-4 flex items-center justify-between gap-3">
                         <div className="text-xs font-medium text-slate-500">
-                          Precio unitario: {formatPriceARS(itemPrice)}
+                          Precio unitario: {formatPriceARS(safePrice)}
                         </div>
 
                         <div className="flex items-center gap-2">
@@ -289,7 +314,7 @@ const Cart = () => {
                           </button>
 
                           <span className="min-w-[28px] text-center text-sm font-black text-slate-950">
-                            {itemQuantity}
+                            {safeQuantity}
                           </span>
 
                           <button

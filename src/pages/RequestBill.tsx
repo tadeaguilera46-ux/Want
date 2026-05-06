@@ -50,12 +50,22 @@ type PedidoItemLike = {
   note?: string;
 };
 
+type MenuItemPrice = {
+  id: string;
+  name?: string;
+  price?: number;
+  active?: boolean;
+};
+
 const formatPriceARS = (value: number) =>
   new Intl.NumberFormat("es-AR", {
     style: "currency",
     currency: "ARS",
     maximumFractionDigits: 0,
   }).format(value || 0);
+
+const normalizeName = (value: string) =>
+  value.trim().toLowerCase().replace(/\s+/g, " ");
 
 const getPedidoItems = (pedido: PedidoRecord): PedidoItemLike[] => {
   const rawPedido = pedido as unknown as {
@@ -84,11 +94,38 @@ const RequestBill = () => {
   const [selected, setSelected] = useState<MetodoPago | null>(null);
   const [splitBill, setSplitBill] = useState(false);
   const [pedidos, setPedidos] = useState<PedidoRecord[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItemPrice[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [loadingMesa, setLoadingMesa] = useState(true);
   const [loadingPedidos, setLoadingPedidos] = useState(false);
+  const [loadingMenu, setLoadingMenu] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!restaurantId) return;
+
+    setLoadingMenu(true);
+
+    const menuUnsubscribe = onSnapshot(
+      collection(db, "restaurants", restaurantId, "menu"),
+      (snapshot) => {
+        const data = snapshot.docs.map((document) => ({
+          id: document.id,
+          ...document.data(),
+        })) as MenuItemPrice[];
+
+        setMenuItems(data);
+        setLoadingMenu(false);
+      },
+      (err) => {
+        console.error("Error leyendo menú para cuenta:", err);
+        setLoadingMenu(false);
+      }
+    );
+
+    return () => menuUnsubscribe();
+  }, [restaurantId]);
 
   useEffect(() => {
     if (!restaurantId || !Number.isInteger(tableNumber) || tableNumber <= 0) {
@@ -168,6 +205,21 @@ const RequestBill = () => {
     return () => unsubscribe();
   }, [restaurantId, sessionId, tableNumber]);
 
+  const menuPriceByName = useMemo(() => {
+    const map = new Map<string, number>();
+
+    menuItems.forEach((item) => {
+      const name = String(item.name || "").trim();
+      const price = Number(item.price || 0);
+
+      if (!name || !Number.isFinite(price) || price <= 0) return;
+
+      map.set(normalizeName(name), price);
+    });
+
+    return map;
+  }, [menuItems]);
+
   const billItems = useMemo(() => {
     const grouped = new Map<string, BillLineItem>();
 
@@ -182,17 +234,20 @@ const RequestBill = () => {
         const quantity = Number(item.cantidad || item.quantity || 1);
         const note = String(item.observacion || item.note || "").trim();
 
-        const rawUnitPrice = Number(item.precio || item.price || 0);
-
         const safeQuantity =
           Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+
+        const rawUnitPrice = Number(item.precio || item.price || 0);
+        const menuUnitPrice = menuPriceByName.get(normalizeName(name)) || 0;
 
         const resolvedUnitPrice =
           Number.isFinite(rawUnitPrice) && rawUnitPrice > 0
             ? rawUnitPrice
-            : items.length === 1 && safePedidoTotal > 0
-              ? safePedidoTotal / safeQuantity
-              : 0;
+            : menuUnitPrice > 0
+              ? menuUnitPrice
+              : items.length === 1 && safePedidoTotal > 0
+                ? safePedidoTotal / safeQuantity
+                : 0;
 
         const safeUnitPrice =
           Number.isFinite(resolvedUnitPrice) && resolvedUnitPrice > 0
@@ -220,7 +275,7 @@ const RequestBill = () => {
     });
 
     return Array.from(grouped.values());
-  }, [pedidos]);
+  }, [menuPriceByName, pedidos]);
 
   const total = useMemo(() => {
     const itemsTotal = billItems.reduce((sum, item) => sum + item.subtotal, 0);
@@ -259,7 +314,7 @@ const RequestBill = () => {
     }
   };
 
-  const isLoading = loadingMesa || loadingPedidos;
+  const isLoading = loadingMesa || loadingPedidos || loadingMenu;
   const canSubmit = !!selected && !!sessionId && !isSubmitting && !isLoading;
 
   return (
