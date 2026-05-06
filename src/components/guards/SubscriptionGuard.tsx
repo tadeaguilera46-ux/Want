@@ -1,6 +1,6 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Navigate, useSearchParams } from "react-router-dom";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 
 import { getDb } from "@/lib/firebase";
 
@@ -10,16 +10,16 @@ type Props = {
   children: ReactNode;
 };
 
-type SubscriptionStatus =
-  | "trial"
-  | "active"
-  | "past_due"
-  | "blocked";
+type SubscriptionStatus = "trial" | "active" | "past_due" | "blocked";
 
 type RestaurantData = {
   subscriptionStatus?: SubscriptionStatus;
-  nextBillingDate?: any;
-  trialEndsAt?: any;
+  nextBillingDate?: {
+    toDate?: () => Date;
+  };
+  trialEndsAt?: {
+    toDate?: () => Date;
+  };
 };
 
 const SubscriptionGuard = ({ children }: Props) => {
@@ -28,16 +28,18 @@ const SubscriptionGuard = ({ children }: Props) => {
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
 
-  const restaurantId =
-    searchParams.get("restaurantId") || "mi-restaurante";
+  const restaurantId = searchParams.get("restaurantId") || "mi-restaurante";
 
   useEffect(() => {
-    const validateSubscription = async () => {
-      try {
-        const restaurantRef = doc(db, "restaurants", restaurantId);
+    if (!restaurantId) return;
 
-        const restaurantSnap = await getDoc(restaurantRef);
+    setLoading(true);
 
+    const restaurantRef = doc(db, "restaurants", restaurantId);
+
+    const unsubscribe = onSnapshot(
+      restaurantRef,
+      (restaurantSnap) => {
         if (!restaurantSnap.exists()) {
           setAllowed(false);
           setLoading(false);
@@ -45,28 +47,22 @@ const SubscriptionGuard = ({ children }: Props) => {
         }
 
         const data = restaurantSnap.data() as RestaurantData;
-
         const status = data.subscriptionStatus || "trial";
+        const now = new Date();
 
-        // 🔒 Bloqueado manualmente
         if (status === "blocked") {
           setAllowed(false);
           setLoading(false);
           return;
         }
 
-        const now = new Date();
-
-        // 🧪 Trial
         if (status === "trial") {
-          if (data.trialEndsAt?.toDate) {
-            const trialEndsAt = data.trialEndsAt.toDate();
+          const trialEndsAt = data.trialEndsAt?.toDate?.();
 
-            if (trialEndsAt < now) {
-              setAllowed(false);
-              setLoading(false);
-              return;
-            }
+          if (trialEndsAt && trialEndsAt < now) {
+            setAllowed(false);
+            setLoading(false);
+            return;
           }
 
           setAllowed(true);
@@ -74,17 +70,13 @@ const SubscriptionGuard = ({ children }: Props) => {
           return;
         }
 
-        // 💳 Suscripción activa
         if (status === "active") {
-          if (data.nextBillingDate?.toDate) {
-            const nextBillingDate = data.nextBillingDate.toDate();
+          const nextBillingDate = data.nextBillingDate?.toDate?.();
 
-            // venció
-            if (nextBillingDate < now) {
-              setAllowed(false);
-              setLoading(false);
-              return;
-            }
+          if (nextBillingDate && nextBillingDate < now) {
+            setAllowed(false);
+            setLoading(false);
+            return;
           }
 
           setAllowed(true);
@@ -92,7 +84,6 @@ const SubscriptionGuard = ({ children }: Props) => {
           return;
         }
 
-        // ⚠️ Moroso
         if (status === "past_due") {
           setAllowed(true);
           setLoading(false);
@@ -101,15 +92,15 @@ const SubscriptionGuard = ({ children }: Props) => {
 
         setAllowed(false);
         setLoading(false);
-      } catch (error) {
+      },
+      (error) => {
         console.error("Subscription guard error:", error);
-
         setAllowed(false);
         setLoading(false);
       }
-    };
+    );
 
-    void validateSubscription();
+    return () => unsubscribe();
   }, [restaurantId]);
 
   if (loading) {
