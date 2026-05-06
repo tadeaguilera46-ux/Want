@@ -17,6 +17,7 @@ import {
 } from "../lib/runtime-context";
 import { getOrCreateMesaSession } from "../lib/mesas";
 import { getDb } from "../lib/firebase";
+import { useRestaurantConfig } from "../lib/restaurant-config";
 
 const db = getDb();
 
@@ -73,6 +74,7 @@ const Menu = () => {
   });
 
   const tableNumber = parseTableNumber(table);
+  const { config } = useRestaurantConfig(restaurantId);
 
   const [activeCategory, setActiveCategory] = useState("");
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -84,6 +86,10 @@ const Menu = () => {
   const [sessionError, setSessionError] = useState<string | null>(null);
 
   const { addToCart, getQuantity, totalItems, total } = useCart();
+
+  const primaryColor = config.primaryColor || "#000000";
+  const secondaryColor = config.secondaryColor || "#FFFFFF";
+  const pageBackground = secondaryColor === "#FFFFFF" ? "#f6f4ef" : secondaryColor;
 
   useEffect(() => {
     let isMounted = true;
@@ -229,7 +235,10 @@ const Menu = () => {
 
   if (isInitializingSession) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f6f4ef] px-6">
+      <div
+        className="flex min-h-screen items-center justify-center px-6"
+        style={{ backgroundColor: pageBackground }}
+      >
         <div className="text-center">
           <p className="text-sm font-semibold text-zinc-500">
             Inicializando mesa...
@@ -241,7 +250,10 @@ const Menu = () => {
 
   if (sessionError) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f6f4ef] px-6">
+      <div
+        className="flex min-h-screen items-center justify-center px-6"
+        style={{ backgroundColor: pageBackground }}
+      >
         <div className="w-full max-w-md rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm">
           <h1 className="text-lg font-black text-zinc-950">
             No se pudo abrir la mesa
@@ -253,12 +265,21 @@ const Menu = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#f6f4ef] pb-32">
+    <div
+      className="min-h-screen pb-32"
+      style={{ backgroundColor: pageBackground }}
+    >
       <div className="mx-auto w-full max-w-lg">
-        <header className="sticky top-0 z-40 border-b border-black/5 bg-[#f6f4ef]/95 backdrop-blur">
+        <header
+          className="sticky top-0 z-40 border-b border-black/5 backdrop-blur"
+          style={{ backgroundColor: `${pageBackground}F2` }}
+        >
           <div className="px-4 pb-4 pt-[max(12px,env(safe-area-inset-top))]">
             <div className="flex items-center justify-between gap-3">
-              <div className="rounded-full bg-zinc-950 px-3 py-1.5 text-xs font-bold text-white shadow-sm">
+              <div
+                className="rounded-full px-3 py-1.5 text-xs font-bold text-white shadow-sm"
+                style={{ backgroundColor: primaryColor }}
+              >
                 Mesa {table}
               </div>
 
@@ -271,7 +292,8 @@ const Menu = () => {
                     }
                   )
                 }
-                className="inline-flex items-center gap-2 rounded-full bg-accent px-4 py-2 text-sm font-extrabold text-accent-foreground shadow-want transition-all hover:scale-[1.03] active:scale-[0.98]"
+                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-extrabold text-white shadow-want transition-all hover:scale-[1.03] active:scale-[0.98]"
+                style={{ backgroundColor: primaryColor }}
               >
                 <Receipt size={16} />
                 Pedir cuenta
@@ -279,15 +301,44 @@ const Menu = () => {
             </div>
 
             <div className="mt-4 overflow-hidden rounded-[30px] border border-black/5 bg-white shadow-[0_10px_30px_-12px_rgba(0,0,0,0.18)]">
+              {config.coverUrl && (
+                <div className="relative h-36 w-full overflow-hidden bg-zinc-100">
+                  <img
+                    src={config.coverUrl}
+                    alt={config.name}
+                    className="h-full w-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent" />
+                </div>
+              )}
+
               <div className="px-5 pb-5 pt-5">
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-zinc-500">
-                  Menú digital
-                </p>
+                <div className="mb-3 flex items-center gap-3">
+                  {config.logoUrl && (
+                    <div className="h-14 w-14 overflow-hidden rounded-2xl border border-black/10 bg-white">
+                      <img
+                        src={config.logoUrl}
+                        alt={config.name}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                  )}
+
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-zinc-500">
+                      Menú digital
+                    </p>
+                    <h2 className="truncate text-xl font-black tracking-tight text-zinc-950">
+                      {config.name}
+                    </h2>
+                  </div>
+                </div>
+
                 <h1 className="mt-2 text-3xl font-black tracking-tight text-zinc-950">
                   {activeCategoryLabel}
                 </h1>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                  Elegí productos de esta categoría y agregalos a tu pedido.
+                  {config.welcomeMessage || "Elegí productos y agregalos a tu pedido."}
                 </p>
               </div>
             </div>
@@ -300,9 +351,14 @@ const Menu = () => {
                 onClick={() => setActiveCategory(category.key)}
                 className={`inline-flex h-11 shrink-0 items-center rounded-full px-4 text-sm font-semibold transition-all ${
                   activeCategory === category.key
-                    ? "bg-zinc-950 text-white shadow-sm"
+                    ? "text-white shadow-sm"
                     : "border border-black/10 bg-white text-zinc-700 shadow-sm"
                 }`}
+                style={
+                  activeCategory === category.key
+                    ? { backgroundColor: primaryColor }
+                    : undefined
+                }
               >
                 {category.label}
               </button>
@@ -412,7 +468,8 @@ const Menu = () => {
                             <motion.button
                               whileTap={{ scale: 0.92 }}
                               onClick={() => handleAddWithoutNote(item)}
-                              className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-want"
+                              className="flex h-11 w-11 items-center justify-center rounded-full text-white shadow-want"
+                              style={{ backgroundColor: primaryColor }}
                             >
                               <Plus size={18} />
                             </motion.button>
@@ -439,12 +496,13 @@ const Menu = () => {
                   state: { table, restaurantId },
                 })
               }
-              className="pointer-events-auto flex h-14 w-full items-center justify-between rounded-2xl bg-zinc-950 px-4 text-white shadow-[0_14px_34px_-12px_rgba(0,0,0,0.45)]"
+              className="pointer-events-auto flex h-14 w-full items-center justify-between rounded-2xl px-4 text-white shadow-[0_14px_34px_-12px_rgba(0,0,0,0.45)]"
+              style={{ backgroundColor: primaryColor }}
             >
               <div className="flex items-center gap-3">
                 <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
                   <ShoppingCart size={20} />
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-primary px-1 text-[11px] font-extrabold text-primary-foreground">
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white px-1 text-[11px] font-extrabold text-zinc-950">
                     {totalItems}
                   </span>
                 </div>
@@ -518,7 +576,8 @@ const Menu = () => {
 
                 <button
                   onClick={handleAddWithNote}
-                  className="h-12 rounded-2xl bg-zinc-950 font-semibold text-white"
+                  className="h-12 rounded-2xl font-semibold text-white"
+                  style={{ backgroundColor: primaryColor }}
                 >
                   Agregar al pedido
                 </button>
