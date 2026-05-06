@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { CreditCard, MessageCircleWarning } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore";
 
 import { getDb } from "@/lib/firebase";
 
@@ -21,54 +21,65 @@ type RestaurantData = {
   };
 };
 
+const canAccess = (data: RestaurantData) => {
+  const status = data.subscriptionStatus || "trial";
+  const now = new Date();
+
+  if (status === "blocked") return false;
+
+  if (status === "trial") {
+    const trialEndsAt = data.trialEndsAt?.toDate?.();
+    if (trialEndsAt && trialEndsAt < now) return false;
+    return true;
+  }
+
+  if (status === "active") {
+    const nextBillingDate = data.nextBillingDate?.toDate?.();
+    if (nextBillingDate && nextBillingDate < now) return false;
+    return true;
+  }
+
+  if (status === "past_due") return true;
+
+  return false;
+};
+
 const PaymentRequired = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const restaurantId = searchParams.get("restaurantId") || "mi-restaurante";
 
+  const redirectToAdmin = () => {
+    navigate(`/staff/admin?restaurantId=${restaurantId}`, { replace: true });
+  };
+
   useEffect(() => {
     if (!restaurantId) return;
 
     const restaurantRef = doc(db, "restaurants", restaurantId);
 
+    const checkAccess = async () => {
+      const snap = await getDoc(restaurantRef);
+
+      if (!snap.exists()) return;
+
+      const data = snap.data() as RestaurantData;
+
+      if (canAccess(data)) {
+        redirectToAdmin();
+      }
+    };
+
     const unsubscribe = onSnapshot(
       restaurantRef,
-      (restaurantSnap) => {
-        if (!restaurantSnap.exists()) return;
+      (snap) => {
+        if (!snap.exists()) return;
 
-        const data = restaurantSnap.data() as RestaurantData;
-        const status = data.subscriptionStatus || "trial";
-        const now = new Date();
+        const data = snap.data() as RestaurantData;
 
-        if (status === "blocked") return;
-
-        if (status === "trial") {
-          const trialEndsAt = data.trialEndsAt?.toDate?.();
-
-          if (trialEndsAt && trialEndsAt < now) return;
-
-          navigate(`/staff/admin?restaurantId=${restaurantId}`, {
-            replace: true,
-          });
-          return;
-        }
-
-        if (status === "active") {
-          const nextBillingDate = data.nextBillingDate?.toDate?.();
-
-          if (nextBillingDate && nextBillingDate < now) return;
-
-          navigate(`/staff/admin?restaurantId=${restaurantId}`, {
-            replace: true,
-          });
-          return;
-        }
-
-        if (status === "past_due") {
-          navigate(`/staff/admin?restaurantId=${restaurantId}`, {
-            replace: true,
-          });
+        if (canAccess(data)) {
+          redirectToAdmin();
         }
       },
       (error) => {
@@ -76,11 +87,27 @@ const PaymentRequired = () => {
       }
     );
 
-    return () => unsubscribe();
+    const interval = window.setInterval(() => {
+      void checkAccess();
+    }, 3000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void checkAccess();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      unsubscribe();
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, [navigate, restaurantId]);
 
   const handleRetryAccess = () => {
-    navigate(`/staff/admin?restaurantId=${restaurantId}`, { replace: true });
+    redirectToAdmin();
   };
 
   return (
