@@ -19,6 +19,7 @@ import {
   Plus,
   ShieldCheck,
   ExternalLink,
+  Copy,
 } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import { createStaffMember } from "../lib/staff";
@@ -26,9 +27,7 @@ import { createStaffMember } from "../lib/staff";
 const db = getDb();
 const auth = getAuth();
 
-const SUPER_ADMIN_EMAILS = [
-  "tadeaguilera46@gmail.com",
-];
+const SUPER_ADMIN_EMAILS = ["tadeaguilera46@gmail.com"];
 
 type RestaurantRecord = {
   id: string;
@@ -122,6 +121,15 @@ const SuperAdmin = () => {
 
     return () => unsub();
   }, [isSuperAdmin]);
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setMessage(`${label} copiado correctamente.`);
+    } catch {
+      window.prompt(`Copiá el link de ${label}:`, text);
+    }
+  };
 
   const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -235,9 +243,7 @@ const SuperAdmin = () => {
               <ShieldCheck size={22} />
             </div>
 
-            <h1 className="text-2xl font-black text-zinc-950">
-              Super Admin
-            </h1>
+            <h1 className="text-2xl font-black text-zinc-950">Super Admin</h1>
             <p className="mt-1 text-sm text-zinc-500">
               Acceso interno para crear restaurantes.
             </p>
@@ -459,7 +465,8 @@ const SuperAdmin = () => {
                             ID: {restaurant.id}
                           </p>
                           <p className="mt-1 text-xs font-semibold text-zinc-500">
-                            Estado: {restaurant.active === false ? "Inactivo" : "Activo"}
+                            Estado:{" "}
+                            {restaurant.active === false ? "Inactivo" : "Activo"}
                           </p>
                         </div>
 
@@ -474,6 +481,17 @@ const SuperAdmin = () => {
                             <ExternalLink size={14} />
                           </a>
 
+                          <button
+                            type="button"
+                            onClick={() =>
+                              copyToClipboard(staffUrl, "Link Staff")
+                            }
+                            className="flex h-10 items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900"
+                          >
+                            <Copy size={14} />
+                            Copiar Staff
+                          </button>
+
                           <a
                             href={mesa1Url}
                             target="_blank"
@@ -483,6 +501,17 @@ const SuperAdmin = () => {
                             Mesa 1
                             <ExternalLink size={14} />
                           </a>
+
+                          <button
+                            type="button"
+                            onClick={() =>
+                              copyToClipboard(mesa1Url, "Link Mesa 1")
+                            }
+                            className="flex h-10 items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900"
+                          >
+                            <Copy size={14} />
+                            Copiar Mesa 1
+                          </button>
                         </div>
                       </div>
                     </div>
