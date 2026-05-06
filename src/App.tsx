@@ -6,6 +6,9 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+// Guards
+import SubscriptionGuard from "@/components/guards/SubscriptionGuard";
+
 // Cliente
 const Index = lazy(() => import("./pages/Index"));
 const Welcome = lazy(() => import("./pages/Welcome"));
@@ -27,6 +30,9 @@ const AdminAnalytics = lazy(() => import("./pages/AdminAnalytics"));
 // Super Admin
 const SuperAdmin = lazy(() => import("./pages/SuperAdmin"));
 
+// Billing
+const PaymentRequired = lazy(() => import("./pages/PaymentRequired"));
+
 // Otros
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -37,7 +43,9 @@ function AppLoader() {
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
         <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-slate-900" />
-        <p className="text-sm font-medium text-slate-600">Cargando sistema...</p>
+        <p className="text-sm font-medium text-slate-600">
+          Cargando sistema...
+        </p>
       </div>
     </div>
   );
@@ -52,9 +60,13 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+
       <Suspense fallback={<AppLoader />}>
         <Routes>
-          {/* Cliente */}
+          {/* =========================
+              CLIENTE
+          ========================= */}
+
           <Route
             path="/"
             element={
@@ -63,6 +75,7 @@ const App = () => (
               </ClientApp>
             }
           />
+
           <Route
             path="/welcome"
             element={
@@ -71,6 +84,7 @@ const App = () => (
               </ClientApp>
             }
           />
+
           <Route
             path="/menu"
             element={
@@ -79,6 +93,7 @@ const App = () => (
               </ClientApp>
             }
           />
+
           <Route
             path="/cart"
             element={
@@ -87,6 +102,7 @@ const App = () => (
               </ClientApp>
             }
           />
+
           <Route
             path="/order-confirmed"
             element={
@@ -95,6 +111,7 @@ const App = () => (
               </ClientApp>
             }
           />
+
           <Route
             path="/bill"
             element={
@@ -103,6 +120,7 @@ const App = () => (
               </ClientApp>
             }
           />
+
           <Route
             path="/bill-confirmed"
             element={
@@ -112,56 +130,105 @@ const App = () => (
             }
           />
 
-          {/* Super Admin */}
+          {/* =========================
+              SUPER ADMIN
+          ========================= */}
+
           <Route path="/super-admin" element={<SuperAdmin />} />
 
-          {/* Staff */}
+          {/* =========================
+              BILLING
+          ========================= */}
+
+          <Route
+            path="/payment-required"
+            element={<PaymentRequired />}
+          />
+
+          {/* =========================
+              STAFF LOGIN
+          ========================= */}
+
           <Route path="/staff/login" element={<StaffLogin />} />
+
+          {/* =========================
+              KITCHEN
+          ========================= */}
 
           <Route
             path="/staff/kitchen"
             element={
-              <StaffRoute allowedRoles={["kitchen", "admin"]}>
-                <Kitchen />
-              </StaffRoute>
+              <SubscriptionGuard>
+                <StaffRoute allowedRoles={["kitchen", "admin"]}>
+                  <Kitchen />
+                </StaffRoute>
+              </SubscriptionGuard>
             }
           />
+
+          {/* =========================
+              BAR
+          ========================= */}
 
           <Route
             path="/staff/bar"
             element={
-              <StaffRoute allowedRoles={["bar", "admin"]}>
-                <Bar />
-              </StaffRoute>
+              <SubscriptionGuard>
+                <StaffRoute allowedRoles={["bar", "admin"]}>
+                  <Bar />
+                </StaffRoute>
+              </SubscriptionGuard>
             }
           />
+
+          {/* =========================
+              RUNNER
+          ========================= */}
 
           <Route
             path="/staff/runner"
             element={
-              <StaffRoute allowedRoles={["runner", "admin"]}>
-                <Runner />
-              </StaffRoute>
+              <SubscriptionGuard>
+                <StaffRoute allowedRoles={["runner", "admin"]}>
+                  <Runner />
+                </StaffRoute>
+              </SubscriptionGuard>
             }
           />
+
+          {/* =========================
+              ADMIN
+          ========================= */}
 
           <Route
             path="/staff/admin"
             element={
-              <StaffRoute allowedRoles={["admin"]}>
-                <Admin />
-              </StaffRoute>
+              <SubscriptionGuard>
+                <StaffRoute allowedRoles={["admin"]}>
+                  <Admin />
+                </StaffRoute>
+              </SubscriptionGuard>
             }
           />
+
+          {/* =========================
+              ANALYTICS
+          ========================= */}
 
           <Route
             path="/staff/admin/analytics"
             element={
-              <StaffRoute allowedRoles={["admin"]}>
-                <AdminAnalytics />
-              </StaffRoute>
+              <SubscriptionGuard>
+                <StaffRoute allowedRoles={["admin"]}>
+                  <AdminAnalytics />
+                </StaffRoute>
+              </SubscriptionGuard>
             }
           />
+
+          {/* =========================
+              404
+          ========================= */}
 
           <Route path="*" element={<NotFound />} />
         </Routes>
