@@ -318,7 +318,7 @@ const Menu = () => {
 
               <div className="flex items-center gap-3 px-4 py-2.5">
                 {logoUrl && (
-                  <div className="h-10 w-10 overflow-hidden rounded-xl border border-black/5 bg-white shadow-sm">
+                  <div className="h-12 w-12 overflow-hidden rounded-xl border border-black/5 bg-white shadow-sm">
                     <img
                       src={logoUrl}
                       alt={restaurantName}
