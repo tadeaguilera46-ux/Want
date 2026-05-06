@@ -7,6 +7,7 @@ import {
   Landmark,
   Users,
   ChevronRight,
+  ReceiptText,
 } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
 import { getDb } from "../lib/firebase";
@@ -28,12 +29,45 @@ const paymentOptions: {
   { id: "transfer", label: "Transferencia", icon: Landmark },
 ];
 
+type BillLineItem = {
+  key: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+  note?: string;
+};
+
+type PedidoItemLike = {
+  id?: string;
+  nombre?: string;
+  name?: string;
+  cantidad?: number;
+  quantity?: number;
+  precio?: number;
+  price?: number;
+  observacion?: string;
+  note?: string;
+};
+
 const formatPriceARS = (value: number) =>
   new Intl.NumberFormat("es-AR", {
     style: "currency",
     currency: "ARS",
     maximumFractionDigits: 0,
   }).format(value || 0);
+
+const getPedidoItems = (pedido: PedidoRecord): PedidoItemLike[] => {
+  const rawPedido = pedido as unknown as {
+    items?: PedidoItemLike[];
+    productos?: PedidoItemLike[];
+  };
+
+  if (Array.isArray(rawPedido.items)) return rawPedido.items;
+  if (Array.isArray(rawPedido.productos)) return rawPedido.productos;
+
+  return [];
+};
 
 const RequestBill = () => {
   const [searchParams] = useSearchParams();
@@ -73,7 +107,8 @@ const RequestBill = () => {
         const data = snapshot.data();
 
         const activeSessionId =
-          data?.estado === "occupied" && typeof data?.activeSessionId === "string"
+          data?.estado === "occupied" &&
+          typeof data?.activeSessionId === "string"
             ? data.activeSessionId
             : null;
 
@@ -133,12 +168,57 @@ const RequestBill = () => {
     return () => unsubscribe();
   }, [restaurantId, sessionId, tableNumber]);
 
+  const billItems = useMemo(() => {
+    const grouped = new Map<string, BillLineItem>();
+
+    pedidos.forEach((pedido) => {
+      const items = getPedidoItems(pedido);
+
+      items.forEach((item, index) => {
+        const name = String(item.nombre || item.name || "Producto");
+        const quantity = Number(item.cantidad || item.quantity || 1);
+        const unitPrice = Number(item.precio || item.price || 0);
+        const note = String(item.observacion || item.note || "").trim();
+
+        const safeQuantity =
+          Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+        const safeUnitPrice =
+          Number.isFinite(unitPrice) && unitPrice > 0 ? unitPrice : 0;
+
+        const key = `${name}-${safeUnitPrice}-${note || "sin-nota"}`;
+
+        const existing = grouped.get(key);
+
+        if (existing) {
+          existing.quantity += safeQuantity;
+          existing.subtotal += safeUnitPrice * safeQuantity;
+          return;
+        }
+
+        grouped.set(key, {
+          key: `${pedido.id || "pedido"}-${index}-${key}`,
+          name,
+          quantity: safeQuantity,
+          unitPrice: safeUnitPrice,
+          subtotal: safeUnitPrice * safeQuantity,
+          note,
+        });
+      });
+    });
+
+    return Array.from(grouped.values());
+  }, [pedidos]);
+
   const total = useMemo(() => {
+    const itemsTotal = billItems.reduce((sum, item) => sum + item.subtotal, 0);
+
+    if (itemsTotal > 0) return itemsTotal;
+
     return pedidos.reduce((sum, pedido) => {
       const pedidoTotal = Number(pedido.total || 0);
       return sum + (Number.isFinite(pedidoTotal) ? pedidoTotal : 0);
     }, 0);
-  }, [pedidos]);
+  }, [billItems, pedidos]);
 
   const handleRequestBill = async () => {
     if (!selected || !sessionId || isSubmitting) return;
@@ -188,7 +268,7 @@ const RequestBill = () => {
                   Pedir cuenta
                 </h1>
                 <p className="text-sm text-slate-500">
-                  Elegí cómo querés pagar
+                  Revisá tu consumo y elegí cómo pagar
                 </p>
               </div>
 
@@ -225,6 +305,72 @@ const RequestBill = () => {
               Todavía no encontramos consumos cargados para esta sesión.
             </div>
           )}
+
+          <section className="mb-5 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-700">
+                <ReceiptText size={18} />
+              </div>
+
+              <div>
+                <h2 className="text-base font-black text-slate-950">
+                  Detalle de la cuenta
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Estos son los productos cargados en tu mesa.
+                </p>
+              </div>
+            </div>
+
+            {isLoading ? (
+              <div className="rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">
+                Cargando detalle...
+              </div>
+            ) : billItems.length === 0 ? (
+              <div className="rounded-2xl bg-slate-50 p-4 text-sm font-semibold text-slate-500">
+                No hay productos para mostrar todavía.
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-2xl border border-slate-100">
+                <div className="divide-y divide-slate-100">
+                  {billItems.map((item) => (
+                    <div key={item.key} className="bg-white px-3 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-slate-950">
+                            {item.quantity}× {item.name}
+                          </p>
+
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            {formatPriceARS(item.unitPrice)} c/u
+                          </p>
+
+                          {item.note && (
+                            <p className="mt-1 rounded-xl bg-slate-50 px-2 py-1 text-xs font-medium text-slate-500">
+                              Nota: {item.note}
+                            </p>
+                          )}
+                        </div>
+
+                        <p className="shrink-0 text-sm font-black text-slate-950">
+                          {formatPriceARS(item.subtotal)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-3 py-3">
+                  <span className="text-sm font-black text-slate-950">
+                    Total
+                  </span>
+                  <span className="text-lg font-black text-slate-950">
+                    {formatPriceARS(total)}
+                  </span>
+                </div>
+              </div>
+            )}
+          </section>
 
           <section className="mb-5">
             <div className="mb-3">
