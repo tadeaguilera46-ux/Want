@@ -301,7 +301,7 @@ const Menu = () => {
 
             <div className="mt-3 overflow-hidden rounded-[26px] border border-black/5 bg-white shadow-[0_10px_24px_-14px_rgba(0,0,0,0.18)]">
               {coverUrl && (
-                <div className="aspect-[16/4] w-full overflow-hidden bg-zinc-100">
+                <div className="aspect-[16/2] w-full overflow-hidden bg-zinc-100">
                   <img
                     src={coverUrl}
                     alt={restaurantName}
