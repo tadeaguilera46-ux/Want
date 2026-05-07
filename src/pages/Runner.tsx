@@ -9,6 +9,7 @@ import {
   MessageSquareText,
   ChevronRight,
   LogOut,
+  Volume2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth-context";
@@ -20,6 +21,7 @@ import {
   orderBy,
   updateDoc,
   doc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { actualizarEstadoCuenta } from "../lib/bill";
 import { markMesaAvailable } from "../lib/mesas";
@@ -38,14 +40,44 @@ const NEW_BADGE_MS = 15000;
 const WARNING_MINUTES = 10;
 const DANGER_MINUTES = 15;
 
+type ReadyTaskType = "food" | "drinks";
+
+type ReadyTask = {
+  id: string;
+  type: ReadyTaskType;
+  order: PedidoRecord;
+  items: PedidoItem[];
+};
+
 const normalizeObservation = (value?: string) => value?.trim() || "";
+
+const isFoodItem = (item: PedidoItem) => item.category !== "drinks";
+const isDrinkItem = (item: PedidoItem) => item.category === "drinks";
 
 const Runner = () => {
   const { restaurantId } = useRestaurant();
   const navigate = useNavigate();
   const { logout, user } = useAuth();
 
+  const [tab, setTab] = useState<"orders" | "bills">("orders");
+  const [orders, setOrders] = useState<PedidoRecord[]>([]);
+  const [bills, setBills] = useState<CuentaRecord[]>([]);
+  const [loadingOrdersById, setLoadingOrdersById] = useState<
+    Record<string, boolean>
+  >({});
+  const [loadingBillsById, setLoadingBillsById] = useState<
+    Record<string, boolean>
+  >({});
+  const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now());
+  const [soundEnabled, setSoundEnabled] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+
+  const notifiedBillIdsRef = useRef<Set<string>>(new Set());
+  const notifiedReadyTaskIdsRef = useRef<Set<string>>(new Set());
+  const firstBillsLoadRef = useRef(true);
+  const firstOrdersLoadRef = useRef(true);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const handleLogout = async () => {
     try {
@@ -65,21 +97,6 @@ const Runner = () => {
     }
   };
 
-  const [tab, setTab] = useState<"orders" | "bills">("orders");
-  const [orders, setOrders] = useState<PedidoRecord[]>([]);
-  const [bills, setBills] = useState<CuentaRecord[]>([]);
-  const [loadingOrdersById, setLoadingOrdersById] = useState<Record<string, boolean>>({});
-  const [loadingBillsById, setLoadingBillsById] = useState<Record<string, boolean>>({});
-  const [error, setError] = useState<string | null>(null);
-  const [now, setNow] = useState(Date.now());
-  const [soundEnabled, setSoundEnabled] = useState(false);
-
-  const notifiedBillIdsRef = useRef<Set<string>>(new Set());
-  const notifiedReadyOrderIdsRef = useRef<Set<string>>(new Set());
-  const firstBillsLoadRef = useRef(true);
-  const firstOrdersLoadRef = useRef(true);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
   useEffect(() => {
     const audio = new Audio("/ding.mp3");
     audio.preload = "auto";
@@ -91,21 +108,27 @@ const Runner = () => {
     };
   }, []);
 
-  useEffect(() => {
-    const unlockAudio = async () => {
-      if (!audioRef.current || soundEnabled) return;
+  const enableSound = async () => {
+    if (!audioRef.current) return;
 
-      try {
-        audioRef.current.muted = true;
-        audioRef.current.currentTime = 0;
-        await audioRef.current.play();
-        audioRef.current.pause();
-        audioRef.current.currentTime = 0;
-        audioRef.current.muted = false;
-        setSoundEnabled(true);
-      } catch (error) {
-        console.error("No se pudo habilitar el sonido del runner:", error);
-      }
+    try {
+      audioRef.current.muted = true;
+      audioRef.current.currentTime = 0;
+      await audioRef.current.play();
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      audioRef.current.muted = false;
+      setSoundEnabled(true);
+      localStorage.setItem("want-runner-sound-enabled", "true");
+    } catch (error) {
+      console.error("No se pudo habilitar el sonido del runner:", error);
+    }
+  };
+
+  useEffect(() => {
+    const unlockAudio = () => {
+      if (soundEnabled) return;
+      void enableSound();
     };
 
     window.addEventListener("click", unlockAudio, { once: true });
@@ -117,9 +140,21 @@ const Runner = () => {
     };
   }, [soundEnabled]);
 
+  useEffect(() => {
+    if (!soundEnabled) return;
+
+    const keepAlive = setInterval(() => {
+      if (!audioRef.current) return;
+
+      audioRef.current.load();
+    }, 25000);
+
+    return () => clearInterval(keepAlive);
+  }, [soundEnabled]);
+
   const playSound = async () => {
     try {
-      if (!audioRef.current) return;
+      if (!audioRef.current || !soundEnabled) return;
 
       const audio = audioRef.current.cloneNode(true) as HTMLAudioElement;
       audio.volume = 1;
@@ -138,29 +173,49 @@ const Runner = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const tieneComida = (order: PedidoRecord) =>
-    order.estadoCocina !== null && order.estadoCocina !== undefined;
+  const hasFood = (order: PedidoRecord) =>
+    order.items?.some(isFoodItem) &&
+    order.estadoCocina !== null &&
+    order.estadoCocina !== undefined;
 
-  const tieneBebidas = (order: PedidoRecord) =>
-    order.estadoBarra !== null && order.estadoBarra !== undefined;
+  const hasDrinks = (order: PedidoRecord) =>
+    order.items?.some(isDrinkItem) &&
+    order.estadoBarra !== null &&
+    order.estadoBarra !== undefined;
 
-  const pedidoListoParaRunner = (order: PedidoRecord) => {
-    const hayComida = tieneComida(order);
-    const hayBebidas = tieneBebidas(order);
+  const getReadyTasksFromOrders = (data: PedidoRecord[]) => {
+    const tasks: ReadyTask[] = [];
 
-    if (hayComida && hayBebidas) {
-      return order.estadoCocina === "listo" && order.estadoBarra === "listo";
-    }
+    data.forEach((order) => {
+      const foodItems = order.items?.filter(isFoodItem) || [];
+      const drinkItems = order.items?.filter(isDrinkItem) || [];
 
-    if (hayComida) {
-      return order.estadoCocina === "listo";
-    }
+      if (
+        foodItems.length > 0 &&
+        order.estadoCocina === "listo"
+      ) {
+        tasks.push({
+          id: `${order.id}__food`,
+          type: "food",
+          order,
+          items: foodItems,
+        });
+      }
 
-    if (hayBebidas) {
-      return order.estadoBarra === "listo";
-    }
+      if (
+        drinkItems.length > 0 &&
+        order.estadoBarra === "listo"
+      ) {
+        tasks.push({
+          id: `${order.id}__drinks`,
+          type: "drinks",
+          order,
+          items: drinkItems,
+        });
+      }
+    });
 
-    return false;
+    return tasks;
   };
 
   const getCreatedAtMs = (
@@ -183,9 +238,7 @@ const Runner = () => {
     value: PedidoRecord["createdAt"] | CuentaRecord["createdAt"]
   ) => {
     const createdAtMs = getCreatedAtMs(value);
-
     if (!createdAtMs) return 0;
-
     return Math.max(0, Math.floor((now - createdAtMs) / 1000));
   };
 
@@ -202,7 +255,10 @@ const Runner = () => {
     const minutes = Math.floor(diffSeconds / 60);
     const seconds = diffSeconds % 60;
 
-    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(
+      2,
+      "0"
+    )}`;
   };
 
   const getTimeStyles = (
@@ -221,26 +277,15 @@ const Runner = () => {
     return "bg-slate-100 text-slate-700 border border-slate-200";
   };
 
-  const getOrderCardStyles = (order: PedidoRecord) => {
-    const completo =
-      (!tieneComida(order) || order.estadoCocina === "listo") &&
-      (!tieneBebidas(order) || order.estadoBarra === "listo");
+  const getTaskCardStyles = (task: ReadyTask) => {
+    const minutes = getElapsedMinutes(task.order.createdAt);
 
-    const minutes = getElapsedMinutes(order.createdAt);
+    if (minutes >= DANGER_MINUTES) return "border-l-4 border-l-red-500";
+    if (minutes >= WARNING_MINUTES) return "border-l-4 border-l-amber-500";
 
-    if (!completo) {
-      return "border-l-4 border-l-amber-500";
-    }
-
-    if (minutes >= DANGER_MINUTES) {
-      return "border-l-4 border-l-red-500";
-    }
-
-    if (minutes >= WARNING_MINUTES) {
-      return "border-l-4 border-l-amber-500";
-    }
-
-    return "border-l-4 border-l-emerald-500";
+    return task.type === "drinks"
+      ? "border-l-4 border-l-blue-500"
+      : "border-l-4 border-l-emerald-500";
   };
 
   const getBillCardStyles = (bill: CuentaRecord) => {
@@ -272,27 +317,28 @@ const Runner = () => {
           ...document.data(),
         })) as PedidoRecord[];
 
-        const pedidosListos = data.filter((order) => pedidoListoParaRunner(order));
+        const readyTasks = getReadyTasksFromOrders(data);
 
         if (firstOrdersLoadRef.current) {
-          pedidosListos.forEach((order) => {
-            notifiedReadyOrderIdsRef.current.add(order.id);
+          readyTasks.forEach((task) => {
+            notifiedReadyTaskIdsRef.current.add(task.id);
           });
           firstOrdersLoadRef.current = false;
         } else {
-          const nuevosPedidosListos = pedidosListos.filter(
-            (order) => !notifiedReadyOrderIdsRef.current.has(order.id)
+          const newReadyTasks = readyTasks.filter(
+            (task) => !notifiedReadyTaskIdsRef.current.has(task.id)
           );
 
-          if (nuevosPedidosListos.length > 0) {
+          if (newReadyTasks.length > 0) {
             void playSound();
-            nuevosPedidosListos.forEach((order) => {
-              notifiedReadyOrderIdsRef.current.add(order.id);
+
+            newReadyTasks.forEach((task) => {
+              notifiedReadyTaskIdsRef.current.add(task.id);
             });
           }
         }
 
-        setOrders(pedidosListos);
+        setOrders(data);
       },
       (err) => {
         console.error("Error escuchando pedidos listos:", err);
@@ -301,7 +347,7 @@ const Runner = () => {
     );
 
     return () => unsubscribe();
-  }, [restaurantId]);
+  }, [restaurantId, soundEnabled]);
 
   useEffect(() => {
     if (!restaurantId) {
@@ -325,21 +371,24 @@ const Runner = () => {
           ...document.data(),
         })) as CuentaRecord[];
 
-        const cuentasPendientes = data.filter((bill) => bill.estado === "pendiente");
+        const pendingBillsData = data.filter(
+          (bill) => bill.estado === "pendiente"
+        );
 
         if (firstBillsLoadRef.current) {
-          cuentasPendientes.forEach((bill) => {
+          pendingBillsData.forEach((bill) => {
             notifiedBillIdsRef.current.add(bill.id);
           });
           firstBillsLoadRef.current = false;
         } else {
-          const nuevas = cuentasPendientes.filter(
+          const newBills = pendingBillsData.filter(
             (bill) => !notifiedBillIdsRef.current.has(bill.id)
           );
 
-          if (nuevas.length > 0) {
+          if (newBills.length > 0) {
             void playSound();
-            nuevas.forEach((bill) => {
+
+            newBills.forEach((bill) => {
               notifiedBillIdsRef.current.add(bill.id);
             });
           }
@@ -354,26 +403,37 @@ const Runner = () => {
     );
 
     return () => unsubscribe();
-  }, [restaurantId]);
+  }, [restaurantId, soundEnabled]);
 
-  const markDelivered = async (id: string) => {
-    if (loadingOrdersById[id] || !restaurantId) return;
+  const markDelivered = async (task: ReadyTask) => {
+    if (loadingOrdersById[task.id] || !restaurantId) return;
 
     try {
-      setLoadingOrdersById((prev) => ({ ...prev, [id]: true }));
+      setLoadingOrdersById((prev) => ({ ...prev, [task.id]: true }));
       setError(null);
 
-      const ref = doc(db, "restaurants", restaurantId, "pedidos", id);
+      const ref = doc(db, "restaurants", restaurantId, "pedidos", task.order.id);
 
-      await updateDoc(ref, {
-        estadoCocina: "entregado",
-        estadoBarra: "entregado",
-      });
+      if (task.type === "food") {
+        await updateDoc(ref, {
+          estadoCocina: "entregado",
+          cocinaDeliveredAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      if (task.type === "drinks") {
+        await updateDoc(ref, {
+          estadoBarra: "entregado",
+          barraDeliveredAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
     } catch (err) {
       console.error("Error marcando pedido como entregado:", err);
       setError("No se pudo marcar el pedido como entregado.");
     } finally {
-      setLoadingOrdersById((prev) => ({ ...prev, [id]: false }));
+      setLoadingOrdersById((prev) => ({ ...prev, [task.id]: false }));
     }
   };
 
@@ -410,6 +470,7 @@ const Runner = () => {
     const ok = window.confirm(
       `¿Confirmás que la mesa ${bill.mesa} ya está limpia y lista para nuevos clientes?`
     );
+
     if (!ok) return;
 
     try {
@@ -430,6 +491,13 @@ const Runner = () => {
       setLoadingBillsById((prev) => ({ ...prev, [bill.id]: false }));
     }
   };
+
+  const readyTasks = useMemo(() => {
+    return getReadyTasksFromOrders(orders).sort(
+      (a, b) =>
+        getCreatedAtMs(a.order.createdAt) - getCreatedAtMs(b.order.createdAt)
+    );
+  }, [orders]);
 
   const pendingBills = bills.filter((bill) => bill.estado === "pendiente").length;
   const visibleBills = bills.filter((bill) => bill.estado !== "cerrada");
@@ -458,19 +526,13 @@ const Runner = () => {
     return "bg-gray-100 text-gray-700 border border-gray-300";
   };
 
-  const readyOrders = useMemo(() => {
-    return [...orders].sort(
-      (a, b) => getCreatedAtMs(a.createdAt) - getCreatedAtMs(b.createdAt)
-    );
-  }, [orders]);
-
   const renderItemsSection = (
     title: string,
     items: PedidoItem[],
     icon?: "food" | "drinks"
   ) => {
     if (items.length === 0) return null;
-    
+
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">
@@ -530,30 +592,24 @@ const Runner = () => {
     );
   };
 
-  const renderOrderCard = (order: PedidoRecord) => {
-    const comida =
-      order.items?.filter((item: PedidoItem) => item.category !== "drinks") || [];
-    const bebidas =
-      order.items?.filter((item: PedidoItem) => item.category === "drinks") || [];
-    const isLoading = !!loadingOrdersById[order.id];
-    const isNew = now - getCreatedAtMs(order.createdAt) < NEW_BADGE_MS;
-    const completo =
-      (!tieneComida(order) || order.estadoCocina === "listo") &&
-      (!tieneBebidas(order) || order.estadoBarra === "listo");
+  const renderReadyTaskCard = (task: ReadyTask) => {
+    const isLoading = !!loadingOrdersById[task.id];
+    const isNew = now - getCreatedAtMs(task.order.createdAt) < NEW_BADGE_MS;
+    const isFood = task.type === "food";
 
     return (
       <motion.div
-        key={order.id}
+        key={task.id}
         layout
-        className={`rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 ${getOrderCardStyles(
-          order
+        className={`rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 ${getTaskCardStyles(
+          task
         )} ${isNew ? "ring-2 ring-orange-300" : ""}`}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-xl font-black tracking-tight text-slate-900">
-                Mesa {order.mesa}
+                Mesa {task.order.mesa}
               </h2>
 
               {isNew && (
@@ -566,36 +622,54 @@ const Runner = () => {
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <div
                 className={`inline-flex items-center rounded-full px-3 py-1.5 text-sm font-bold ${getTimeStyles(
-                  order.createdAt
+                  task.order.createdAt
                 )}`}
               >
-                ⏱ {formatElapsedTime(order.createdAt)}
+                ⏱ {formatElapsedTime(task.order.createdAt)}
               </div>
 
               <span
-                className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide ${
-                  completo
-                    ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                    : "bg-amber-100 text-amber-800 border border-amber-200"
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide ${
+                  isFood
+                    ? "border-emerald-200 bg-emerald-100 text-emerald-700"
+                    : "border-blue-200 bg-blue-100 text-blue-700"
                 }`}
               >
-                {completo ? "Completo" : "Parcial"}
+                {isFood ? <Utensils size={13} /> : <Wine size={13} />}
+                {isFood ? "Comida lista" : "Bebidas listas"}
               </span>
+
+              {hasFood(task.order) && hasDrinks(task.order) && (
+                <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide text-amber-800">
+                  Entrega parcial
+                </span>
+              )}
             </div>
           </div>
         </div>
 
         <div className="space-y-4">
-          {renderItemsSection("Cocina", comida, "food")}
-          {renderItemsSection("Bar", bebidas, "drinks")}
+          {renderItemsSection(
+            isFood ? "Cocina lista" : "Bar listo",
+            task.items,
+            task.type
+          )}
         </div>
 
         <button
-          onClick={() => markDelivered(order.id)}
+          onClick={() => markDelivered(task)}
           disabled={isLoading}
-          className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 text-sm font-extrabold text-white transition-all duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+          className={`mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-sm font-extrabold text-white transition-all duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 ${
+            isFood ? "bg-emerald-600" : "bg-blue-600"
+          }`}
         >
-          <span>{isLoading ? "Actualizando..." : "Marcar como entregado"}</span>
+          <span>
+            {isLoading
+              ? "Actualizando..."
+              : isFood
+                ? "Marcar comida entregada"
+                : "Marcar bebidas entregadas"}
+          </span>
           {!isLoading && <ChevronRight size={16} />}
         </button>
       </motion.div>
@@ -765,31 +839,31 @@ const Runner = () => {
                   Runner
                 </h1>
                 <p className="mt-0.5 text-sm text-slate-500">
-                  {readyOrders.length} pedidos listos · {visibleBills.length} cuentas activas
+                  {readyTasks.length} entregas listas · {visibleBills.length} cuentas activas
                 </p>
                 {user?.email && (
-                    <p className="mt-1 text-xs text-slate-400">
-                      Sesión activa: {user.email}
-                    </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Sesión activa: {user.email}
+                  </p>
                 )}
               </div>
 
               <div className="ml-auto flex flex-col items-end gap-2">
-              <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
-                <Clock size={12} />
-                Live
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              </div>
+                <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
+                  <Clock size={12} />
+                  Live
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                </div>
 
-              <button
-                onClick={handleLogout}
-                disabled={loggingOut}
-                className="flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
-              >
-                <LogOut size={14} />
-                {loggingOut ? "Cerrando..." : "Cerrar sesiósn"}
-              </button>
-            </div>
+                <button
+                  onClick={handleLogout}
+                  disabled={loggingOut}
+                  className="flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+                >
+                  <LogOut size={14} />
+                  {loggingOut ? "Cerrando..." : "Cerrar sesión"}
+                </button>
+              </div>
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2">
@@ -801,7 +875,7 @@ const Runner = () => {
                     : "border border-slate-200 bg-white text-slate-700"
                 }`}
               >
-                Pedidos
+                Entregas
                 <span
                   className={`ml-2 rounded-full px-2 py-0.5 text-xs ${
                     tab === "orders"
@@ -809,7 +883,7 @@ const Runner = () => {
                       : "bg-slate-100 text-slate-700"
                   }`}
                 >
-                  {readyOrders.length}
+                  {readyTasks.length}
                 </span>
               </button>
 
@@ -844,9 +918,14 @@ const Runner = () => {
 
         <main className="px-4 py-4 pb-24 sm:px-5 sm:py-5">
           {!soundEnabled && (
-            <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
-              Tocá una vez la pantalla para habilitar el sonido.
-            </div>
+            <button
+              type="button"
+              onClick={() => void enableSound()}
+              className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-extrabold text-amber-900"
+            >
+              <Volume2 size={16} />
+              Activar sonido de alertas
+            </button>
           )}
 
           {error && (
@@ -857,18 +936,18 @@ const Runner = () => {
 
           {tab === "orders" && (
             <>
-              {readyOrders.length === 0 ? (
+              {readyTasks.length === 0 ? (
                 <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center shadow-sm">
                   <p className="text-base font-semibold text-slate-700">
-                    No hay pedidos listos
+                    No hay entregas listas
                   </p>
                   <p className="mt-1 text-sm text-slate-500">
-                    Cuando cocina o barra terminen un pedido, va a aparecer acá.
+                    Cuando cocina o barra marquen algo como listo, va a aparecer acá.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
-                  {readyOrders.map(renderOrderCard)}
+                  {readyTasks.map(renderReadyTaskCard)}
                 </div>
               )}
             </>
