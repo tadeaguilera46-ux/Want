@@ -337,6 +337,7 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
       });
 
       await createPaymentRecord(restaurant.id, {
+        restaurantId: restaurant.id,
         type: "monthly",
         amount,
         plan: restaurant.plan || "pro",
@@ -369,6 +370,7 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
       });
 
       await createPaymentRecord(restaurant.id, {
+        restaurantId: restaurant.id,
         type: "setup",
         amount,
         plan: restaurant.plan || "pro",
@@ -459,6 +461,7 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
 
       if (setupFeePaid && restaurant.setupFeePaid !== true) {
         await createPaymentRecord(restaurant.id, {
+          restaurantId: restaurant.id,
           type: "setup",
           amount: setupPrice,
           plan,
