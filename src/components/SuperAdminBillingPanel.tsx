@@ -798,10 +798,10 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
 
                   <label className="flex h-11 items-center gap-2 self-end rounded-2xl border border-zinc-200 bg-white px-3 text-sm font-bold text-zinc-700">
                     <input
+                      key={`setup-${restaurant.id}-${restaurant.setupFeePaid ? "paid" : "pending"}`}
                       name="setupFeePaid"
                       type="checkbox"
                       defaultChecked={Boolean(restaurant.setupFeePaid)}
-                      key={`setup-${restaurant.id}-${restaurant.setupFeePaid ? "paid" : "pending"}`}
                       className="h-4 w-4 rounded border-zinc-300"
                     />
                     Setup pagado
