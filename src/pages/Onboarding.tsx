@@ -14,13 +14,22 @@ import {
   Loader2,
   ShieldCheck,
   Sparkles,
+  BarChart3,
+  Boxes,
+  Users,
+  DoorOpen,
 } from "lucide-react";
 
 import { auth, getDb } from "@/lib/firebase";
+import {
+  canCreateTable,
+  getPlanLimits,
+  getStaffLimitLabel,
+  getTableLimitLabel,
+  type RestaurantPlan,
+} from "@/lib/plan";
 
 const db = getDb();
-
-type RestaurantPlan = "starter" | "pro" | "premium";
 
 const PLAN_OPTIONS: {
   id: RestaurantPlan;
@@ -28,27 +37,29 @@ const PLAN_OPTIONS: {
   price: number;
   setup: number;
   description: string;
+  recommended?: boolean;
 }[] = [
   {
     id: "starter",
     name: "Starter",
     price: 70000,
     setup: 250000,
-    description: "Ideal para bares chicos o restaurantes simples.",
+    description: "Ideal para bares chicos, cafés o restaurantes simples.",
   },
   {
     id: "pro",
     name: "Pro",
     price: 100000,
     setup: 400000,
-    description: "Recomendado para restaurantes con operación completa.",
+    description: "Recomendado para restaurantes con más operación y métricas.",
+    recommended: true,
   },
   {
     id: "premium",
     name: "Premium",
     price: 160000,
     setup: 600000,
-    description: "Para locales con más volumen y soporte premium.",
+    description: "Para locales grandes con stock, analytics y operación avanzada.",
   },
 ];
 
@@ -109,11 +120,37 @@ const Onboarding = () => {
     return PLAN_OPTIONS.find((item) => item.id === plan) || PLAN_OPTIONS[1];
   }, [plan]);
 
+  const selectedPlanLimits = useMemo(() => getPlanLimits(plan), [plan]);
+
+  const selectedTableLimitLabel = getTableLimitLabel(plan);
+  const selectedStaffLimitLabel = getStaffLimitLabel(plan);
+
+  const normalizedTableCount = Number(tableCount);
+  const tableLimitReached =
+    Number.isInteger(normalizedTableCount) &&
+    normalizedTableCount > 0 &&
+    !canCreateTable(plan, normalizedTableCount - 1);
+
   const handleRestaurantNameChange = (value: string) => {
     setRestaurantName(value);
 
     if (!restaurantId.trim()) {
       setRestaurantId(normalizeRestaurantId(value));
+    }
+  };
+
+  const handlePlanChange = (nextPlan: RestaurantPlan) => {
+    setPlan(nextPlan);
+
+    const nextLimits = getPlanLimits(nextPlan);
+    const currentTables = Number(tableCount);
+
+    if (
+      nextLimits.maxTables !== null &&
+      Number.isInteger(currentTables) &&
+      currentTables > nextLimits.maxTables
+    ) {
+      setTableCount(String(nextLimits.maxTables));
     }
   };
 
@@ -123,7 +160,7 @@ const Onboarding = () => {
     const cleanName = restaurantName.trim();
     const cleanRestaurantId = normalizeRestaurantId(restaurantId);
     const cleanEmail = email.trim().toLowerCase();
-    const normalizedTableCount = Number(tableCount);
+    const tablesToCreate = Number(tableCount);
 
     if (!cleanName) {
       setMessage("Ingresá el nombre del restaurante.");
@@ -146,11 +183,18 @@ const Onboarding = () => {
     }
 
     if (
-      !Number.isInteger(normalizedTableCount) ||
-      normalizedTableCount <= 0 ||
-      normalizedTableCount > 100
+      !Number.isInteger(tablesToCreate) ||
+      tablesToCreate <= 0 ||
+      tablesToCreate > 500
     ) {
-      setMessage("Ingresá una cantidad de mesas válida entre 1 y 100.");
+      setMessage("Ingresá una cantidad de mesas válida.");
+      return;
+    }
+
+    if (!canCreateTable(plan, tablesToCreate - 1)) {
+      setMessage(
+        `El plan ${selectedPlan.name} permite hasta ${selectedTableLimitLabel} mesas. Elegí menos mesas o seleccioná un plan superior.`
+      );
       return;
     }
 
@@ -222,13 +266,14 @@ const Onboarding = () => {
         updatedAt: serverTimestamp(),
       });
 
-      for (let index = 1; index <= normalizedTableCount; index += 1) {
+      for (let index = 1; index <= tablesToCreate; index += 1) {
         batch.set(
           doc(db, "restaurants", cleanRestaurantId, "mesas", String(index)),
           {
             restaurantId: cleanRestaurantId,
             numero: index,
             estado: "available",
+            active: true,
             activeSessionId: null,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -371,13 +416,26 @@ const Onboarding = () => {
                 <input
                   type="number"
                   min={1}
-                  max={100}
+                  max={selectedPlanLimits.maxTables || 500}
                   value={tableCount}
                   onChange={(event) => setTableCount(event.target.value)}
                   disabled={loading}
-                  className="h-12 rounded-2xl border border-zinc-200 px-4 text-sm font-medium outline-none transition focus:ring-2 focus:ring-black/10 disabled:opacity-60"
+                  className={`h-12 rounded-2xl border px-4 text-sm font-medium outline-none transition focus:ring-2 focus:ring-black/10 disabled:opacity-60 ${
+                    tableLimitReached
+                      ? "border-red-300 bg-red-50"
+                      : "border-zinc-200"
+                  }`}
                   required
                 />
+
+                <span
+                  className={`text-xs font-semibold ${
+                    tableLimitReached ? "text-red-600" : "text-zinc-400"
+                  }`}
+                >
+                  Límite del plan {selectedPlan.name}:{" "}
+                  {selectedTableLimitLabel} mesas.
+                </span>
               </label>
             </div>
 
@@ -389,13 +447,14 @@ const Onboarding = () => {
               <div className="grid gap-3">
                 {PLAN_OPTIONS.map((option) => {
                   const selected = option.id === plan;
+                  const limits = getPlanLimits(option.id);
 
                   return (
                     <button
                       key={option.id}
                       type="button"
                       disabled={loading}
-                      onClick={() => setPlan(option.id)}
+                      onClick={() => handlePlanChange(option.id)}
                       className={`rounded-3xl border p-4 text-left transition ${
                         selected
                           ? "border-zinc-950 bg-zinc-950 text-white"
@@ -404,7 +463,22 @@ const Onboarding = () => {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-lg font-black">{option.name}</p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-lg font-black">{option.name}</p>
+
+                            {option.recommended && (
+                              <span
+                                className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide ${
+                                  selected
+                                    ? "bg-white/15 text-white"
+                                    : "bg-emerald-100 text-emerald-700"
+                                }`}
+                              >
+                                Recomendado
+                              </span>
+                            )}
+                          </div>
+
                           <p
                             className={`mt-1 text-sm ${
                               selected ? "text-white/70" : "text-zinc-500"
@@ -454,6 +528,62 @@ const Onboarding = () => {
                           </p>
                         </div>
                       </div>
+
+                      <div className="mt-4 grid gap-2">
+                        <div
+                          className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-bold ${
+                            selected ? "bg-white/10" : "bg-zinc-50"
+                          }`}
+                        >
+                          <DoorOpen size={14} />
+                          Mesas:{" "}
+                          {limits.maxTables === null
+                            ? "Ilimitadas"
+                            : `hasta ${limits.maxTables}`}
+                        </div>
+
+                        <div
+                          className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-bold ${
+                            selected ? "bg-white/10" : "bg-zinc-50"
+                          }`}
+                        >
+                          <Users size={14} />
+                          Empleados:{" "}
+                          {limits.maxStaff === null
+                            ? "Ilimitados"
+                            : `hasta ${limits.maxStaff}`}
+                        </div>
+
+                        <div
+                          className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-bold ${
+                            limits.analytics
+                              ? selected
+                                ? "bg-emerald-500/20 text-emerald-100"
+                                : "bg-emerald-50 text-emerald-700"
+                              : selected
+                                ? "bg-white/10 text-white/50"
+                                : "bg-zinc-50 text-zinc-400"
+                          }`}
+                        >
+                          <BarChart3 size={14} />
+                          Analytics {limits.analytics ? "incluido" : "no incluido"}
+                        </div>
+
+                        <div
+                          className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-bold ${
+                            limits.stock
+                              ? selected
+                                ? "bg-emerald-500/20 text-emerald-100"
+                                : "bg-emerald-50 text-emerald-700"
+                              : selected
+                                ? "bg-white/10 text-white/50"
+                                : "bg-zinc-50 text-zinc-400"
+                          }`}
+                        >
+                          <Boxes size={14} />
+                          Stock {limits.stock ? "incluido" : "no incluido"}
+                        </div>
+                      </div>
                     </button>
                   );
                 })}
@@ -462,8 +592,8 @@ const Onboarding = () => {
 
             <button
               type="submit"
-              disabled={loading}
-              className="mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-950 text-base font-black text-white transition hover:opacity-90 disabled:opacity-60"
+              disabled={loading || tableLimitReached}
+              className="mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-950 text-base font-black text-white transition hover:opacity-90 disabled:opacity-40"
             >
               {loading ? (
                 <>
@@ -492,7 +622,7 @@ const Onboarding = () => {
               {[
                 "Restaurante multi-tenant",
                 "Usuario admin del dueño",
-                "Mesas iniciales",
+                "Mesas iniciales según el plan",
                 "Trial gratis de 7 días",
                 "Billing en Super Admin",
                 "Panel listo para cargar menú y branding",
@@ -514,6 +644,18 @@ const Onboarding = () => {
               <p className="mt-1 text-sm text-white/60">
                 {formatPriceARS(selectedPlan.price)} / mes
               </p>
+
+              <div className="mt-4 grid gap-2 text-sm text-white/75">
+                <p>Mesas: {selectedTableLimitLabel}</p>
+                <p>Empleados: {selectedStaffLimitLabel}</p>
+                <p>
+                  Analytics:{" "}
+                  {selectedPlanLimits.analytics ? "Incluido" : "No incluido"}
+                </p>
+                <p>
+                  Stock: {selectedPlanLimits.stock ? "Incluido" : "No incluido"}
+                </p>
+              </div>
             </div>
           </aside>
         </div>
