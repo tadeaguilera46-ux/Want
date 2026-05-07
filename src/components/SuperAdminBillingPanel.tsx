@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   addDoc,
   collection,
   doc,
+  onSnapshot,
   serverTimestamp,
   Timestamp,
   updateDoc,
@@ -19,6 +20,9 @@ import {
   AlertTriangle,
   Wallet,
   RefreshCw,
+  History,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { getDb } from "@/lib/firebase";
 
@@ -46,6 +50,21 @@ export type BillingRestaurantRecord = {
   blockedAt?: {
     toDate?: () => Date;
   } | null;
+};
+
+type PaymentRecord = {
+  id: string;
+  restaurantId?: string;
+  type?: "monthly" | "setup" | string;
+  amount?: number;
+  plan?: RestaurantPlan;
+  notes?: string;
+  paidAt?: {
+    toDate?: () => Date;
+  };
+  createdAt?: {
+    toDate?: () => Date;
+  };
 };
 
 type Props = {
@@ -97,38 +116,31 @@ const formatShortDate = (value?: { toDate?: () => Date } | null) => {
 
 const getDateTimestamp = (value: string) => {
   if (!value) return null;
-
-  const date = new Date(`${value}T12:00:00`);
-
-  return Timestamp.fromDate(date);
+  return Timestamp.fromDate(new Date(`${value}T12:00:00`));
 };
 
+const getTimestampDate = (value?: { toDate?: () => Date } | null) =>
+  value?.toDate?.() || null;
+
 const getPlanLabel = (plan?: RestaurantPlan) => {
-  switch (plan) {
-    case "starter":
-      return "Starter";
-    case "pro":
-      return "Pro";
-    case "premium":
-      return "Premium";
-    default:
-      return "Sin plan";
-  }
+  if (plan === "starter") return "Starter";
+  if (plan === "pro") return "Pro";
+  if (plan === "premium") return "Premium";
+  return "Sin plan";
 };
 
 const getStatusLabel = (status?: SubscriptionStatus) => {
-  switch (status) {
-    case "trial":
-      return "Trial";
-    case "active":
-      return "Activo";
-    case "past_due":
-      return "Moroso";
-    case "blocked":
-      return "Bloqueado";
-    default:
-      return "Sin definir";
-  }
+  if (status === "trial") return "Trial";
+  if (status === "active") return "Activo";
+  if (status === "past_due") return "Moroso";
+  if (status === "blocked") return "Bloqueado";
+  return "Sin definir";
+};
+
+const getPaymentTypeLabel = (type?: string) => {
+  if (type === "monthly") return "Mensualidad";
+  if (type === "setup") return "Setup inicial";
+  return "Pago";
 };
 
 const getStatusStyle = (status?: SubscriptionStatus) => {
@@ -146,17 +158,17 @@ const getStatusStyle = (status?: SubscriptionStatus) => {
   }
 };
 
-const getTimestampDate = (value?: { toDate?: () => Date } | null) => {
-  return value?.toDate?.() || null;
-};
-
 const addOneBillingMonth = (baseDate: Date, billingDay?: number) => {
   const nextDate = new Date(baseDate);
   const desiredDay = Math.min(Math.max(Number(billingDay || 10), 1), 31);
 
   const targetYear = nextDate.getFullYear();
   const targetMonth = nextDate.getMonth() + 1;
-  const lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+  const lastDayOfTargetMonth = new Date(
+    targetYear,
+    targetMonth + 1,
+    0
+  ).getDate();
 
   nextDate.setFullYear(targetYear);
   nextDate.setMonth(targetMonth);
@@ -177,20 +189,14 @@ const getEffectiveStatus = (
   if (currentStatus === "trial") {
     const trialEndsAt = getTimestampDate(restaurant.trialEndsAt);
 
-    if (trialEndsAt && trialEndsAt < now) {
-      return "past_due";
-    }
+    if (trialEndsAt && trialEndsAt < now) return "past_due";
 
     return "trial";
   }
 
   const nextBillingDate = getTimestampDate(restaurant.nextBillingDate);
 
-  if (
-    currentStatus === "active" &&
-    nextBillingDate &&
-    nextBillingDate < now
-  ) {
+  if (currentStatus === "active" && nextBillingDate && nextBillingDate < now) {
     return "past_due";
   }
 
@@ -209,9 +215,59 @@ const getEffectiveStatus = (
 const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [syncingOverdue, setSyncingOverdue] = useState(false);
+  const [expandedPaymentsId, setExpandedPaymentsId] = useState<string | null>(
+    null
+  );
+  const [paymentsByRestaurant, setPaymentsByRestaurant] = useState<
+    Record<string, PaymentRecord[]>
+  >({});
 
   const sortedRestaurants = useMemo(() => {
     return [...restaurants].sort((a, b) => a.id.localeCompare(b.id));
+  }, [restaurants]);
+
+  useEffect(() => {
+    if (restaurants.length === 0) {
+      setPaymentsByRestaurant({});
+      return;
+    }
+
+    const unsubscribers = restaurants.map((restaurant) => {
+      return onSnapshot(
+        collection(db, "restaurants", restaurant.id, "payments"),
+        (snapshot) => {
+          const payments = snapshot.docs.map((paymentDoc) => ({
+            id: paymentDoc.id,
+            ...paymentDoc.data(),
+          })) as PaymentRecord[];
+
+          payments.sort((a, b) => {
+            const aDate =
+              a.paidAt?.toDate?.()?.getTime() ||
+              a.createdAt?.toDate?.()?.getTime() ||
+              0;
+            const bDate =
+              b.paidAt?.toDate?.()?.getTime() ||
+              b.createdAt?.toDate?.()?.getTime() ||
+              0;
+
+            return bDate - aDate;
+          });
+
+          setPaymentsByRestaurant((prev) => ({
+            ...prev,
+            [restaurant.id]: payments,
+          }));
+        },
+        (error) => {
+          console.error("Error cargando pagos:", error);
+        }
+      );
+    });
+
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe());
+    };
   }, [restaurants]);
 
   const metrics = useMemo(() => {
@@ -233,17 +289,9 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
           acc.mrr += monthlyPrice;
         }
 
-        if (effectiveStatus === "trial") {
-          acc.trial += 1;
-        }
-
-        if (effectiveStatus === "past_due") {
-          acc.pastDue += 1;
-        }
-
-        if (effectiveStatus === "blocked") {
-          acc.blocked += 1;
-        }
+        if (effectiveStatus === "trial") acc.trial += 1;
+        if (effectiveStatus === "past_due") acc.pastDue += 1;
+        if (effectiveStatus === "blocked") acc.blocked += 1;
 
         if (!restaurant.setupFeePaid) {
           acc.setupPending += setupPrice;
@@ -273,6 +321,18 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
     );
   }, [restaurants]);
 
+  const createPaymentRecord = async (
+    restaurantId: string,
+    data: Record<string, unknown>
+  ) => {
+    await addDoc(collection(db, "restaurants", restaurantId, "payments"), {
+      restaurantId,
+      ...data,
+      createdAt: serverTimestamp(),
+      paidAt: serverTimestamp(),
+    });
+  };
+
   const updateRestaurantBilling = async (
     restaurantId: string,
     data: Record<string, unknown>,
@@ -293,17 +353,6 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
     } finally {
       setSavingId(null);
     }
-  };
-
-  const createPaymentRecord = async (
-    restaurantId: string,
-    data: Record<string, unknown>
-  ) => {
-    await addDoc(collection(db, "restaurants", restaurantId, "payments"), {
-      ...data,
-      createdAt: serverTimestamp(),
-      paidAt: serverTimestamp(),
-    });
   };
 
   const handleQuickStatus = async (
@@ -337,7 +386,6 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
       });
 
       await createPaymentRecord(restaurant.id, {
-        restaurantId: restaurant.id,
         type: "monthly",
         amount,
         plan: restaurant.plan || "pro",
@@ -370,7 +418,6 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
       });
 
       await createPaymentRecord(restaurant.id, {
-        restaurantId: restaurant.id,
         type: "setup",
         amount,
         plan: restaurant.plan || "pro",
@@ -401,8 +448,7 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
 
         batch.update(doc(db, "restaurants", restaurant.id), {
           subscriptionStatus: effectiveStatus,
-          blockedAt:
-            effectiveStatus === "blocked" ? serverTimestamp() : null,
+          blockedAt: effectiveStatus === "blocked" ? serverTimestamp() : null,
           updatedAt: serverTimestamp(),
         });
 
@@ -415,7 +461,6 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
       }
 
       await batch.commit();
-
       onMessage?.(`${updates} restaurante(s) sincronizado(s).`);
     } catch (error) {
       console.error("Error sincronizando vencidos:", error);
@@ -454,14 +499,12 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
         billingDay,
         nextBillingDate: getDateTimestamp(nextBillingDateValue),
         trialEndsAt: getDateTimestamp(trialEndsAtValue),
-        blockedAt:
-          subscriptionStatus === "blocked" ? serverTimestamp() : null,
+        blockedAt: subscriptionStatus === "blocked" ? serverTimestamp() : null,
         updatedAt: serverTimestamp(),
       });
 
       if (setupFeePaid && restaurant.setupFeePaid !== true) {
         await createPaymentRecord(restaurant.id, {
-          restaurantId: restaurant.id,
           type: "setup",
           amount: setupPrice,
           plan,
@@ -491,7 +534,8 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
               Control de pagos SaaS
             </h2>
             <p className="mt-1 text-sm text-zinc-500">
-              Administrá planes, mensualidades, trials y bloqueos.
+              Administrá planes, mensualidades, trials, bloqueos e historial de
+              pagos.
             </p>
           </div>
         </div>
@@ -512,9 +556,7 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
 
       <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
-          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-zinc-950 text-white">
-            <TrendingUp size={18} />
-          </div>
+          <TrendingUp className="mb-3 text-zinc-950" size={22} />
           <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-zinc-500">
             MRR activo
           </p>
@@ -524,9 +566,7 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
         </div>
 
         <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
-          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-600 text-white">
-            <CheckCircle2 size={18} />
-          </div>
+          <CheckCircle2 className="mb-3 text-emerald-600" size={22} />
           <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-zinc-500">
             Activos
           </p>
@@ -536,9 +576,7 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
         </div>
 
         <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
-          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500 text-white">
-            <AlertTriangle size={18} />
-          </div>
+          <AlertTriangle className="mb-3 text-amber-500" size={22} />
           <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-zinc-500">
             Morosos / Bloqueados
           </p>
@@ -548,38 +586,13 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
         </div>
 
         <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
-          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 text-white">
-            <Wallet size={18} />
-          </div>
+          <Wallet className="mb-3 text-blue-600" size={22} />
           <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-zinc-500">
             Setup pendiente
           </p>
           <p className="mt-1 text-2xl font-black text-zinc-950">
             {formatPriceARS(metrics.setupPending)}
           </p>
-        </div>
-      </div>
-
-      <div className="mb-5 grid gap-2 rounded-3xl border border-zinc-200 bg-white p-4 md:grid-cols-3">
-        <div className="rounded-2xl bg-blue-50 px-4 py-3">
-          <p className="text-xs font-bold text-blue-700">Trials</p>
-          <p className="text-xl font-black text-blue-950">{metrics.trial}</p>
-        </div>
-
-        <div className="rounded-2xl bg-amber-50 px-4 py-3">
-          <p className="text-xs font-bold text-amber-700">
-            Vencen próximos 7 días
-          </p>
-          <p className="text-xl font-black text-amber-950">
-            {metrics.dueSoon}
-          </p>
-        </div>
-
-        <div className="rounded-2xl bg-zinc-50 px-4 py-3">
-          <p className="text-xs font-bold text-zinc-600">
-            Restaurantes totales
-          </p>
-          <p className="text-xl font-black text-zinc-950">{metrics.total}</p>
         </div>
       </div>
 
@@ -595,6 +608,8 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
             const currentPlan = restaurant.plan || "pro";
             const saving = savingId === restaurant.id;
             const hasCalculatedStatus = currentStatus !== effectiveStatus;
+            const restaurantPayments = paymentsByRestaurant[restaurant.id] || [];
+            const isPaymentsOpen = expandedPaymentsId === restaurant.id;
 
             return (
               <form
@@ -801,7 +816,9 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
 
                   <label className="flex h-11 items-center gap-2 self-end rounded-2xl border border-zinc-200 bg-white px-3 text-sm font-bold text-zinc-700">
                     <input
-                      key={`setup-${restaurant.id}-${restaurant.setupFeePaid ? "paid" : "pending"}`}
+                      key={`setup-${restaurant.id}-${
+                        restaurant.setupFeePaid ? "paid" : "pending"
+                      }`}
                       name="setupFeePaid"
                       type="checkbox"
                       defaultChecked={Boolean(restaurant.setupFeePaid)}
@@ -811,7 +828,25 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
                   </label>
                 </div>
 
-                <div className="mt-4 flex justify-end">
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedPaymentsId((current) =>
+                        current === restaurant.id ? null : restaurant.id
+                      )
+                    }
+                    className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-bold text-zinc-900 transition hover:bg-zinc-50"
+                  >
+                    <History size={16} />
+                    Historial de pagos ({restaurantPayments.length})
+                    {isPaymentsOpen ? (
+                      <ChevronUp size={16} />
+                    ) : (
+                      <ChevronDown size={16} />
+                    )}
+                  </button>
+
                   <button
                     type="submit"
                     disabled={saving}
@@ -821,6 +856,41 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
                     {saving ? "Guardando..." : "Guardar billing"}
                   </button>
                 </div>
+
+                {isPaymentsOpen && (
+                  <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-3">
+                    {restaurantPayments.length === 0 ? (
+                      <p className="text-sm font-medium text-zinc-500">
+                        Todavía no hay pagos registrados.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {restaurantPayments.slice(0, 8).map((payment) => (
+                          <div
+                            key={payment.id}
+                            className="flex flex-col gap-1 rounded-2xl bg-zinc-50 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div>
+                              <p className="text-sm font-black text-zinc-950">
+                                {getPaymentTypeLabel(payment.type)} ·{" "}
+                                {formatPriceARS(Number(payment.amount || 0))}
+                              </p>
+                              <p className="mt-0.5 text-xs text-zinc-500">
+                                {formatShortDate(payment.paidAt)} · Plan{" "}
+                                {getPlanLabel(payment.plan)}
+                              </p>
+                              {payment.notes && (
+                                <p className="mt-1 text-xs text-zinc-400">
+                                  {payment.notes}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </form>
             );
           })}
