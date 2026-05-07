@@ -595,7 +595,7 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
 
             return (
               <form
-                key={restaurant.id}
+                key={`${restaurant.id}-${restaurant.subscriptionStatus}-${restaurant.setupFeePaid}-${restaurant.nextBillingDate?.toDate?.()?.getTime() || "no-date"}-${restaurant.trialEndsAt?.toDate?.()?.getTime() || "no-trial"}`}
                 onSubmit={(event) => {
                   event.preventDefault();
                   void handleSaveManual(
