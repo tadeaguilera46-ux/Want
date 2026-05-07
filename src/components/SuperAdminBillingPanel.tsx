@@ -800,7 +800,8 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
                     <input
                       name="setupFeePaid"
                       type="checkbox"
-                      defaultChecked={restaurant.setupFeePaid === true}
+                      defaultChecked={Boolean(restaurant.setupFeePaid)}
+                      key={`setup-${restaurant.id}-${restaurant.setupFeePaid ? "paid" : "pending"}`}
                       className="h-4 w-4 rounded border-zinc-300"
                     />
                     Setup pagado
