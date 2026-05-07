@@ -5,7 +5,6 @@ import { CartProvider } from "@/lib/CartContext";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-
 // Guards
 import SubscriptionGuard from "@/components/guards/SubscriptionGuard";
 
@@ -17,6 +16,7 @@ const Cart = lazy(() => import("./pages/Cart"));
 const OrderConfirmed = lazy(() => import("./pages/OrderConfirmed"));
 const RequestBill = lazy(() => import("./pages/RequestBill"));
 const BillConfirmed = lazy(() => import("./pages/BillConfirmed"));
+const Onboarding = lazy(() => import("./pages/Onboarding"));
 
 // Staff
 const Kitchen = lazy(() => import("./pages/Kitchen"));
@@ -225,7 +225,11 @@ const App = () => (
               </SubscriptionGuard>
             }
           />
-
+          <Route 
+            path="/onboarding"  
+            element={<Onboarding />
+            } 
+          />
           {/* =========================
               404
           ========================= */}
