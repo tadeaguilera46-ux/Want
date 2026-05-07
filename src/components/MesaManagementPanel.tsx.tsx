@@ -1,15 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot, query } from "firebase/firestore";
+import { collection, doc, onSnapshot, query } from "firebase/firestore";
 import { Copy, DoorOpen, Download, Plus, QrCode, X } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
 import { getDb } from "../lib/firebase";
 import { createMesaIfNotExists, setMesaActive } from "../lib/mesas";
+import {
+  canCreateTable,
+  getPlanLimits,
+  getTableLimitLabel,
+  normalizePlan,
+  PLAN_LABELS,
+  type RestaurantPlan,
+} from "../lib/plan";
 
 type MesaAdmin = {
   id: string;
   numero?: number;
   estado?: string;
   active?: boolean;
+};
+
+type RestaurantBillingData = {
+  plan?: RestaurantPlan;
 };
 
 type Props = {
@@ -28,10 +40,29 @@ const getMenuUrl = (restaurantId: string, mesa: number) => {
 
 export function MesaManagementPanel({ restaurantId }: Props) {
   const [mesas, setMesas] = useState<MesaAdmin[]>([]);
+  const [restaurantPlan, setRestaurantPlan] = useState<RestaurantPlan>("starter");
   const [newMesaNumber, setNewMesaNumber] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [qrMesa, setQrMesa] = useState<MesaAdmin | null>(null);
+
+  useEffect(() => {
+    if (!restaurantId) return;
+
+    const unsubscribe = onSnapshot(
+      doc(db, "restaurants", restaurantId),
+      (snapshot) => {
+        const data = snapshot.data() as RestaurantBillingData | undefined;
+        setRestaurantPlan(normalizePlan(data?.plan));
+      },
+      (error) => {
+        console.error("Error cargando plan del restaurante:", error);
+        setRestaurantPlan("starter");
+      }
+    );
+
+    return () => unsubscribe();
+  }, [restaurantId]);
 
   useEffect(() => {
     if (!restaurantId) return;
@@ -68,6 +99,14 @@ export function MesaManagementPanel({ restaurantId }: Props) {
     });
   }, [mesas]);
 
+  const activeMesasCount = useMemo(() => {
+    return mesas.filter((mesa) => mesa.active !== false).length;
+  }, [mesas]);
+
+  const tableLimitLabel = getTableLimitLabel(restaurantPlan);
+  const planLimits = getPlanLimits(restaurantPlan);
+  const reachedTableLimit = !canCreateTable(restaurantPlan, activeMesasCount);
+
   const handleCreateMesa = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -75,6 +114,13 @@ export function MesaManagementPanel({ restaurantId }: Props) {
 
     if (!Number.isInteger(numero) || numero <= 0) {
       alert("Ingresá un número de mesa válido");
+      return;
+    }
+
+    if (!canCreateTable(restaurantPlan, activeMesasCount)) {
+      alert(
+        `Tu plan ${PLAN_LABELS[restaurantPlan]} permite hasta ${tableLimitLabel} mesas activas.`
+      );
       return;
     }
 
@@ -96,6 +142,13 @@ export function MesaManagementPanel({ restaurantId }: Props) {
     if (!Number.isInteger(numero) || numero <= 0) return;
 
     const nextActive = mesa.active === false;
+
+    if (nextActive && !canCreateTable(restaurantPlan, activeMesasCount)) {
+      alert(
+        `Tu plan ${PLAN_LABELS[restaurantPlan]} permite hasta ${tableLimitLabel} mesas activas.`
+      );
+      return;
+    }
 
     if (!nextActive && mesa.estado === "occupied") {
       alert("No podés desactivar una mesa ocupada.");
@@ -132,7 +185,9 @@ export function MesaManagementPanel({ restaurantId }: Props) {
     if (!qrMesa) return;
 
     const numero = Number(qrMesa.numero ?? qrMesa.id);
-    const canvas = document.getElementById("mesa-qr-canvas") as HTMLCanvasElement | null;
+    const canvas = document.getElementById(
+      "mesa-qr-canvas"
+    ) as HTMLCanvasElement | null;
 
     if (!canvas) return;
 
@@ -166,6 +221,28 @@ export function MesaManagementPanel({ restaurantId }: Props) {
               <p className="mt-1 text-sm text-zinc-500">
                 Creá mesas, activalas/desactivalas y generá el QR real.
               </p>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-zinc-700">
+                  Plan {PLAN_LABELS[restaurantPlan]}
+                </span>
+
+                <span
+                  className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wide ${
+                    reachedTableLimit
+                      ? "border-red-200 bg-red-100 text-red-700"
+                      : "border-emerald-200 bg-emerald-100 text-emerald-700"
+                  }`}
+                >
+                  Mesas activas: {activeMesasCount} / {tableLimitLabel}
+                </span>
+
+                {planLimits.maxTables !== null && (
+                  <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">
+                    Upgrade a Premium para mesas ilimitadas
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -181,14 +258,21 @@ export function MesaManagementPanel({ restaurantId }: Props) {
 
             <button
               type="submit"
-              disabled={saving}
-              className="flex h-11 items-center gap-2 rounded-2xl bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+              disabled={saving || reachedTableLimit}
+              className="flex h-11 items-center gap-2 rounded-2xl bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
             >
               <Plus size={16} />
               Crear
             </button>
           </form>
         </div>
+
+        {reachedTableLimit && (
+          <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            Alcanzaste el límite de mesas activas para el plan{" "}
+            {PLAN_LABELS[restaurantPlan]}. Desactivá una mesa o subí de plan.
+          </div>
+        )}
 
         {loading ? (
           <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">

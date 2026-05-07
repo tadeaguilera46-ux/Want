@@ -1,6 +1,19 @@
 import { createUserWithEmailAndPassword, signOut } from "firebase/auth";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  serverTimestamp,
+  setDoc,
+} from "firebase/firestore";
 import { getDb, getSecondaryAuth } from "./firebase";
+import {
+  canCreateStaff,
+  getStaffLimitLabel,
+  normalizePlan,
+  PLAN_LABELS,
+} from "./plan";
 
 export type StaffRole = "admin" | "kitchen" | "bar" | "runner";
 
@@ -20,6 +33,31 @@ export async function createStaffMember({
   const db = getDb();
   const secondaryAuth = getSecondaryAuth();
 
+  const restaurantSnap = await getDoc(doc(db, "restaurants", restaurantId));
+
+  if (!restaurantSnap.exists()) {
+    throw new Error("Restaurante no encontrado.");
+  }
+
+  const restaurantData = restaurantSnap.data();
+  const plan = normalizePlan(restaurantData.plan);
+
+  const staffSnap = await getDocs(
+    collection(db, "restaurants", restaurantId, "staff")
+  );
+
+  const activeStaffCount = staffSnap.docs.filter(
+    (staffDoc) => staffDoc.data().active === true
+  ).length;
+
+  if (!canCreateStaff(plan, activeStaffCount)) {
+    throw new Error(
+      `El plan ${PLAN_LABELS[plan]} permite hasta ${getStaffLimitLabel(
+        plan
+      )} empleados activos.`
+    );
+  }
+
   try {
     const credential = await createUserWithEmailAndPassword(
       secondaryAuth,
@@ -34,7 +72,9 @@ export async function createStaffMember({
       email: email.trim().toLowerCase(),
       role,
       active: true,
+      restaurantId,
       createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
 
     await signOut(secondaryAuth);
