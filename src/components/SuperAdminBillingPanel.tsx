@@ -1,5 +1,13 @@
 import { useMemo, useState } from "react";
-import { doc, serverTimestamp, updateDoc, Timestamp } from "firebase/firestore";
+import {
+  addDoc,
+  collection,
+  doc,
+  serverTimestamp,
+  Timestamp,
+  updateDoc,
+  writeBatch,
+} from "firebase/firestore";
 import {
   BadgeDollarSign,
   Ban,
@@ -7,6 +15,10 @@ import {
   Clock,
   CreditCard,
   Save,
+  TrendingUp,
+  AlertTriangle,
+  Wallet,
+  RefreshCw,
 } from "lucide-react";
 import { getDb } from "@/lib/firebase";
 
@@ -50,6 +62,15 @@ const STATUS_OPTIONS: SubscriptionStatus[] = [
   "blocked",
 ];
 
+const GRACE_DAYS_BEFORE_BLOCK = 7;
+
+const formatPriceARS = (value: number) =>
+  new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
+
 const formatDateInput = (value?: { toDate?: () => Date } | null) => {
   const date = value?.toDate?.();
 
@@ -62,12 +83,37 @@ const formatDateInput = (value?: { toDate?: () => Date } | null) => {
   return `${year}-${month}-${day}`;
 };
 
+const formatShortDate = (value?: { toDate?: () => Date } | null) => {
+  const date = value?.toDate?.();
+
+  if (!date) return "Sin fecha";
+
+  return new Intl.DateTimeFormat("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+};
+
 const getDateTimestamp = (value: string) => {
   if (!value) return null;
 
   const date = new Date(`${value}T12:00:00`);
 
   return Timestamp.fromDate(date);
+};
+
+const getPlanLabel = (plan?: RestaurantPlan) => {
+  switch (plan) {
+    case "starter":
+      return "Starter";
+    case "pro":
+      return "Pro";
+    case "premium":
+      return "Premium";
+    default:
+      return "Sin plan";
+  }
 };
 
 const getStatusLabel = (status?: SubscriptionStatus) => {
@@ -85,25 +131,147 @@ const getStatusLabel = (status?: SubscriptionStatus) => {
   }
 };
 
-const getPlanLabel = (plan?: RestaurantPlan) => {
-  switch (plan) {
-    case "starter":
-      return "Starter";
-    case "pro":
-      return "Pro";
-    case "premium":
-      return "Premium";
+const getStatusStyle = (status?: SubscriptionStatus) => {
+  switch (status) {
+    case "active":
+      return "border-emerald-200 bg-emerald-100 text-emerald-800";
+    case "trial":
+      return "border-blue-200 bg-blue-100 text-blue-800";
+    case "past_due":
+      return "border-amber-200 bg-amber-100 text-amber-800";
+    case "blocked":
+      return "border-red-200 bg-red-100 text-red-800";
     default:
-      return "Sin plan";
+      return "border-zinc-200 bg-zinc-100 text-zinc-700";
   }
 };
 
+const getTimestampDate = (value?: { toDate?: () => Date } | null) => {
+  return value?.toDate?.() || null;
+};
+
+const addOneBillingMonth = (baseDate: Date, billingDay?: number) => {
+  const nextDate = new Date(baseDate);
+  const desiredDay = Math.min(Math.max(Number(billingDay || 10), 1), 31);
+
+  const targetYear = nextDate.getFullYear();
+  const targetMonth = nextDate.getMonth() + 1;
+  const lastDayOfTargetMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+
+  nextDate.setFullYear(targetYear);
+  nextDate.setMonth(targetMonth);
+  nextDate.setDate(Math.min(desiredDay, lastDayOfTargetMonth));
+  nextDate.setHours(12, 0, 0, 0);
+
+  return nextDate;
+};
+
+const getEffectiveStatus = (
+  restaurant: BillingRestaurantRecord
+): SubscriptionStatus => {
+  const currentStatus = restaurant.subscriptionStatus || "trial";
+  const now = new Date();
+
+  if (currentStatus === "blocked") return "blocked";
+
+  if (currentStatus === "trial") {
+    const trialEndsAt = getTimestampDate(restaurant.trialEndsAt);
+
+    if (trialEndsAt && trialEndsAt < now) {
+      return "past_due";
+    }
+
+    return "trial";
+  }
+
+  const nextBillingDate = getTimestampDate(restaurant.nextBillingDate);
+
+  if (
+    currentStatus === "active" &&
+    nextBillingDate &&
+    nextBillingDate < now
+  ) {
+    return "past_due";
+  }
+
+  if (
+    currentStatus === "past_due" &&
+    nextBillingDate &&
+    now.getTime() - nextBillingDate.getTime() >
+      GRACE_DAYS_BEFORE_BLOCK * 24 * 60 * 60 * 1000
+  ) {
+    return "blocked";
+  }
+
+  return currentStatus;
+};
+
 const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [syncingOverdue, setSyncingOverdue] = useState(false);
+
   const sortedRestaurants = useMemo(() => {
     return [...restaurants].sort((a, b) => a.id.localeCompare(b.id));
   }, [restaurants]);
 
-  const [savingId, setSavingId] = useState<string | null>(null);
+  const metrics = useMemo(() => {
+    const now = new Date();
+    const sevenDaysFromNow = new Date();
+    sevenDaysFromNow.setDate(now.getDate() + 7);
+
+    return restaurants.reduce(
+      (acc, restaurant) => {
+        const effectiveStatus = getEffectiveStatus(restaurant);
+        const monthlyPrice = Number(restaurant.monthlyPrice || 0);
+        const setupPrice = Number(restaurant.setupPrice || 0);
+        const nextBillingDate = getTimestampDate(restaurant.nextBillingDate);
+
+        acc.total += 1;
+
+        if (effectiveStatus === "active") {
+          acc.active += 1;
+          acc.mrr += monthlyPrice;
+        }
+
+        if (effectiveStatus === "trial") {
+          acc.trial += 1;
+        }
+
+        if (effectiveStatus === "past_due") {
+          acc.pastDue += 1;
+        }
+
+        if (effectiveStatus === "blocked") {
+          acc.blocked += 1;
+        }
+
+        if (!restaurant.setupFeePaid) {
+          acc.setupPending += setupPrice;
+        }
+
+        if (
+          effectiveStatus === "active" &&
+          nextBillingDate &&
+          nextBillingDate >= now &&
+          nextBillingDate <= sevenDaysFromNow
+        ) {
+          acc.dueSoon += 1;
+        }
+
+        return acc;
+      },
+      {
+        total: 0,
+        active: 0,
+        trial: 0,
+        pastDue: 0,
+        blocked: 0,
+        dueSoon: 0,
+        mrr: 0,
+        setupPending: 0,
+      }
+    );
+  }, [restaurants]);
 
   const updateRestaurantBilling = async (
     restaurantId: string,
@@ -127,6 +295,17 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
     }
   };
 
+  const createPaymentRecord = async (
+    restaurantId: string,
+    data: Record<string, unknown>
+  ) => {
+    await addDoc(collection(db, "restaurants", restaurantId, "payments"), {
+      ...data,
+      createdAt: serverTimestamp(),
+      paidAt: serverTimestamp(),
+    });
+  };
+
   const handleQuickStatus = async (
     restaurantId: string,
     status: SubscriptionStatus
@@ -142,21 +321,106 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
   };
 
   const handleMarkMonthlyPaid = async (restaurant: BillingRestaurantRecord) => {
-    const nextDate = new Date();
-    nextDate.setMonth(nextDate.getMonth() + 1);
+    const currentNextBillingDate = getTimestampDate(restaurant.nextBillingDate);
+    const baseDate = currentNextBillingDate || new Date();
+    const nextDate = addOneBillingMonth(baseDate, restaurant.billingDay);
+    const amount = Number(restaurant.monthlyPrice || 0);
 
-    const billingDay = restaurant.billingDay || nextDate.getDate();
-    nextDate.setDate(Math.min(billingDay, 28));
+    try {
+      setSavingId(restaurant.id);
 
-    await updateRestaurantBilling(
-      restaurant.id,
-      {
+      await updateDoc(doc(db, "restaurants", restaurant.id), {
         subscriptionStatus: "active",
         nextBillingDate: Timestamp.fromDate(nextDate),
         blockedAt: null,
-      },
-      "Pago mensual registrado correctamente."
-    );
+        updatedAt: serverTimestamp(),
+      });
+
+      await createPaymentRecord(restaurant.id, {
+        type: "monthly",
+        amount,
+        plan: restaurant.plan || "pro",
+        nextBillingDate: Timestamp.fromDate(nextDate),
+        notes: "Pago mensual registrado desde Super Admin.",
+      });
+
+      onMessage?.(
+        `Pago mensual registrado. Nuevo vencimiento: ${new Intl.DateTimeFormat(
+          "es-AR"
+        ).format(nextDate)}.`
+      );
+    } catch (error) {
+      console.error("Error registrando pago mensual:", error);
+      onMessage?.("No se pudo registrar el pago mensual.");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const handleMarkSetupPaid = async (restaurant: BillingRestaurantRecord) => {
+    const amount = Number(restaurant.setupPrice || 0);
+
+    try {
+      setSavingId(restaurant.id);
+
+      await updateDoc(doc(db, "restaurants", restaurant.id), {
+        setupFeePaid: true,
+        updatedAt: serverTimestamp(),
+      });
+
+      await createPaymentRecord(restaurant.id, {
+        type: "setup",
+        amount,
+        plan: restaurant.plan || "pro",
+        notes: "Setup inicial marcado como pagado desde Super Admin.",
+      });
+
+      onMessage?.("Setup inicial marcado como pagado.");
+    } catch (error) {
+      console.error("Error marcando setup pagado:", error);
+      onMessage?.("No se pudo marcar el setup como pagado.");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const handleSyncOverdueRestaurants = async () => {
+    try {
+      setSyncingOverdue(true);
+
+      const batch = writeBatch(db);
+      let updates = 0;
+
+      sortedRestaurants.forEach((restaurant) => {
+        const storedStatus = restaurant.subscriptionStatus || "trial";
+        const effectiveStatus = getEffectiveStatus(restaurant);
+
+        if (storedStatus === effectiveStatus) return;
+
+        batch.update(doc(db, "restaurants", restaurant.id), {
+          subscriptionStatus: effectiveStatus,
+          blockedAt:
+            effectiveStatus === "blocked" ? serverTimestamp() : null,
+          updatedAt: serverTimestamp(),
+        });
+
+        updates += 1;
+      });
+
+      if (updates === 0) {
+        onMessage?.("No hay vencimientos para sincronizar.");
+        return;
+      }
+
+      await batch.commit();
+
+      onMessage?.(`${updates} restaurante(s) sincronizado(s).`);
+    } catch (error) {
+      console.error("Error sincronizando vencidos:", error);
+      onMessage?.("No se pudieron sincronizar los vencimientos.");
+    } finally {
+      setSyncingOverdue(false);
+    }
   };
 
   const handleSaveManual = async (
@@ -176,9 +440,10 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
     const nextBillingDateValue = String(formData.get("nextBillingDate") || "");
     const trialEndsAtValue = String(formData.get("trialEndsAt") || "");
 
-    await updateRestaurantBilling(
-      restaurant.id,
-      {
+    try {
+      setSavingId(restaurant.id);
+
+      await updateDoc(doc(db, "restaurants", restaurant.id), {
         plan,
         subscriptionStatus,
         setupFeePaid,
@@ -189,25 +454,129 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
         trialEndsAt: getDateTimestamp(trialEndsAtValue),
         blockedAt:
           subscriptionStatus === "blocked" ? serverTimestamp() : null,
-      },
-      "Billing guardado correctamente."
-    );
+        updatedAt: serverTimestamp(),
+      });
+
+      if (setupFeePaid && restaurant.setupFeePaid !== true) {
+        await createPaymentRecord(restaurant.id, {
+          type: "setup",
+          amount: setupPrice,
+          plan,
+          notes: "Setup inicial registrado desde guardado manual.",
+        });
+      }
+
+      onMessage?.("Billing guardado correctamente.");
+    } catch (error) {
+      console.error("Error guardando billing:", error);
+      onMessage?.("No se pudo guardar el billing.");
+    } finally {
+      setSavingId(null);
+    }
   };
 
   return (
     <section className="mb-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-      <div className="mb-4 flex items-start gap-3">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-950 text-white">
-          <BadgeDollarSign size={20} />
+      <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <div className="flex items-start gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-950 text-white">
+            <BadgeDollarSign size={20} />
+          </div>
+
+          <div>
+            <h2 className="text-xl font-black text-zinc-950">
+              Control de pagos SaaS
+            </h2>
+            <p className="mt-1 text-sm text-zinc-500">
+              Administrá planes, mensualidades, trials y bloqueos.
+            </p>
+          </div>
         </div>
 
-        <div>
-          <h2 className="text-xl font-black text-zinc-950">
-            Control de pagos SaaS
-          </h2>
-          <p className="mt-1 text-sm text-zinc-500">
-            Administrá planes, mensualidades, trials y bloqueos.
+        <button
+          type="button"
+          disabled={syncingOverdue}
+          onClick={() => void handleSyncOverdueRestaurants()}
+          className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-bold text-zinc-900 transition hover:bg-zinc-50 disabled:opacity-60"
+        >
+          <RefreshCw
+            size={16}
+            className={syncingOverdue ? "animate-spin" : ""}
+          />
+          {syncingOverdue ? "Sincronizando..." : "Sincronizar vencidos"}
+        </button>
+      </div>
+
+      <div className="mb-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
+          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-zinc-950 text-white">
+            <TrendingUp size={18} />
+          </div>
+          <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-zinc-500">
+            MRR activo
           </p>
+          <p className="mt-1 text-2xl font-black text-zinc-950">
+            {formatPriceARS(metrics.mrr)}
+          </p>
+        </div>
+
+        <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
+          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-600 text-white">
+            <CheckCircle2 size={18} />
+          </div>
+          <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-zinc-500">
+            Activos
+          </p>
+          <p className="mt-1 text-2xl font-black text-zinc-950">
+            {metrics.active} / {metrics.total}
+          </p>
+        </div>
+
+        <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
+          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-500 text-white">
+            <AlertTriangle size={18} />
+          </div>
+          <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-zinc-500">
+            Morosos / Bloqueados
+          </p>
+          <p className="mt-1 text-2xl font-black text-zinc-950">
+            {metrics.pastDue} / {metrics.blocked}
+          </p>
+        </div>
+
+        <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
+          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-600 text-white">
+            <Wallet size={18} />
+          </div>
+          <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-zinc-500">
+            Setup pendiente
+          </p>
+          <p className="mt-1 text-2xl font-black text-zinc-950">
+            {formatPriceARS(metrics.setupPending)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mb-5 grid gap-2 rounded-3xl border border-zinc-200 bg-white p-4 md:grid-cols-3">
+        <div className="rounded-2xl bg-blue-50 px-4 py-3">
+          <p className="text-xs font-bold text-blue-700">Trials</p>
+          <p className="text-xl font-black text-blue-950">{metrics.trial}</p>
+        </div>
+
+        <div className="rounded-2xl bg-amber-50 px-4 py-3">
+          <p className="text-xs font-bold text-amber-700">
+            Vencen próximos 7 días
+          </p>
+          <p className="text-xl font-black text-amber-950">
+            {metrics.dueSoon}
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-zinc-50 px-4 py-3">
+          <p className="text-xs font-bold text-zinc-600">
+            Restaurantes totales
+          </p>
+          <p className="text-xl font-black text-zinc-950">{metrics.total}</p>
         </div>
       </div>
 
@@ -219,8 +588,10 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
         <div className="space-y-4">
           {sortedRestaurants.map((restaurant) => {
             const currentStatus = restaurant.subscriptionStatus || "trial";
+            const effectiveStatus = getEffectiveStatus(restaurant);
             const currentPlan = restaurant.plan || "pro";
             const saving = savingId === restaurant.id;
+            const hasCalculatedStatus = currentStatus !== effectiveStatus;
 
             return (
               <form
@@ -232,7 +603,13 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
                     new FormData(event.currentTarget)
                   );
                 }}
-                className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4"
+                className={`rounded-3xl border p-4 ${
+                  effectiveStatus === "blocked"
+                    ? "border-red-200 bg-red-50"
+                    : effectiveStatus === "past_due"
+                      ? "border-amber-200 bg-amber-50"
+                      : "border-zinc-200 bg-zinc-50"
+                }`}
               >
                 <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div>
@@ -248,12 +625,27 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
                         Plan: {getPlanLabel(currentPlan)}
                       </span>
 
+                      <span
+                        className={`rounded-full border px-3 py-1 text-xs font-bold shadow-sm ${getStatusStyle(
+                          effectiveStatus
+                        )}`}
+                      >
+                        Estado: {getStatusLabel(effectiveStatus)}
+                      </span>
+
+                      {hasCalculatedStatus && (
+                        <span className="rounded-full border border-orange-200 bg-orange-100 px-3 py-1 text-xs font-bold text-orange-800 shadow-sm">
+                          Pendiente sincronizar
+                        </span>
+                      )}
+
                       <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-zinc-700 shadow-sm">
-                        Estado: {getStatusLabel(currentStatus)}
+                        Setup:{" "}
+                        {restaurant.setupFeePaid ? "Pagado" : "Pendiente"}
                       </span>
 
                       <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-zinc-700 shadow-sm">
-                        Setup: {restaurant.setupFeePaid ? "Pagado" : "Pendiente"}
+                        Vence: {formatShortDate(restaurant.nextBillingDate)}
                       </span>
                     </div>
                   </div>
@@ -262,7 +654,9 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
                     <button
                       type="button"
                       disabled={saving}
-                      onClick={() => void handleQuickStatus(restaurant.id, "active")}
+                      onClick={() =>
+                        void handleQuickStatus(restaurant.id, "active")
+                      }
                       className="flex h-10 items-center gap-2 rounded-2xl bg-emerald-600 px-4 text-sm font-semibold text-white disabled:opacity-60"
                     >
                       <CheckCircle2 size={15} />
@@ -302,6 +696,18 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
                       <CreditCard size={15} />
                       Pago mensual
                     </button>
+
+                    {!restaurant.setupFeePaid && (
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={() => void handleMarkSetupPaid(restaurant)}
+                        className="flex h-10 items-center gap-2 rounded-2xl bg-blue-600 px-4 text-sm font-semibold text-white disabled:opacity-60"
+                      >
+                        <Wallet size={15} />
+                        Setup pagado
+                      </button>
+                    )}
                   </div>
                 </div>
 
