@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
+import {
+  getDownloadURL,
+  ref,
+  uploadBytesResumable,
+} from "firebase/storage";
 import {
   Image,
   Plus,
@@ -8,8 +13,10 @@ import {
   Pencil,
   Save,
   X,
+  Upload,
+  Loader2,
 } from "lucide-react";
-import { getDb } from "../lib/firebase";
+import { getDb, getStorageService } from "../lib/firebase";
 import {
   createMenuItem,
   deleteMenuItem,
@@ -19,6 +26,9 @@ import {
 } from "../lib/menu";
 
 const db = getDb();
+const storage = getStorageService();
+
+const MAX_MENU_IMAGE_SIZE_MB = 5;
 
 const formatPriceARS = (value: number) =>
   new Intl.NumberFormat("es-AR", {
@@ -49,6 +59,25 @@ const getDisplayCategory = (item: MenuItem) => {
   return item.category || "General";
 };
 
+const getFileExtension = (file: File) => {
+  const parts = file.name.split(".");
+  return parts.length > 1 ? parts.pop()?.toLowerCase() || "jpg" : "jpg";
+};
+
+const validateImageFile = (file: File) => {
+  if (!file.type.startsWith("image/")) {
+    return "El archivo debe ser una imagen.";
+  }
+
+  const maxBytes = MAX_MENU_IMAGE_SIZE_MB * 1024 * 1024;
+
+  if (file.size > maxBytes) {
+    return `La imagen no puede superar los ${MAX_MENU_IMAGE_SIZE_MB}MB.`;
+  }
+
+  return "";
+};
+
 export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,6 +91,12 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [image, setImage] = useState("");
+
+  const [uploadingCreateImage, setUploadingCreateImage] = useState(false);
+  const [uploadingEditImageId, setUploadingEditImageId] = useState<
+    string | null
+  >(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     if (!restaurantId) return;
@@ -100,6 +135,101 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       return a.name.localeCompare(b.name);
     });
   }, [items]);
+
+  const uploadMenuImage = async (file: File) => {
+    const validationError = validateImageFile(file);
+
+    if (validationError) {
+      alert(validationError);
+      return "";
+    }
+
+    const extension = getFileExtension(file);
+    const fileName = `menu-${Date.now()}-${crypto.randomUUID()}.${extension}`;
+    const storagePath = `restaurants/${restaurantId}/menu/${fileName}`;
+    const imageRef = ref(storage, storagePath);
+
+    const uploadTask = uploadBytesResumable(imageRef, file, {
+      contentType: file.type,
+      customMetadata: {
+        restaurantId,
+        type: "menu",
+      },
+    });
+
+    const downloadUrl = await new Promise<string>((resolve, reject) => {
+      uploadTask.on(
+        "state_changed",
+        (snapshot) => {
+          const progress = Math.round(
+            (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+          );
+
+          setUploadProgress(progress);
+        },
+        reject,
+        async () => {
+          const url = await getDownloadURL(uploadTask.snapshot.ref);
+          resolve(url);
+        }
+      );
+    });
+
+    return downloadUrl;
+  };
+
+  const handleCreateImageUpload = async (
+    event: ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) return;
+
+    try {
+      setUploadingCreateImage(true);
+      setUploadProgress(0);
+
+      const url = await uploadMenuImage(file);
+
+      if (url) {
+        setImage(url);
+      }
+    } catch (error) {
+      console.error("Error subiendo imagen del producto:", error);
+      alert("No se pudo subir la imagen.");
+    } finally {
+      setUploadingCreateImage(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleEditImageUpload = async (
+    event: ChangeEvent<HTMLInputElement>,
+    itemId: string
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) return;
+
+    try {
+      setUploadingEditImageId(itemId);
+      setUploadProgress(0);
+
+      const url = await uploadMenuImage(file);
+
+      if (url) {
+        setDraft((prev) => (prev ? { ...prev, image: url } : prev));
+      }
+    } catch (error) {
+      console.error("Error subiendo imagen del producto:", error);
+      alert("No se pudo subir la imagen.");
+    } finally {
+      setUploadingEditImageId(null);
+      setUploadProgress(0);
+    }
+  };
 
   const handleCreate = async () => {
     const normalizedName = name.trim();
@@ -287,17 +417,43 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
         />
 
         <div className="space-y-2">
-          <input
-            placeholder="URL de imagen"
-            value={image}
-            onChange={(e) => setImage(e.target.value)}
-            className="h-11 w-full rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
-          />
+          <label className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100">
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              disabled={uploadingCreateImage}
+              onChange={handleCreateImageUpload}
+            />
+
+            {uploadingCreateImage ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Subiendo {uploadProgress}%
+              </>
+            ) : (
+              <>
+                <Upload size={16} />
+                Subir imagen
+              </>
+            )}
+          </label>
+
+          {image && (
+            <div className="h-24 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100">
+              <img
+                src={image}
+                alt="Preview producto"
+                className="h-full w-full object-cover"
+              />
+            </div>
+          )}
 
           <button
             type="button"
             onClick={handleCreate}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90"
+            disabled={uploadingCreateImage}
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
           >
             <Plus size={16} />
             Agregar
@@ -319,6 +475,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
             {sortedItems.map((item) => {
               const isSaving = savingId === item.id;
               const isEditing = editingId === item.id;
+              const isUploadingEditImage = uploadingEditImageId === item.id;
               const itemType = getItemType(item);
               const itemCategory = getDisplayCategory(item);
 
@@ -328,9 +485,9 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                   className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-3 md:grid-cols-[120px_1fr_auto]"
                 >
                   <div className="h-28 overflow-hidden rounded-2xl bg-zinc-100">
-                    {item.image ? (
+                    {(isEditing ? draft?.image : item.image) ? (
                       <img
-                        src={item.image}
+                        src={isEditing ? draft?.image : item.image}
                         alt={item.name}
                         className="h-full w-full object-cover"
                       />
@@ -375,12 +532,6 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                         <p className="mt-2 text-sm font-bold text-zinc-700">
                           {formatPriceARS(item.price)}
                         </p>
-
-                        {item.image && (
-                          <p className="mt-1 truncate text-xs text-zinc-400">
-                            Imagen: {item.image}
-                          </p>
-                        )}
                       </>
                     ) : (
                       <>
@@ -442,17 +593,44 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                           />
                         </div>
 
-                        <input
-                          value={draft?.image || ""}
-                          placeholder="URL de imagen"
-                          disabled={isSaving}
-                          onChange={(e) =>
-                            setDraft((prev) =>
-                              prev ? { ...prev, image: e.target.value } : prev
-                            )
-                          }
-                          className="mb-2 h-10 w-full rounded-xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
-                        />
+                        <div className="mb-2 grid gap-2 sm:grid-cols-[180px_1fr]">
+                          <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              disabled={isSaving || isUploadingEditImage}
+                              onChange={(event) =>
+                                handleEditImageUpload(event, item.id)
+                              }
+                            />
+
+                            {isUploadingEditImage ? (
+                              <>
+                                <Loader2 size={15} className="animate-spin" />
+                                {uploadProgress}%
+                              </>
+                            ) : (
+                              <>
+                                <Upload size={15} />
+                                Cambiar imagen
+                              </>
+                            )}
+                          </label>
+
+                          <button
+                            type="button"
+                            disabled={isSaving || isUploadingEditImage}
+                            onClick={() =>
+                              setDraft((prev) =>
+                                prev ? { ...prev, image: "" } : prev
+                              )
+                            }
+                            className="h-10 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-60"
+                          >
+                            Quitar imagen
+                          </button>
+                        </div>
 
                         <textarea
                           value={draft?.description || ""}
@@ -486,7 +664,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                       <>
                         <button
                           onClick={() => saveEditing(item)}
-                          disabled={isSaving}
+                          disabled={isSaving || isUploadingEditImage}
                           className="flex h-10 items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
                         >
                           <Save size={15} />
@@ -495,7 +673,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
 
                         <button
                           onClick={cancelEditing}
-                          disabled={isSaving}
+                          disabled={isSaving || isUploadingEditImage}
                           className="flex h-10 items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 font-semibold text-zinc-900 transition hover:bg-zinc-50 disabled:opacity-60"
                         >
                           <X size={15} />
