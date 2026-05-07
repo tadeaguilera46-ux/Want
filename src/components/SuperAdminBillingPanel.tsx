@@ -3,6 +3,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDocs,
   onSnapshot,
   serverTimestamp,
   Timestamp,
@@ -67,6 +68,22 @@ type PaymentRecord = {
   };
 };
 
+type MesaLimitRecord = {
+  id: string;
+  numero?: number;
+  active?: boolean;
+};
+
+type StaffLimitRecord = {
+  id: string;
+  role?: string;
+  active?: boolean;
+  createdAt?: {
+    seconds?: number;
+    toMillis?: () => number;
+  };
+};
+
 type Props = {
   restaurants: BillingRestaurantRecord[];
   onMessage?: (message: string) => void;
@@ -80,6 +97,18 @@ const STATUS_OPTIONS: SubscriptionStatus[] = [
   "past_due",
   "blocked",
 ];
+
+const PLAN_TABLE_LIMITS: Record<RestaurantPlan, number | null> = {
+  starter: 15,
+  pro: 20,
+  premium: null,
+};
+
+const PLAN_STAFF_LIMITS: Record<RestaurantPlan, number | null> = {
+  starter: 7,
+  pro: 10,
+  premium: null,
+};
 
 const GRACE_DAYS_BEFORE_BLOCK = 7;
 
@@ -210,6 +239,103 @@ const getEffectiveStatus = (
   }
 
   return currentStatus;
+};
+
+const getCreatedAtMillis = (item: StaffLimitRecord) => {
+  if (typeof item.createdAt?.toMillis === "function") {
+    return item.createdAt.toMillis();
+  }
+
+  if (typeof item.createdAt?.seconds === "number") {
+    return item.createdAt.seconds * 1000;
+  }
+
+  return 0;
+};
+
+const enforcePlanLimits = async (
+  restaurantId: string,
+  plan: RestaurantPlan
+) => {
+  const tableLimit = PLAN_TABLE_LIMITS[plan];
+  const staffLimit = PLAN_STAFF_LIMITS[plan];
+
+  if (tableLimit === null && staffLimit === null) {
+    return {
+      disabledTables: 0,
+      disabledStaff: 0,
+    };
+  }
+
+  const [mesasSnapshot, staffSnapshot] = await Promise.all([
+    getDocs(collection(db, "restaurants", restaurantId, "mesas")),
+    getDocs(collection(db, "restaurants", restaurantId, "staff")),
+  ]);
+
+  const mesas = mesasSnapshot.docs.map((document) => ({
+    id: document.id,
+    ...document.data(),
+  })) as MesaLimitRecord[];
+
+  const staff = staffSnapshot.docs.map((document) => ({
+    id: document.id,
+    ...document.data(),
+  })) as StaffLimitRecord[];
+
+  const batch = writeBatch(db);
+
+  let disabledTables = 0;
+  let disabledStaff = 0;
+
+  if (tableLimit !== null) {
+    const activeMesas = mesas
+      .filter((mesa) => mesa.active !== false)
+      .sort((a, b) => {
+        const aNumber = Number(a.numero ?? a.id);
+        const bNumber = Number(b.numero ?? b.id);
+        return aNumber - bNumber;
+      });
+
+    activeMesas.slice(tableLimit).forEach((mesa) => {
+      batch.update(doc(db, "restaurants", restaurantId, "mesas", mesa.id), {
+        active: false,
+        updatedAt: serverTimestamp(),
+      });
+
+      disabledTables += 1;
+    });
+  }
+
+  if (staffLimit !== null) {
+    const activeStaff = staff
+      .filter((member) => member.active === true)
+      .sort((a, b) => {
+        if (a.role === "admin" && b.role !== "admin") return -1;
+        if (a.role !== "admin" && b.role === "admin") return 1;
+
+        return getCreatedAtMillis(a) - getCreatedAtMillis(b);
+      });
+
+    activeStaff.slice(staffLimit).forEach((member) => {
+      if (member.role === "admin") return;
+
+      batch.update(doc(db, "restaurants", restaurantId, "staff", member.id), {
+        active: false,
+        updatedAt: serverTimestamp(),
+      });
+
+      disabledStaff += 1;
+    });
+  }
+
+  if (disabledTables > 0 || disabledStaff > 0) {
+    await batch.commit();
+  }
+
+  return {
+    disabledTables,
+    disabledStaff,
+  };
 };
 
 const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
@@ -503,6 +629,8 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
         updatedAt: serverTimestamp(),
       });
 
+      const limitsResult = await enforcePlanLimits(restaurant.id, plan);
+
       if (setupFeePaid && restaurant.setupFeePaid !== true) {
         await createPaymentRecord(restaurant.id, {
           type: "setup",
@@ -512,7 +640,12 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
         });
       }
 
-      onMessage?.("Billing guardado correctamente.");
+      const limitMessage =
+        limitsResult.disabledTables > 0 || limitsResult.disabledStaff > 0
+          ? ` Se ajustaron límites: ${limitsResult.disabledTables} mesa(s) y ${limitsResult.disabledStaff} empleado(s) desactivado(s).`
+          : "";
+
+      onMessage?.(`Billing guardado correctamente.${limitMessage}`);
     } catch (error) {
       console.error("Error guardando billing:", error);
       onMessage?.("No se pudo guardar el billing.");
@@ -737,9 +870,9 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
                       defaultValue={currentPlan}
                       className="h-11 rounded-2xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 outline-none focus:ring-2 focus:ring-black/10"
                     >
-                      {PLAN_OPTIONS.map((plan) => (
-                        <option key={plan} value={plan}>
-                          {getPlanLabel(plan)}
+                      {PLAN_OPTIONS.map((planOption) => (
+                        <option key={planOption} value={planOption}>
+                          {getPlanLabel(planOption)}
                         </option>
                       ))}
                     </select>
