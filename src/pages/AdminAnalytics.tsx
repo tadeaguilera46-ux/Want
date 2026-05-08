@@ -247,7 +247,6 @@ const barColor = "#27272a";
 const AdminAnalytics = () => {
   const navigate = useNavigate();
   const { restaurantId } = useRestaurant();
-
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
