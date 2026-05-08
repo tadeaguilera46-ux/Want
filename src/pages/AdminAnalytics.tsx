@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getDb } from "../lib/firebase";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { collection, doc, onSnapshot, orderBy, query } from "firebase/firestore";
 import { useRestaurant } from "../lib/restaurant-context";
 import {
   ResponsiveContainer,
@@ -30,9 +30,12 @@ import {
   Flame,
   PieChart,
   RefreshCcw,
+  ShieldCheck,
 } from "lucide-react";
 
 const db = getDb();
+
+type RestaurantPlan = "starter" | "pro" | "premium";
 
 type TimestampLike = {
   seconds?: number;
@@ -247,6 +250,13 @@ const barColor = "#27272a";
 const AdminAnalytics = () => {
   const navigate = useNavigate();
   const { restaurantId } = useRestaurant();
+
+  const [currentPlan, setCurrentPlan] = useState<RestaurantPlan>("starter");
+  const [planLoading, setPlanLoading] = useState(true);
+
+  const analyticsEnabled =
+    currentPlan === "pro" || currentPlan === "premium";
+
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [sessions, setSessions] = useState<SessionRecord[]>([]);
@@ -254,6 +264,39 @@ const AdminAnalytics = () => {
 
   useEffect(() => {
     if (!restaurantId) {
+      setCurrentPlan("starter");
+      setPlanLoading(false);
+      return;
+    }
+
+    setPlanLoading(true);
+
+    const unsubscribe = onSnapshot(
+      doc(db, "restaurants", restaurantId),
+      (snapshot) => {
+        const data = snapshot.data();
+        const plan = data?.plan;
+
+        if (plan === "starter" || plan === "pro" || plan === "premium") {
+          setCurrentPlan(plan);
+        } else {
+          setCurrentPlan("starter");
+        }
+
+        setPlanLoading(false);
+      },
+      (error) => {
+        console.error("Error cargando plan del restaurante:", error);
+        setCurrentPlan("starter");
+        setPlanLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [restaurantId]);
+
+  useEffect(() => {
+    if (!restaurantId || !analyticsEnabled) {
       setCuentas([]);
       setPedidos([]);
       setSessions([]);
@@ -311,7 +354,7 @@ const AdminAnalytics = () => {
       unsubPedidos();
       unsubSessions();
     };
-  }, [restaurantId]);
+  }, [restaurantId, analyticsEnabled]);
 
   const cuentasCobradas = useMemo(
     () => cuentas.filter((c) => isCuentaCobrada(c.estado)),
@@ -658,6 +701,50 @@ const AdminAnalytics = () => {
           <p className="mt-2 text-sm text-zinc-600">
             Seleccioná un restaurante antes de entrar a analytics.
           </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (planLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
+        <div className="rounded-3xl border border-zinc-200 bg-white px-6 py-5 shadow-sm">
+          Verificando plan...
+        </div>
+      </div>
+    );
+  }
+
+  if (!analyticsEnabled) {
+    return (
+      <div className="min-h-screen bg-zinc-100 p-6">
+        <div className="mx-auto max-w-2xl rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
+          <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-zinc-950 text-white">
+            <ShieldCheck size={24} />
+          </div>
+
+          <h1 className="mt-5 text-3xl font-black text-zinc-950">
+            Analytics no disponible
+          </h1>
+
+          <p className="mt-3 text-sm leading-relaxed text-zinc-500">
+            Tu plan actual no incluye analytics avanzados. Pasate a Pro o
+            Premium para desbloquear métricas, productos más vendidos,
+            facturación y reportes operativos.
+          </p>
+
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+            Plan actual: {currentPlan.toUpperCase()}
+          </div>
+
+          <button
+            onClick={() => navigate("/staff/admin")}
+            className="mt-6 flex h-11 items-center gap-2 rounded-2xl bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90"
+          >
+            <ArrowLeft size={16} />
+            Volver a Admin
+          </button>
         </div>
       </div>
     );
