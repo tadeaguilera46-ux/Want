@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import admin from "firebase-admin";
+import { randomUUID } from "crypto";
 
 type StockUnit = "kg" | "g" | "l" | "ml" | "unit";
 
@@ -50,18 +51,19 @@ type StockItemDoc = {
   active?: boolean;
 };
 
-const app =
-  admin.apps.length > 0
-    ? admin.app()
-    : admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-        }),
-      });
+const getAdminDb = () => {
+  if (!admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+      }),
+    });
+  }
 
-const db = app.firestore();
+  return admin.firestore();
+};
 
 const toBaseUnit = (quantity: number, unit: StockUnit) => {
   if (unit === "kg") return quantity * 1000;
@@ -91,9 +93,8 @@ const compatibleUnits = (recipeUnit: StockUnit, stockUnit: StockUnit) => {
 
 const normalizeObservation = (value?: string) => value?.trim() || "";
 
-const mergeObservations = (...values: string[]) => {
-  return values.map((v) => v.trim()).filter(Boolean).join(" · ");
-};
+const mergeObservations = (...values: string[]) =>
+  values.map((value) => value.trim()).filter(Boolean).join(" · ");
 
 const validatePedido = (pedido: PedidoInput) => {
   if (!pedido.restaurantId || typeof pedido.restaurantId !== "string") {
@@ -125,7 +126,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    const db = getAdminDb();
     const pedido = req.body as PedidoInput;
+
     validatePedido(pedido);
 
     const restaurantId = pedido.restaurantId.trim();
@@ -133,7 +136,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const pedidoId = await db.runTransaction(async (transaction) => {
       const restaurantRef = db.doc(`restaurants/${restaurantId}`);
+      const mesaRef = db.doc(`restaurants/${restaurantId}/mesas/${mesa}`);
+
       const restaurantSnap = await transaction.get(restaurantRef);
+      const mesaSnap = await transaction.get(mesaRef);
 
       if (!restaurantSnap.exists) {
         throw new Error("Restaurante inexistente");
@@ -142,12 +148,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const restaurantData = restaurantSnap.data() || {};
       const isPremium = restaurantData.plan === "premium";
 
-      const mesaRef = db.doc(`restaurants/${restaurantId}/mesas/${mesa}`);
-      const mesaSnap = await transaction.get(mesaRef);
-
-      let sessionId: string | null = null;
       const mesaData = mesaSnap.exists ? mesaSnap.data() || {} : {};
       const activeSessionId = mesaData.activeSessionId;
+
+      let sessionId: string | null = null;
+      let existingSessionSnap: FirebaseFirestore.DocumentSnapshot | null = null;
 
       if (
         typeof activeSessionId === "string" &&
@@ -157,13 +162,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const sessionRef = db.doc(
           `restaurants/${restaurantId}/sessions/${activeSessionId}`
         );
-        const sessionSnap = await transaction.get(sessionRef);
 
-        if (!sessionSnap.exists) {
+        existingSessionSnap = await transaction.get(sessionRef);
+
+        if (!existingSessionSnap.exists) {
           throw new Error("La mesa tiene una sesión inválida");
         }
 
-        const sessionData = sessionSnap.data() || {};
+        const sessionData = existingSessionSnap.data() || {};
 
         if (sessionData.status !== "active") {
           throw new Error("La sesión de la mesa no está activa");
@@ -172,47 +178,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         sessionId = activeSessionId;
       }
 
-      if (!sessionId) {
-        sessionId = crypto.randomUUID();
+      const menuReads: {
+        rawItem: PedidoItemInput;
+        quantity: number;
+        menuRef: FirebaseFirestore.DocumentReference;
+        menuSnap: FirebaseFirestore.DocumentSnapshot;
+      }[] = [];
 
-        const sessionRef = db.doc(
-          `restaurants/${restaurantId}/sessions/${sessionId}`
-        );
-
-        transaction.set(sessionRef, {
-          restaurantId,
-          tableNumber: mesa,
-          status: "active",
-          openedAt: admin.firestore.FieldValue.serverTimestamp(),
-          closedAt: null,
-          closedReason: null,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
-
-      const normalizedItems = [];
-      const stockRefMap = new Map<string, FirebaseFirestore.DocumentReference>();
-      const stockRequiredBaseMap = new Map<string, number>();
-      const stockMovementMeta = new Map<
+      const stockRefsById = new Map<
         string,
-        {
-          stockItemName: string;
-          stockUnit: StockUnit;
-        }
+        FirebaseFirestore.DocumentReference
       >();
-
-      let tieneComida = false;
-      let tieneBebidas = false;
 
       for (const rawItem of pedido.items) {
         if (!rawItem.id) {
           throw new Error("Hay un producto inválido en el pedido");
         }
 
-        const menuRef = db.doc(
-          `restaurants/${restaurantId}/menu/${rawItem.id}`
-        );
+        const quantity = Number(rawItem.cantidad || rawItem.quantity || 1);
+
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+          throw new Error("Cantidad inválida en el pedido");
+        }
+
+        const menuRef = db.doc(`restaurants/${restaurantId}/menu/${rawItem.id}`);
         const menuSnap = await transaction.get(menuRef);
 
         if (!menuSnap.exists) {
@@ -221,14 +210,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const menuData = menuSnap.data() as MenuItemDoc;
 
-        if (menuData.active === false) {
-          throw new Error(`${menuData.name || rawItem.nombre} no está disponible`);
+        if (Array.isArray(menuData.ingredients)) {
+          for (const ingredient of menuData.ingredients) {
+            if (!stockRefsById.has(ingredient.stockItemId)) {
+              stockRefsById.set(
+                ingredient.stockItemId,
+                db.doc(
+                  `restaurants/${restaurantId}/stock/${ingredient.stockItemId}`
+                )
+              );
+            }
+          }
         }
 
-        const quantity = Number(rawItem.cantidad || rawItem.quantity || 1);
+        menuReads.push({
+          rawItem,
+          quantity,
+          menuRef,
+          menuSnap,
+        });
+      }
 
-        if (!Number.isFinite(quantity) || quantity <= 0) {
-          throw new Error("Cantidad inválida en el pedido");
+      const stockSnapsById = new Map<
+        string,
+        FirebaseFirestore.DocumentSnapshot
+      >();
+
+      for (const [stockItemId, stockRef] of stockRefsById.entries()) {
+        const stockSnap = await transaction.get(stockRef);
+        stockSnapsById.set(stockItemId, stockSnap);
+      }
+
+      const normalizedItems = [];
+      const stockRequiredBaseMap = new Map<string, number>();
+
+      let tieneComida = false;
+      let tieneBebidas = false;
+
+      for (const menuRead of menuReads) {
+        const { rawItem, quantity, menuSnap } = menuRead;
+        const menuData = menuSnap.data() as MenuItemDoc;
+
+        if (menuData.active === false) {
+          throw new Error(`${menuData.name || rawItem.nombre} no está disponible`);
         }
 
         const itemCategory = menuData.type === "drinks" ? "drinks" : "food";
@@ -241,13 +265,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         if (isPremium && Array.isArray(menuData.ingredients)) {
           for (const ingredient of menuData.ingredients) {
-            const stockRef = db.doc(
-              `restaurants/${restaurantId}/stock/${ingredient.stockItemId}`
-            );
+            const stockSnap = stockSnapsById.get(ingredient.stockItemId);
 
-            const stockSnap = await transaction.get(stockRef);
-
-            if (!stockSnap.exists) {
+            if (!stockSnap || !stockSnap.exists) {
               if (ingredient.essential) {
                 throw new Error(
                   `${menuData.name || rawItem.nombre} no está disponible por falta de ${ingredient.stockItemName}`
@@ -274,9 +294,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const stockUnit = stockData.unit || "unit";
 
             if (!compatibleUnits(ingredient.unit, stockUnit)) {
-              throw new Error(
-                `Unidad incompatible en ${ingredient.stockItemName}`
-              );
+              throw new Error(`Unidad incompatible en ${ingredient.stockItemName}`);
             }
 
             const availableBase = toBaseUnit(
@@ -293,7 +311,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             if (requiredPerUnitBase <= 0) continue;
 
-            if (availableBase < requiredTotalBase) {
+            const previousRequired =
+              stockRequiredBaseMap.get(ingredient.stockItemId) || 0;
+
+            const nextRequired = previousRequired + requiredTotalBase;
+
+            if (availableBase < nextRequired) {
               const maxAvailable = Math.floor(
                 availableBase / requiredPerUnitBase
               );
@@ -308,19 +331,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               continue;
             }
 
-            const previousRequired =
-              stockRequiredBaseMap.get(ingredient.stockItemId) || 0;
-
-            stockRequiredBaseMap.set(
-              ingredient.stockItemId,
-              previousRequired + requiredTotalBase
-            );
-
-            stockRefMap.set(ingredient.stockItemId, stockRef);
-            stockMovementMeta.set(ingredient.stockItemId, {
-              stockItemName: stockData.name || ingredient.stockItemName,
-              stockUnit,
-            });
+            stockRequiredBaseMap.set(ingredient.stockItemId, nextRequired);
 
             itemStockMovements.push({
               stockItemId: ingredient.stockItemId,
@@ -338,7 +349,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             : "";
 
         const itemName = menuData.name || rawItem.nombre || "Producto";
-        const itemPrice = Number(menuData.price || rawItem.precio || rawItem.price || 0);
+        const itemPrice = Number(
+          menuData.price || rawItem.precio || rawItem.price || 0
+        );
 
         normalizedItems.push({
           id: rawItem.id,
@@ -363,37 +376,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      if (isPremium) {
-        for (const [stockItemId, requiredBase] of stockRequiredBaseMap.entries()) {
-          const stockRef = stockRefMap.get(stockItemId);
+      if (!sessionId) {
+        sessionId = randomUUID();
 
-          if (!stockRef) continue;
+        const sessionRef = db.doc(
+          `restaurants/${restaurantId}/sessions/${sessionId}`
+        );
 
-          const stockSnap = await transaction.get(stockRef);
+        transaction.set(sessionRef, {
+          restaurantId,
+          tableNumber: mesa,
+          status: "active",
+          openedAt: admin.firestore.FieldValue.serverTimestamp(),
+          closedAt: null,
+          closedReason: null,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
 
-          if (!stockSnap.exists) {
-            throw new Error("El stock cambió. Reintentá el pedido.");
-          }
+      for (const [stockItemId, requiredBase] of stockRequiredBaseMap.entries()) {
+        const stockRef = stockRefsById.get(stockItemId);
+        const stockSnap = stockSnapsById.get(stockItemId);
 
-          const stockData = stockSnap.data() as StockItemDoc;
-          const stockUnit = stockData.unit || "unit";
-          const availableBase = toBaseUnit(
-            Number(stockData.currentQuantity || 0),
-            stockUnit
-          );
-
-          if (availableBase < requiredBase) {
-            throw new Error("El stock cambió. Reintentá el pedido.");
-          }
-
-          const nextBase = availableBase - requiredBase;
-          const nextQuantity = fromBaseUnit(nextBase, stockUnit);
-
-          transaction.update(stockRef, {
-            currentQuantity: nextQuantity,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
+        if (!stockRef || !stockSnap || !stockSnap.exists) {
+          throw new Error("El stock cambió. Reintentá el pedido.");
         }
+
+        const stockData = stockSnap.data() as StockItemDoc;
+        const stockUnit = stockData.unit || "unit";
+
+        const availableBase = toBaseUnit(
+          Number(stockData.currentQuantity || 0),
+          stockUnit
+        );
+
+        const nextBase = availableBase - requiredBase;
+        const nextQuantity = fromBaseUnit(nextBase, stockUnit);
+
+        transaction.update(stockRef, {
+          currentQuantity: nextQuantity,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
       }
 
       transaction.set(
