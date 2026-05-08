@@ -30,6 +30,8 @@ import { createStaffMember, type StaffRole } from "../lib/staff";
 import { StaffManagementPanel } from "../components/StaffManagementPanel";
 import { MesaManagementPanel } from "../components/MesaManagementPanel.tsx";
 import { MenuManagementPanel } from "../components/MenuManagementPanel";
+import { StockPanel } from "../components/StockPanel";
+import { canUseStock } from "../lib/plan";
 import type {
   CuentaRecord,
   EstadoCocinaBarra,
@@ -290,7 +292,7 @@ const renderPedidoItems = (pedido: Pedido) => {
 
 const Admin = () => {
   const navigate = useNavigate();
-  const { restaurantId } = useRestaurant();
+  const { restaurantId, restaurant } = useRestaurant(); 
   const { logout, user } = useAuth();
 
   const [mesas, setMesas] = useState<MesaDoc[]>([]);
@@ -1101,6 +1103,10 @@ const Admin = () => {
 
         <StaffManagementPanel restaurantId={restaurantId} />
         <MenuManagementPanel restaurantId={restaurantId} />
+        <StockPanel
+          restaurantId={restaurantId}
+          plan={restaurant?.plan}
+        />
       </div>
 
       {mesaDetalleLive && (

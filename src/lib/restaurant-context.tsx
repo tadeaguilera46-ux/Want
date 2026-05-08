@@ -8,14 +8,29 @@ import {
   type ReactNode,
 } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
+import { doc, onSnapshot } from "firebase/firestore";
+import { getDb } from "./firebase";
+import { normalizePlan, type RestaurantPlan } from "./plan";
+
+type RestaurantContextRestaurant = {
+  id: string;
+  name?: string;
+  plan: RestaurantPlan;
+  subscriptionStatus?: string;
+  active?: boolean;
+};
 
 type RestaurantContextValue = {
   restaurantId: string | null;
+  restaurant: RestaurantContextRestaurant | null;
+  restaurantLoading: boolean;
   setRestaurantId: (restaurantId: string) => void;
   clearRestaurantId: () => void;
 };
 
 const STORAGE_KEY = "want:activeRestaurantId";
+
+const db = getDb();
 
 const RestaurantContext = createContext<RestaurantContextValue | undefined>(
   undefined
@@ -28,15 +43,14 @@ const normalizeRestaurantId = (value: unknown): string | null => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
-export const RestaurantProvider = ({
-  children,
-}: {
-  children: ReactNode;
-}) => {
+export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
   const [searchParams] = useSearchParams();
   const location = useLocation();
 
   const [restaurantId, setRestaurantIdState] = useState<string | null>(null);
+  const [restaurant, setRestaurant] =
+    useState<RestaurantContextRestaurant | null>(null);
+  const [restaurantLoading, setRestaurantLoading] = useState(false);
 
   useEffect(() => {
     const restaurantIdFromQuery = normalizeRestaurantId(
@@ -66,6 +80,51 @@ export const RestaurantProvider = ({
     setRestaurantIdState(null);
   }, [searchParams, location.state]);
 
+  useEffect(() => {
+    if (!restaurantId) {
+      setRestaurant(null);
+      setRestaurantLoading(false);
+      return;
+    }
+
+    setRestaurantLoading(true);
+
+    const unsub = onSnapshot(
+      doc(db, "restaurants", restaurantId),
+      (snapshot) => {
+        if (!snapshot.exists()) {
+          setRestaurant(null);
+          setRestaurantLoading(false);
+          return;
+        }
+
+        const data = snapshot.data();
+
+        setRestaurant({
+          id: snapshot.id,
+          name: typeof data.name === "string" ? data.name : undefined,
+          plan: normalizePlan(
+            typeof data.plan === "string" ? data.plan : null
+          ),
+          subscriptionStatus:
+            typeof data.subscriptionStatus === "string"
+              ? data.subscriptionStatus
+              : undefined,
+          active: typeof data.active === "boolean" ? data.active : undefined,
+        });
+
+        setRestaurantLoading(false);
+      },
+      (error) => {
+        console.error("Error escuchando restaurante:", error);
+        setRestaurant(null);
+        setRestaurantLoading(false);
+      }
+    );
+
+    return () => unsub();
+  }, [restaurantId]);
+
   const setRestaurantId = useCallback((nextRestaurantId: string) => {
     const normalized = normalizeRestaurantId(nextRestaurantId);
 
@@ -79,16 +138,25 @@ export const RestaurantProvider = ({
 
   const clearRestaurantId = useCallback(() => {
     setRestaurantIdState(null);
+    setRestaurant(null);
     window.localStorage.removeItem(STORAGE_KEY);
   }, []);
 
   const value = useMemo(
     () => ({
       restaurantId,
+      restaurant,
+      restaurantLoading,
       setRestaurantId,
       clearRestaurantId,
     }),
-    [restaurantId, setRestaurantId, clearRestaurantId]
+    [
+      restaurantId,
+      restaurant,
+      restaurantLoading,
+      setRestaurantId,
+      clearRestaurantId,
+    ]
   );
 
   return (
