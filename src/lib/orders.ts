@@ -9,11 +9,19 @@ export const crearPedido = async (pedido: PedidoInput) => {
     body: JSON.stringify(pedido),
   });
 
-  const data = (await response.json()) as {
+  const text = await response.text();
+
+  let data: {
     ok?: boolean;
     pedidoId?: string;
     error?: string;
-  };
+  } = {};
+
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error(`Error del servidor (${response.status}). Revisá logs de Vercel.`);
+  }
 
   if (!response.ok || !data.ok || !data.pedidoId) {
     throw new Error(data.error || "No se pudo crear el pedido");
