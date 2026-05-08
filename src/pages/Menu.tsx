@@ -8,8 +8,15 @@ import {
   X,
   MessageSquareText,
   ChevronRight,
+  AlertTriangle,
 } from "lucide-react";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
+import {
+  collection,
+  onSnapshot,
+  orderBy,
+  query,
+  where,
+} from "firebase/firestore";
 import { useCart } from "@/lib/CartContext";
 import {
   parseTableNumber,
@@ -18,6 +25,12 @@ import {
 import { getOrCreateMesaSession } from "../lib/mesas";
 import { getDb } from "../lib/firebase";
 import { useRestaurantConfig } from "../lib/restaurant-config";
+import type { MenuIngredient } from "../lib/store";
+import type { StockItem } from "../types/stock";
+import {
+  buildMissingOptionalObservation,
+  getMenuItemAvailability,
+} from "../lib/stock-availability";
 
 const db = getDb();
 
@@ -32,6 +45,7 @@ type MenuItem = {
   category: string;
   active: boolean;
   image?: string;
+  ingredients?: MenuIngredient[];
 };
 
 const formatPriceARS = (value: number) =>
@@ -63,6 +77,11 @@ const getItemTags = (item: MenuItem) => {
   return tags;
 };
 
+const mergeObservations = (manualNote: string, automaticNote: string) => {
+  const parts = [manualNote.trim(), automaticNote.trim()].filter(Boolean);
+  return parts.join(" · ");
+};
+
 const Menu = () => {
   const [searchParams] = useSearchParams();
   const location = useLocation();
@@ -78,7 +97,9 @@ const Menu = () => {
 
   const [activeCategory, setActiveCategory] = useState("");
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [loadingMenu, setLoadingMenu] = useState(true);
+  const [loadingStock, setLoadingStock] = useState(true);
 
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [note, setNote] = useState("");
@@ -160,16 +181,58 @@ const Menu = () => {
     return () => unsubscribe();
   }, [restaurantId]);
 
+  useEffect(() => {
+    if (!restaurantId) return;
+
+    setLoadingStock(true);
+
+    const q = query(
+      collection(db, "restaurants", restaurantId, "stock"),
+      orderBy("name")
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const data = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        })) as StockItem[];
+
+        setStockItems(data);
+        setLoadingStock(false);
+      },
+      (error) => {
+        console.error("Error cargando stock:", error);
+        setStockItems([]);
+        setLoadingStock(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [restaurantId]);
+
+  const availableMenuItems = useMemo(() => {
+    return menuItems.filter((item) => {
+      const availability = getMenuItemAvailability({
+        ingredients: item.ingredients,
+        stockItems,
+      });
+
+      return availability.visible;
+    });
+  }, [menuItems, stockItems]);
+
   const categories = useMemo(() => {
     const unique = Array.from(
-      new Set(menuItems.map((item) => getDisplayCategory(item)))
+      new Set(availableMenuItems.map((item) => getDisplayCategory(item)))
     ).filter(Boolean);
 
     return unique.map((category) => ({
       key: category,
       label: category,
     }));
-  }, [menuItems]);
+  }, [availableMenuItems]);
 
   useEffect(() => {
     if (categories.length > 0 && !activeCategory) {
@@ -186,12 +249,59 @@ const Menu = () => {
   }, [categories, activeCategory]);
 
   const filteredItems = useMemo(() => {
-    return menuItems.filter(
+    return availableMenuItems.filter(
       (item) => getDisplayCategory(item) === activeCategory
     );
-  }, [menuItems, activeCategory]);
+  }, [availableMenuItems, activeCategory]);
+
+  const getAutomaticObservation = (item: MenuItem) => {
+    const availability = getMenuItemAvailability({
+      ingredients: item.ingredients,
+      stockItems,
+    });
+
+    return buildMissingOptionalObservation(
+      availability.missingOptionalIngredients
+    );
+  };
+
+  const canAddQuantity = (item: MenuItem) => {
+    const availability = getMenuItemAvailability({
+      ingredients: item.ingredients,
+      stockItems,
+    });
+
+    const currentQuantity = getQuantity(item.id);
+    const maxQuantity = availability.maxQuantity;
+
+    if (maxQuantity !== null && currentQuantity >= maxQuantity) {
+      alert(`Nos quedan ${maxQuantity} ${item.name} en stock.`);
+      return false;
+    }
+
+    return true;
+  };
+
+  const confirmOptionalMissing = (item: MenuItem) => {
+    const availability = getMenuItemAvailability({
+      ingredients: item.ingredients,
+      stockItems,
+    });
+
+    if (availability.missingOptionalIngredients.length === 0) {
+      return true;
+    }
+
+    return window.confirm(
+      `No tenemos ${availability.missingOptionalIngredients.join(
+        ", "
+      )}. ¿Querés pedir igual ${item.name}?`
+    );
+  };
 
   const openNoteModal = (item: MenuItem) => {
+    if (!canAddQuantity(item)) return;
+
     setSelectedItem(item);
     setNote("");
   };
@@ -202,6 +312,11 @@ const Menu = () => {
   };
 
   const handleAddWithoutNote = (item: MenuItem) => {
+    if (!canAddQuantity(item)) return;
+    if (!confirmOptionalMissing(item)) return;
+
+    const automaticObservation = getAutomaticObservation(item);
+
     addToCart({
       id: item.id,
       nombre: item.name,
@@ -211,14 +326,20 @@ const Menu = () => {
       cantidad: 1,
       category: getItemType(item),
       displayCategory: getDisplayCategory(item),
-      observacion: "",
+      observacion: automaticObservation,
       description: item.description || "",
       image: item.image || "",
+      ingredients: item.ingredients || [],
     } as any);
   };
 
   const handleAddWithNote = () => {
     if (!selectedItem) return;
+    if (!canAddQuantity(selectedItem)) return;
+    if (!confirmOptionalMissing(selectedItem)) return;
+
+    const automaticObservation = getAutomaticObservation(selectedItem);
+    const finalObservation = mergeObservations(note, automaticObservation);
 
     addToCart({
       id: selectedItem.id,
@@ -229,9 +350,10 @@ const Menu = () => {
       cantidad: 1,
       category: getItemType(selectedItem),
       displayCategory: getDisplayCategory(selectedItem),
-      observacion: note.trim(),
+      observacion: finalObservation,
       description: selectedItem.description || "",
       image: selectedItem.image || "",
+      ingredients: selectedItem.ingredients || [],
     } as any);
 
     closeNoteModal();
@@ -265,6 +387,8 @@ const Menu = () => {
       </div>
     );
   }
+
+  const loading = loadingMenu || loadingStock;
 
   return (
     <div
@@ -369,7 +493,7 @@ const Menu = () => {
         </header>
 
         <main className="px-4 py-4">
-          {loadingMenu ? (
+          {loading ? (
             <div className="rounded-3xl border border-black/5 bg-white p-6 text-center text-sm font-semibold text-zinc-500 shadow-sm">
               Cargando menú...
             </div>
@@ -395,6 +519,11 @@ const Menu = () => {
                 {filteredItems.map((item) => {
                   const qty = getQuantity(item.id);
                   const tags = getItemTags(item);
+
+                  const availability = getMenuItemAvailability({
+                    ingredients: item.ingredients,
+                    stockItems,
+                  });
 
                   return (
                     <motion.div
@@ -432,6 +561,13 @@ const Menu = () => {
                                 {tag}
                               </span>
                             ))}
+
+                            {availability.lowStock && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-black text-amber-800 backdrop-blur">
+                                <AlertTriangle size={12} />
+                                Quedan pocas unidades
+                              </span>
+                            )}
                           </div>
 
                           <div className="shrink-0 rounded-full bg-white/95 px-3 py-1.5 text-sm font-extrabold text-zinc-950 shadow-sm backdrop-blur">

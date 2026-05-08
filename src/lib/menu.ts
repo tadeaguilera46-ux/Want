@@ -7,6 +7,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { getDb } from "./firebase";
+import type { MenuIngredient, MenuVariant } from "./store";
 
 const db = getDb();
 
@@ -21,6 +22,9 @@ export type MenuItem = {
   description?: string;
   image?: string;
   active: boolean;
+  ingredients?: MenuIngredient[];
+  variants?: MenuVariant[];
+  comboItems?: string[];
 };
 
 export const createMenuItem = async (
@@ -31,6 +35,9 @@ export const createMenuItem = async (
 
   await setDoc(ref, {
     ...data,
+    ingredients: data.ingredients || [],
+    variants: data.variants || [],
+    comboItems: data.comboItems || [],
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });

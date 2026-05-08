@@ -19,11 +19,28 @@ export type MetodoPago = "cash" | "debit" | "credit" | "transfer";
 
 export type EstadoCuenta = "pendiente" | "en_camino" | "pagada" | "cerrada";
 
+export type PedidoStockMovement = {
+  stockItemId: string;
+  stockItemName: string;
+  quantity: number;
+  unit: "kg" | "g" | "l" | "ml" | "unit";
+  quantityInBaseUnit: number;
+};
+
 export type PedidoItem = {
+  id?: string;
   nombre: string;
+  name?: string;
   cantidad: number;
+  quantity?: number;
+  precio?: number;
+  price?: number;
+  subtotal?: number;
   category: PedidoCategory;
+  displayCategory?: string;
   observacion?: string;
+  note?: string;
+  stockMovements?: PedidoStockMovement[];
 };
 
 export interface PedidoInput extends RestaurantScoped {
@@ -38,6 +55,7 @@ export interface PedidoRecord extends PedidoInput {
   estadoCocina?: EstadoCocinaBarra | null;
   estadoBarra?: EstadoCocinaBarra | null;
   cancelado?: boolean;
+  stockReturned?: boolean;
   createdAt?: FirestoreTimestampLike;
   updatedAt?: FirestoreTimestampLike;
 }

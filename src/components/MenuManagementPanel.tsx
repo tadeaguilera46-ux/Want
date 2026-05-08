@@ -1,5 +1,5 @@
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import {
   getDownloadURL,
   ref,
@@ -15,6 +15,8 @@ import {
   X,
   Upload,
   Loader2,
+  Boxes,
+  AlertTriangle,
 } from "lucide-react";
 import { getDb, getStorageService } from "../lib/firebase";
 import {
@@ -24,11 +26,15 @@ import {
   type MenuItem,
   type MenuType,
 } from "../lib/menu";
+import type { MenuIngredient, RecipeUnit } from "../lib/store";
+import type { StockItem } from "../types/stock";
 
 const db = getDb();
 const storage = getStorageService();
 
 const MAX_MENU_IMAGE_SIZE_MB = 5;
+
+const units: RecipeUnit[] = ["kg", "g", "l", "ml", "unit"];
 
 const formatPriceARS = (value: number) =>
   new Intl.NumberFormat("es-AR", {
@@ -44,6 +50,21 @@ type DraftItem = {
   category: string;
   description: string;
   image: string;
+  ingredients: MenuIngredient[];
+};
+
+type IngredientFormState = {
+  stockItemId: string;
+  quantity: string;
+  unit: RecipeUnit;
+  essential: boolean;
+};
+
+const emptyIngredientForm: IngredientFormState = {
+  stockItemId: "",
+  quantity: "",
+  unit: "unit",
+  essential: true,
 };
 
 const getItemType = (item: MenuItem): MenuType => {
@@ -78,9 +99,241 @@ const validateImageFile = (file: File) => {
   return "";
 };
 
+const buildIngredient = (
+  stockItems: StockItem[],
+  form: IngredientFormState
+): MenuIngredient | null => {
+  const stockItem = stockItems.find((item) => item.id === form.stockItemId);
+  const quantity = Number(form.quantity);
+
+  if (!stockItem) return null;
+  if (!Number.isFinite(quantity) || quantity <= 0) return null;
+
+  return {
+    stockItemId: stockItem.id,
+    stockItemName: stockItem.name,
+    quantity,
+    unit: form.unit,
+    essential: form.essential,
+  };
+};
+
+const IngredientsEditor = ({
+  stockItems,
+  ingredients,
+  onChange,
+  disabled,
+}: {
+  stockItems: StockItem[];
+  ingredients: MenuIngredient[];
+  onChange: (ingredients: MenuIngredient[]) => void;
+  disabled?: boolean;
+}) => {
+  const [form, setForm] = useState<IngredientFormState>(emptyIngredientForm);
+
+  const selectedStockItem = stockItems.find(
+    (item) => item.id === form.stockItemId
+  );
+
+  useEffect(() => {
+    if (selectedStockItem) {
+      setForm((prev) => ({
+        ...prev,
+        unit: selectedStockItem.unit,
+      }));
+    }
+  }, [selectedStockItem]);
+
+  const handleAddIngredient = () => {
+    const ingredient = buildIngredient(stockItems, form);
+
+    if (!ingredient) {
+      alert("Seleccioná un insumo y una cantidad válida.");
+      return;
+    }
+
+    const alreadyExists = ingredients.some(
+      (item) => item.stockItemId === ingredient.stockItemId
+    );
+
+    if (alreadyExists) {
+      alert("Ese insumo ya está cargado en este producto.");
+      return;
+    }
+
+    onChange([...ingredients, ingredient]);
+    setForm(emptyIngredientForm);
+  };
+
+  const removeIngredient = (stockItemId: string) => {
+    onChange(
+      ingredients.filter((ingredient) => ingredient.stockItemId !== stockItemId)
+    );
+  };
+
+  const toggleEssential = (stockItemId: string) => {
+    onChange(
+      ingredients.map((ingredient) =>
+        ingredient.stockItemId === stockItemId
+          ? { ...ingredient, essential: !ingredient.essential }
+          : ingredient
+      )
+    );
+  };
+
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+      <div className="mb-3 flex items-start gap-2">
+        <Boxes size={17} className="mt-0.5 text-zinc-700" />
+        <div>
+          <p className="text-sm font-black text-zinc-950">
+            Ingredientes / receta
+          </p>
+          <p className="text-xs text-zinc-500">
+            Los esenciales ocultan el plato si no hay stock. Los secundarios
+            generan aviso al cliente.
+          </p>
+        </div>
+      </div>
+
+      {stockItems.length === 0 ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          Primero cargá insumos en Control de stock para poder armar recetas.
+        </div>
+      ) : (
+        <div className="grid gap-2 lg:grid-cols-[1fr_110px_110px_150px_auto]">
+          <select
+            value={form.stockItemId}
+            disabled={disabled}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                stockItemId: e.target.value,
+              }))
+            }
+            className="h-10 rounded-xl border border-zinc-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-black/10"
+          >
+            <option value="">Seleccionar insumo</option>
+            {stockItems.map((stockItem) => (
+              <option key={stockItem.id} value={stockItem.id}>
+                {stockItem.name}
+              </option>
+            ))}
+          </select>
+
+          <input
+            type="number"
+            min={0}
+            step="any"
+            value={form.quantity}
+            disabled={disabled}
+            placeholder="Cantidad"
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                quantity: e.target.value,
+              }))
+            }
+            className="h-10 rounded-xl border border-zinc-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-black/10"
+          />
+
+          <select
+            value={form.unit}
+            disabled={disabled}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                unit: e.target.value as RecipeUnit,
+              }))
+            }
+            className="h-10 rounded-xl border border-zinc-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-black/10"
+          >
+            {units.map((unit) => (
+              <option key={unit} value={unit}>
+                {unit}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={form.essential ? "essential" : "optional"}
+            disabled={disabled}
+            onChange={(e) =>
+              setForm((prev) => ({
+                ...prev,
+                essential: e.target.value === "essential",
+              }))
+            }
+            className="h-10 rounded-xl border border-zinc-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-black/10"
+          >
+            <option value="essential">Esencial</option>
+            <option value="optional">Secundario</option>
+          </select>
+
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={handleAddIngredient}
+            className="h-10 rounded-xl bg-zinc-950 px-4 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-60"
+          >
+            Agregar
+          </button>
+        </div>
+      )}
+
+      {ingredients.length === 0 ? (
+        <div className="mt-3 flex items-start gap-2 rounded-2xl border border-dashed border-zinc-300 bg-white p-3 text-xs text-zinc-500">
+          <AlertTriangle size={15} className="shrink-0" />
+          Este producto no tiene receta cargada. En Premium seguirá siendo
+          vendible, pero no descontará stock automáticamente.
+        </div>
+      ) : (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {ingredients.map((ingredient) => (
+            <div
+              key={ingredient.stockItemId}
+              className="flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700"
+            >
+              <span>
+                {ingredient.stockItemName}: {ingredient.quantity}{" "}
+                {ingredient.unit}
+              </span>
+
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => toggleEssential(ingredient.stockItemId)}
+                className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${
+                  ingredient.essential
+                    ? "bg-red-100 text-red-700"
+                    : "bg-amber-100 text-amber-700"
+                }`}
+              >
+                {ingredient.essential ? "Esencial" : "Secundario"}
+              </button>
+
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => removeIngredient(ingredient.stockItemId)}
+                className="text-zinc-400 transition hover:text-red-600 disabled:opacity-50"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) {
   const [items, setItems] = useState<MenuItem[]>([]);
+  const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingStock, setLoadingStock] = useState(true);
+
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftItem | null>(null);
@@ -91,6 +344,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
   const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [image, setImage] = useState("");
+  const [ingredients, setIngredients] = useState<MenuIngredient[]>([]);
 
   const [uploadingCreateImage, setUploadingCreateImage] = useState(false);
   const [uploadingEditImageId, setUploadingEditImageId] = useState<
@@ -117,6 +371,36 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       (error) => {
         console.error("Error cargando menú:", error);
         setLoading(false);
+      }
+    );
+
+    return () => unsub();
+  }, [restaurantId]);
+
+  useEffect(() => {
+    if (!restaurantId) return;
+
+    setLoadingStock(true);
+
+    const q = query(
+      collection(db, "restaurants", restaurantId, "stock"),
+      orderBy("name")
+    );
+
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const data = snap.docs.map((d) => ({
+          id: d.id,
+          ...d.data(),
+        })) as StockItem[];
+
+        setStockItems(data);
+        setLoadingStock(false);
+      },
+      (error) => {
+        console.error("Error cargando stock:", error);
+        setLoadingStock(false);
       }
     );
 
@@ -256,6 +540,9 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
         description: description.trim(),
         image: image.trim(),
         active: true,
+        ingredients,
+        variants: [],
+        comboItems: [],
       });
 
       setName("");
@@ -264,6 +551,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       setCategory("");
       setDescription("");
       setImage("");
+      setIngredients([]);
     } catch (error) {
       console.error("Error creando producto:", error);
       alert("No se pudo crear el producto");
@@ -279,6 +567,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       category: getDisplayCategory(item),
       description: item.description || "",
       image: item.image || "",
+      ingredients: item.ingredients || [],
     });
   };
 
@@ -315,6 +604,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
         category: normalizedCategory,
         description: draft.description.trim(),
         image: draft.image.trim(),
+        ingredients: draft.ingredients,
       });
 
       cancelEditing();
@@ -369,8 +659,8 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
         <div>
           <h2 className="text-xl font-black text-zinc-950">Menú editable</h2>
           <p className="mt-1 text-sm text-zinc-500">
-            Creá categorías como pizzas, postres, pastas o hamburguesas, sin
-            romper cocina/barra.
+            Creá productos y conectalos con stock usando ingredientes
+            esenciales o secundarios.
           </p>
         </div>
       </div>
@@ -448,17 +738,26 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
               />
             </div>
           )}
-
-          <button
-            type="button"
-            onClick={handleCreate}
-            disabled={uploadingCreateImage}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
-          >
-            <Plus size={16} />
-            Agregar
-          </button>
         </div>
+
+        <div className="lg:col-span-4">
+          <IngredientsEditor
+            stockItems={stockItems}
+            ingredients={ingredients}
+            onChange={setIngredients}
+            disabled={loadingStock}
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={handleCreate}
+          disabled={uploadingCreateImage}
+          className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60 lg:col-span-4"
+        >
+          <Plus size={16} />
+          Agregar producto
+        </button>
       </div>
 
       {loading ? (
@@ -470,7 +769,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
           Todavía no hay productos cargados.
         </div>
       ) : (
-        <div className="max-h-[520px] overflow-y-auto rounded-2xl border border-zinc-200 p-3">
+        <div className="max-h-[640px] overflow-y-auto rounded-2xl border border-zinc-200 p-3">
           <div className="grid gap-3">
             {sortedItems.map((item) => {
               const isSaving = savingId === item.id;
@@ -478,6 +777,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
               const isUploadingEditImage = uploadingEditImageId === item.id;
               const itemType = getItemType(item);
               const itemCategory = getDisplayCategory(item);
+              const itemIngredients = item.ingredients || [];
 
               return (
                 <div
@@ -517,6 +817,18 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                       <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-zinc-700">
                         {itemCategory}
                       </span>
+
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${
+                          itemIngredients.length > 0
+                            ? "border border-blue-200 bg-blue-100 text-blue-700"
+                            : "border border-amber-200 bg-amber-100 text-amber-800"
+                        }`}
+                      >
+                        {itemIngredients.length > 0
+                          ? `${itemIngredients.length} ingrediente(s)`
+                          : "Sin receta"}
+                      </span>
                     </div>
 
                     {!isEditing ? (
@@ -532,6 +844,27 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                         <p className="mt-2 text-sm font-bold text-zinc-700">
                           {formatPriceARS(item.price)}
                         </p>
+
+                        {itemIngredients.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {itemIngredients.map((ingredient) => (
+                              <span
+                                key={ingredient.stockItemId}
+                                className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                                  ingredient.essential
+                                    ? "bg-red-50 text-red-700"
+                                    : "bg-amber-50 text-amber-700"
+                                }`}
+                              >
+                                {ingredient.stockItemName} ·{" "}
+                                {ingredient.quantity} {ingredient.unit} ·{" "}
+                                {ingredient.essential
+                                  ? "esencial"
+                                  : "secundario"}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </>
                     ) : (
                       <>
@@ -644,8 +977,26 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                                 : prev
                             )
                           }
-                          className="w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10"
+                          className="mb-3 w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10"
                         />
+
+                        {draft && (
+                          <IngredientsEditor
+                            stockItems={stockItems}
+                            ingredients={draft.ingredients}
+                            disabled={isSaving || loadingStock}
+                            onChange={(nextIngredients) =>
+                              setDraft((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      ingredients: nextIngredients,
+                                    }
+                                  : prev
+                              )
+                            }
+                          />
+                        )}
                       </>
                     )}
                   </div>

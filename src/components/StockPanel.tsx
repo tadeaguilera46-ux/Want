@@ -204,23 +204,37 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
           ))}
         </select>
 
-        <input
-          type="number"
-          value={quantity}
-          onChange={(e) => setQuantity(Number(e.target.value))}
-          placeholder="Cantidad actual"
-          disabled={!stockEnabled}
-          className="h-11 rounded-2xl border border-zinc-200 px-3"
-        />
+        <div>
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-zinc-500">
+                Cantidad actual del producto
+            </label>
+            <input
+                type="number"
+                min={0}
+                step="any"
+                value={quantity}
+                onChange={(e) => setQuantity(Number(e.target.value))}
+                placeholder="Ej: 10"
+                disabled={!stockEnabled}
+                className="h-11 w-full rounded-2xl border border-zinc-200 px-3"
+            />
+        </div>
 
-        <input
-          type="number"
-          value={minimumQuantity}
-          onChange={(e) => setMinimumQuantity(Number(e.target.value))}
-          placeholder="Stock mínimo"
-          disabled={!stockEnabled}
-          className="h-11 rounded-2xl border border-zinc-200 px-3"
-        />
+        <div>
+            <label className="mb-1 block text-xs font-bold uppercase tracking-wide text-zinc-500">
+                Mínimo del producto
+            </label>
+            <input
+                type="number"
+                min={0}
+                step="any"
+                value={minimumQuantity}
+                onChange={(e) => setMinimumQuantity(Number(e.target.value))}
+                placeholder="Ej: 2"
+                disabled={!stockEnabled}
+                className="h-11 w-full rounded-2xl border border-zinc-200 px-3"
+            />
+        </div>
 
         <input
           value={supplier}

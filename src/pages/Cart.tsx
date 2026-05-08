@@ -13,6 +13,7 @@ import { useCart } from "@/lib/CartContext";
 import { crearPedido } from "../lib/orders";
 import type { PedidoItem } from "../lib/restaurant";
 import { resolveRuntimeContext } from "../lib/runtime-context";
+import type { MenuIngredient } from "../lib/store";
 
 type CartItem = {
   id: string;
@@ -27,6 +28,7 @@ type CartItem = {
   observacion?: string;
   image?: string;
   description?: string;
+  ingredients?: MenuIngredient[];
 };
 
 type MenuOperationalCategory = "food" | "drinks";
@@ -108,6 +110,14 @@ const Cart = () => {
     };
   };
 
+  const getOrderErrorMessage = (err: unknown) => {
+    if (err instanceof Error && err.message.trim()) {
+      return err.message;
+    }
+
+    return "No se pudo enviar el pedido. Reintentá.";
+  };
+
   const handlePedido = async () => {
     if (isSubmittingOrder || isSubmittingOrderAndBill || cart.length === 0) {
       return;
@@ -126,7 +136,7 @@ const Cart = () => {
       });
     } catch (err) {
       console.error("Error creando pedido:", err);
-      setError("No se pudo enviar el pedido. Reintentá.");
+      setError(getOrderErrorMessage(err));
     } finally {
       setIsSubmittingOrder(false);
     }
@@ -150,7 +160,7 @@ const Cart = () => {
       });
     } catch (err) {
       console.error("Error creando pedido y solicitando cuenta:", err);
-      setError("No se pudo enviar el pedido. Reintentá.");
+      setError(getOrderErrorMessage(err));
     } finally {
       setIsSubmittingOrderAndBill(false);
     }
