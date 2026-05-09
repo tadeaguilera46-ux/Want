@@ -45,6 +45,7 @@ const roleLabel: Record<StaffRole, string> = {
   kitchen: "Cocina",
   bar: "Barra",
   runner: "Runner",
+  cashier: "Cajero",
 };
 
 const getCreatedAtMillis = (member: StaffMember) => {
@@ -358,6 +359,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
                         <option value="kitchen">{roleLabel.kitchen}</option>
                         <option value="bar">{roleLabel.bar}</option>
                         <option value="admin">{roleLabel.admin}</option>
+                        <option value="cashier">{roleLabel.cashier}</option>
                       </select>
                     </td>
 

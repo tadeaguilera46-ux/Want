@@ -11,7 +11,7 @@ import { getDb } from "../lib/firebase";
 import { useAuth } from "../lib/auth-context";
 import { useRestaurant } from "../lib/restaurant-context";
 
-type StaffRole = "admin" | "kitchen" | "bar" | "runner";
+type StaffRole = "admin" | "kitchen" | "bar" | "runner" | "cashier";
 
 type StaffRouteProps = {
   children: ReactNode;
@@ -31,6 +31,7 @@ const roleHome: Record<StaffRole, string> = {
   kitchen: "/staff/kitchen",
   bar: "/staff/bar",
   runner: "/staff/runner",
+  cashier: "/staff/cashier",
 };
 
 const normalizeString = (value: unknown) => {
@@ -212,7 +213,6 @@ const StaffRoute = ({ children, allowedRoles }: StaffRouteProps) => {
     );
   }
 
-  // Redirección automática por rol
   if (!isAllowed && staffRole) {
     const target = `${roleHome[staffRole]}?restaurantId=${encodeURIComponent(
       restaurantId
