@@ -15,7 +15,7 @@ import {
   PLAN_LABELS,
 } from "./plan";
 
-export type StaffRole = "admin" | "kitchen" | "bar" | "runner" | "cashier";
+export type StaffRole = "admin" | "kitchen" | "bar" | "runner" | "cashier";   
 
 type CreateStaffMemberInput = {
   restaurantId: string;
