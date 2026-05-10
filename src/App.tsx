@@ -27,6 +27,7 @@ const StaffLogin = lazy(() => import("./pages/StaffLogin"));
 const StaffRoute = lazy(() => import("./components/StaffRoute"));
 const AdminAnalytics = lazy(() => import("./pages/AdminAnalytics"));
 const Cashier = lazy(() => import("./pages/Cashier"));
+const CashierInvoices = lazy(() => import("./pages/CashierInvoices"));
 
 // Super Admin
 const SuperAdmin = lazy(() => import("./pages/SuperAdmin"));
@@ -173,6 +174,16 @@ const App = () => (
               <SubscriptionGuard>
                 <StaffRoute allowedRoles={["cashier", "admin"]}>
                   <Cashier />
+                </StaffRoute>
+              </SubscriptionGuard>
+            }
+          />
+          <Route
+            path="/staff/cashier/invoices"
+            element={
+              <SubscriptionGuard>
+                <StaffRoute allowedRoles={["cashier", "admin"]}>
+                  <CashierInvoices />
                 </StaffRoute>
               </SubscriptionGuard>
             }

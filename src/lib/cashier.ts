@@ -7,7 +7,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { getDb } from "./firebase";
-import { pedirCuenta, actualizarEstadoCuenta } from "./bill";
+import { pedirCuenta } from "./bill";
 import type { CuentaInput, EstadoCuenta, MetodoPago } from "./restaurant";
 import type {
   CashierAuditAction,
@@ -206,7 +206,14 @@ export const registerCashierPayment = async ({
     updatedAt: serverTimestamp(),
   });
 
-  await actualizarEstadoCuenta(restaurantId, cuentaId, "pagada", mesa);
+  await updateDoc(cuentaRef, {
+    metodo,
+    payments,
+    paidAmount: totalPaid,
+    estado: "pagada",
+    paidAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
 
   await createCashierAuditLog({
     restaurantId,
