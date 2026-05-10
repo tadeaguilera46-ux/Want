@@ -8,8 +8,6 @@ import {
 } from "firebase/firestore";
 import {
   AlertTriangle,
-  BadgeDollarSign,
-  CreditCard,
   FileText,
   Plus,
   Printer,
@@ -38,6 +36,11 @@ import type {
 const db = getDb();
 
 type MenuType = "food" | "drinks";
+
+type Session = {
+  id: string;
+  status?: "active" | "closed";
+};
 
 type MenuItem = {
   id: string;
@@ -81,8 +84,12 @@ type Cuenta = {
     documentType?: "DNI" | "CUIT" | "CUIL" | "PASSPORT";
     documentNumber?: string;
     ivaCondition?: string;
-    email?: string;
+    fiscalRegime?: string;
     fiscalAddress?: string;
+    postalCode?: string;
+    province?: string;
+    city?: string;
+    email?: string;
   };
   createdAt?: {
     seconds?: number;
@@ -186,6 +193,7 @@ const Cashier = () => {
   const restaurantId =
     contextRestaurantId || searchParams.get("restaurantId") || "";
 
+  const [sessions, setSessions] = useState<Session[]>([]);
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
   const [orders, setOrders] = useState<Pedido[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -221,6 +229,35 @@ const Cashier = () => {
     useState<"DNI" | "CUIT" | "CUIL" | "PASSPORT">("DNI");
   const [invoiceDocumentNumber, setInvoiceDocumentNumber] = useState("");
   const [invoiceEmail, setInvoiceEmail] = useState("");
+  const [invoiceIvaCondition, setInvoiceIvaCondition] = useState("");
+  const [invoiceFiscalRegime, setInvoiceFiscalRegime] = useState("");
+  const [invoiceFiscalAddress, setInvoiceFiscalAddress] = useState("");
+  const [invoicePostalCode, setInvoicePostalCode] = useState("");
+  const [invoiceProvince, setInvoiceProvince] = useState("");
+  const [invoiceCity, setInvoiceCity] = useState("");
+
+  useEffect(() => {
+    if (!restaurantId) return;
+
+    const q = query(collection(db, "restaurants", restaurantId, "sessions"));
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const data = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data(),
+        })) as Session[];
+
+        setSessions(data);
+      },
+      (err) => {
+        console.error("Error cargando sesiones:", err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [restaurantId]);
 
   useEffect(() => {
     if (!restaurantId) return;
@@ -303,10 +340,40 @@ const Cashier = () => {
     return () => unsubscribe();
   }, [restaurantId]);
 
+  const activeSessionIds = useMemo(() => {
+    return new Set(
+      sessions
+        .filter((session) => session.status === "active")
+        .map((session) => session.id)
+    );
+  }, [sessions]);
+
+  const activeBills = useMemo(() => {
+    return cuentas.filter((cuenta) => {
+      if (cuenta.sessionId) {
+        return activeSessionIds.has(cuenta.sessionId);
+      }
+
+      return cuenta.estado !== "cerrada";
+    });
+  }, [cuentas, activeSessionIds]);
+
+  const pendingBills = useMemo(() => {
+    return activeBills.filter(
+      (cuenta) => cuenta.estado !== "pagada" && cuenta.estado !== "cerrada"
+    );
+  }, [activeBills]);
+
   const selectedCuenta = useMemo(() => {
     if (!selectedCuentaId) return null;
-    return cuentas.find((cuenta) => cuenta.id === selectedCuentaId) || null;
-  }, [cuentas, selectedCuentaId]);
+    return activeBills.find((cuenta) => cuenta.id === selectedCuentaId) || null;
+  }, [activeBills, selectedCuentaId]);
+
+  useEffect(() => {
+    if (selectedCuentaId && !selectedCuenta) {
+      setSelectedCuentaId(null);
+    }
+  }, [selectedCuentaId, selectedCuenta]);
 
   useEffect(() => {
     if (!selectedCuenta) return;
@@ -319,17 +386,19 @@ const Cashier = () => {
 
     const total = Number(selectedCuenta.total || 0);
     setPaymentAmount(String(total));
+
+    setInvoiceType(selectedCuenta.invoice?.type || "B");
+    setInvoiceCustomerName(selectedCuenta.invoice?.customerName || "");
+    setInvoiceDocumentType(selectedCuenta.invoice?.documentType || "DNI");
+    setInvoiceDocumentNumber(selectedCuenta.invoice?.documentNumber || "");
+    setInvoiceEmail(selectedCuenta.invoice?.email || "");
+    setInvoiceIvaCondition(selectedCuenta.invoice?.ivaCondition || "");
+    setInvoiceFiscalRegime(selectedCuenta.invoice?.fiscalRegime || "");
+    setInvoiceFiscalAddress(selectedCuenta.invoice?.fiscalAddress || "");
+    setInvoicePostalCode(selectedCuenta.invoice?.postalCode || "");
+    setInvoiceProvince(selectedCuenta.invoice?.province || "");
+    setInvoiceCity(selectedCuenta.invoice?.city || "");
   }, [selectedCuenta?.id]);
-
-  const activeBills = useMemo(() => {
-    return cuentas.filter((cuenta) => cuenta.estado !== "cerrada");
-  }, [cuentas]);
-
-  const pendingBills = useMemo(() => {
-    return activeBills.filter(
-      (cuenta) => cuenta.estado !== "pagada" && cuenta.estado !== "cerrada"
-    );
-  }, [activeBills]);
 
   const selectedOrders = useMemo(() => {
     if (!selectedCuenta) return [];
@@ -670,6 +739,21 @@ const Cashier = () => {
       return;
     }
 
+    if (!invoiceIvaCondition.trim()) {
+      alert("Ingresá la condición frente al IVA.");
+      return;
+    }
+
+    if (!invoiceFiscalAddress.trim()) {
+      alert("Ingresá la dirección fiscal.");
+      return;
+    }
+
+    if (!invoicePostalCode.trim()) {
+      alert("Ingresá el código postal.");
+      return;
+    }
+
     try {
       setProcessing(true);
       setError(null);
@@ -685,6 +769,12 @@ const Cashier = () => {
           customerName: invoiceCustomerName.trim(),
           documentType: invoiceDocumentType,
           documentNumber: invoiceDocumentNumber.trim(),
+          ivaCondition: invoiceIvaCondition.trim(),
+          fiscalRegime: invoiceFiscalRegime.trim(),
+          fiscalAddress: invoiceFiscalAddress.trim(),
+          postalCode: invoicePostalCode.trim(),
+          province: invoiceProvince.trim(),
+          city: invoiceCity.trim(),
           email: invoiceEmail.trim(),
           provider: "manual",
         },
@@ -693,6 +783,12 @@ const Cashier = () => {
       setInvoiceCustomerName("");
       setInvoiceDocumentNumber("");
       setInvoiceEmail("");
+      setInvoiceIvaCondition("");
+      setInvoiceFiscalRegime("");
+      setInvoiceFiscalAddress("");
+      setInvoicePostalCode("");
+      setInvoiceProvince("");
+      setInvoiceCity("");
     } catch (err) {
       console.error("Error solicitando factura:", err);
       setError(
@@ -746,7 +842,7 @@ const Cashier = () => {
 
             <div className="rounded-3xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
               <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">
-                Activas
+                Sesiones activas
               </p>
               <p className="mt-1 text-3xl font-black text-zinc-950">
                 {activeBills.length}
@@ -1225,7 +1321,9 @@ const Cashier = () => {
                     <select
                       value={invoiceType}
                       onChange={(e) =>
-                        setInvoiceType(e.target.value as "A" | "B" | "C" | "ticket")
+                        setInvoiceType(
+                          e.target.value as "A" | "B" | "C" | "ticket"
+                        )
                       }
                       className="h-12 rounded-2xl border border-zinc-200 px-3"
                     >
@@ -1246,7 +1344,11 @@ const Cashier = () => {
                       value={invoiceDocumentType}
                       onChange={(e) =>
                         setInvoiceDocumentType(
-                          e.target.value as "DNI" | "CUIT" | "CUIL" | "PASSPORT"
+                          e.target.value as
+                            | "DNI"
+                            | "CUIT"
+                            | "CUIL"
+                            | "PASSPORT"
                         )
                       }
                       className="h-12 rounded-2xl border border-zinc-200 px-3"
@@ -1261,6 +1363,48 @@ const Cashier = () => {
                       value={invoiceDocumentNumber}
                       onChange={(e) => setInvoiceDocumentNumber(e.target.value)}
                       placeholder="Número de documento"
+                      className="h-12 rounded-2xl border border-zinc-200 px-4"
+                    />
+
+                    <input
+                      value={invoiceIvaCondition}
+                      onChange={(e) => setInvoiceIvaCondition(e.target.value)}
+                      placeholder="Condición IVA"
+                      className="h-12 rounded-2xl border border-zinc-200 px-4"
+                    />
+
+                    <input
+                      value={invoiceFiscalRegime}
+                      onChange={(e) => setInvoiceFiscalRegime(e.target.value)}
+                      placeholder="Régimen fiscal"
+                      className="h-12 rounded-2xl border border-zinc-200 px-4"
+                    />
+
+                    <input
+                      value={invoiceFiscalAddress}
+                      onChange={(e) => setInvoiceFiscalAddress(e.target.value)}
+                      placeholder="Dirección fiscal"
+                      className="h-12 rounded-2xl border border-zinc-200 px-4"
+                    />
+
+                    <input
+                      value={invoicePostalCode}
+                      onChange={(e) => setInvoicePostalCode(e.target.value)}
+                      placeholder="Código postal"
+                      className="h-12 rounded-2xl border border-zinc-200 px-4"
+                    />
+
+                    <input
+                      value={invoiceProvince}
+                      onChange={(e) => setInvoiceProvince(e.target.value)}
+                      placeholder="Provincia"
+                      className="h-12 rounded-2xl border border-zinc-200 px-4"
+                    />
+
+                    <input
+                      value={invoiceCity}
+                      onChange={(e) => setInvoiceCity(e.target.value)}
+                      placeholder="Localidad"
                       className="h-12 rounded-2xl border border-zinc-200 px-4"
                     />
 

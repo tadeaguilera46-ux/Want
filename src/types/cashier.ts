@@ -38,6 +38,10 @@ export type CashierInvoiceData = {
   invoiceUrl?: string;
   requestedAt?: FirestoreTimestampLike;
   issuedAt?: FirestoreTimestampLike;
+  fiscalRegime?: string;
+  postalCode?: string;
+  province?: string;
+  city?: string;
 };
 
 export type CashierAuditAction =
