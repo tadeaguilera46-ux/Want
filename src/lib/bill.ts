@@ -170,7 +170,6 @@ export const pedirCuenta = async (data: CuentaInput) => {
     const mesaData = mesaSnapshot.data();
     const mesaEstado = mesaData?.estado;
     const currentActiveSessionId = mesaData?.activeSessionId;
-    const now = serverTimestamp();
 
     if (mesaEstado !== "occupied") {
       throw new Error("La mesa no está ocupada");
@@ -203,6 +202,12 @@ export const pedirCuenta = async (data: CuentaInput) => {
       );
     }
 
+    const ref = cuentaDocRef(restaurantId, activeSessionId);
+    const cuentaSnapshot = await transaction.get(ref);
+
+    const now = serverTimestamp();
+    cuentaId = activeSessionId;
+
     transaction.set(
       sessionRef,
       {
@@ -214,11 +219,6 @@ export const pedirCuenta = async (data: CuentaInput) => {
       },
       { merge: true }
     );
-
-    const ref = cuentaDocRef(restaurantId, activeSessionId);
-    const cuentaSnapshot = await transaction.get(ref);
-
-    cuentaId = activeSessionId;
 
     if (cuentaSnapshot.exists()) {
       const cuentaData = cuentaSnapshot.data() as Omit<CuentaRecord, "id">;
@@ -296,7 +296,6 @@ export const actualizarEstadoCuenta = async (
     }
 
     const cuentaData = cuentaSnapshot.data() as Omit<CuentaRecord, "id">;
-    const now = serverTimestamp();
 
     if (
       typeof cuentaData.sessionId === "string" &&
@@ -328,6 +327,8 @@ export const actualizarEstadoCuenta = async (
         `Inconsistencia: la cuenta ${sessionId} no pertenece a la mesa ${mesaObjetivo}`
       );
     }
+
+    const now = serverTimestamp();
 
     if (estado !== "pagada") {
       transaction.update(cuentaRef, {
