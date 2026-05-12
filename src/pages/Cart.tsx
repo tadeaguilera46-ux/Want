@@ -8,13 +8,14 @@ import {
   ShoppingBag,
   ChevronRight,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useCart } from "@/lib/CartContext";
 import { crearPedido } from "../lib/orders";
+import { getSessionById } from "../lib/sessions";
 import type { PedidoInput, PedidoItem } from "../lib/restaurant";
 import { resolveRuntimeContext } from "../lib/runtime-context";
 import type { MenuIngredient } from "../lib/store";
-import { getStoredTableSessionId } from "../lib/table-session";
+import { getStoredTableSessionId, clearStoredTableSessionId, } from "../lib/table-session";
 
 type CartItem = {
   id: string;
@@ -60,6 +61,54 @@ const Cart = () => {
     useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {   
+  const validateSession = async () => {
+    try {
+      const sessionId = getStoredTableSessionId({
+        restaurantId,
+        table: tableNumber,
+      });
+
+      if (!sessionId) {
+        navigate(
+          `/menu?restaurantId=${restaurantId}&table=${table}`,
+          {
+            replace: true,
+          }
+        );
+
+        return;
+      }
+
+      const session = await getSessionById(
+        restaurantId,
+        sessionId
+      );
+
+      if (
+        !session ||
+        session.status !== "active" ||
+        session.ordersLocked === true
+      ) {
+        clearStoredTableSessionId({
+          restaurantId,
+          table: tableNumber,
+        });
+
+        navigate(
+          `/bill-confirmed?restaurantId=${restaurantId}&table=${table}`,
+          {
+            replace: true,
+          }
+        );
+      }
+    } catch (error) {
+      console.error("Error validando sesión:", error);
+    }
+  };
+
+  void validateSession();
+}, [restaurantId, table, tableNumber, navigate]);
   const mapMenuCategoryToOrderCategory = (
     category: MenuOperationalCategory
   ): PedidoItem["category"] => {
