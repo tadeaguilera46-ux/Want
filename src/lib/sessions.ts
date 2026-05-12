@@ -28,6 +28,9 @@ export interface Session {
   restaurantId: string;
   tableNumber: number;
   status: SessionStatus;
+  billRequested?: boolean;
+  ordersLocked?: boolean;
+  lockedReason?: "bill_requested" | "table_closed" | string | null;
   openedAt?: Timestamp;
   closedAt?: Timestamp | null;
   closedReason?: SessionClosedReason | null;
@@ -135,6 +138,9 @@ const mapSession = (id: string, data?: DocumentData): Session | null => {
     restaurantId: restaurantId.trim(),
     tableNumber,
     status,
+    billRequested: data.billRequested === true,
+    ordersLocked: data.ordersLocked === true,
+    lockedReason: data.lockedReason ?? null,
     openedAt: data.openedAt,
     closedAt: data.closedAt ?? null,
     closedReason: closedReason ?? null,

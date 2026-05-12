@@ -27,7 +27,7 @@ import { getDb } from "../lib/firebase";
 import { useRestaurantConfig } from "../lib/restaurant-config";
 import type { MenuIngredient } from "../lib/store";
 import type { StockItem } from "../types/stock";
-import { saveTableSessionId, getStoredTableSessionId, } from "../lib/table-session";
+import { saveTableSessionId, getStoredTableSessionId, clearStoredTableSessionId, } from "../lib/table-session";
 import { getSessionById } from "../lib/sessions";
 import {
   buildMissingOptionalObservation,
@@ -129,42 +129,57 @@ const Menu = () => {
         setSessionError(null);
 
         const storedSessionId = getStoredTableSessionId({
+          restaurantId,
+          table: tableNumber,
+        });
+
+        if (storedSessionId) {
+          const mesa = await getMesa(restaurantId, tableNumber);
+          const session = await getSessionById(restaurantId, storedSessionId);
+
+          const isStillValid =
+            mesa.estado === "occupied" &&
+            mesa.activeSessionId === storedSessionId &&
+            session?.status === "active" &&
+            session?.ordersLocked !== true;
+
+          if (!isStillValid) {
+            clearStoredTableSessionId({
+              restaurantId,
+              table: tableNumber,
+            });
+
+            throw new Error(
+              session?.ordersLocked === true
+                ? "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa."
+                : "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
+            );
+          }
+
+          return;
+        }
+
+          const sessionId = await getOrCreateMesaSession(restaurantId, tableNumber);
+
+          saveTableSessionId({
             restaurantId,
             table: tableNumber,
+            sessionId,
           });
+        } catch (error) {
+          console.error("Error inicializando sesión de mesa:", error);
 
-          if (storedSessionId) {
-            const mesa = await getMesa(restaurantId, tableNumber);
-            const session = await getSessionById(restaurantId, storedSessionId);
-
-            const isStillValid =
-              mesa.estado === "occupied" &&
-              mesa.activeSessionId === storedSessionId &&
-              session?.status === "active";
-
-            if (!isStillValid) {
-              throw new Error(
-                "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
-              );
-            }
-
-            return;
+          if (isMounted) {
+            setSessionError(
+              error instanceof Error
+                ? error.message
+                : "No se pudo inicializar la sesión de la mesa"
+            );
           }
-          
-      } catch (error) {
-        console.error("Error inicializando sesión de mesa:", error);
-
-        if (isMounted) {
-          setSessionError(
-            error instanceof Error
-              ? error.message
-              : "No se pudo inicializar la sesión de la mesa"
-          );
-        }
-      } finally {
-        if (isMounted) {
-          setIsInitializingSession(false);
-        }
+        } finally {
+          if (isMounted) {
+            setIsInitializingSession(false);
+         }
       }
     };
 

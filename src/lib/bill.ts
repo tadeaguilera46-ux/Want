@@ -15,6 +15,8 @@ import type { CuentaInput, CuentaRecord, EstadoCuenta } from "./restaurant";
 
 const db = getDb();
 
+const BILL_LOCKED_REASON = "bill_requested";
+
 const isValidRestaurantId = (restaurantId: string) => {
   return typeof restaurantId === "string" && restaurantId.trim().length > 0;
 };
@@ -109,21 +111,17 @@ const calcularTotalRealSesion = async ({
   sessionId: string;
 }) => {
   const pedidosRef = collection(db, "restaurants", restaurantId, "pedidos");
-
   const pedidosQuery = query(pedidosRef, where("sessionId", "==", sessionId));
-
   const snapshot = await getDocs(pedidosQuery);
 
   const pedidosSesion = snapshot.docs
     .map((docSnap) => docSnap.data())
     .filter((pedido) => String(pedido.mesa) === String(mesa));
 
-  const total = pedidosSesion.reduce((acc, pedido) => {
+  return pedidosSesion.reduce((acc, pedido) => {
     const pedidoTotal = Number(pedido.total || 0);
     return acc + (Number.isFinite(pedidoTotal) ? pedidoTotal : 0);
   }, 0);
-
-  return total;
 };
 
 export const getCuentaBySessionId = async (
@@ -137,9 +135,7 @@ export const getCuentaBySessionId = async (
     cuentaDocRef(normalizedRestaurantId, normalizedSessionId)
   );
 
-  if (!snapshot.exists()) {
-    return null;
-  }
+  if (!snapshot.exists()) return null;
 
   return {
     id: snapshot.id,
@@ -206,6 +202,18 @@ export const pedirCuenta = async (data: CuentaInput) => {
         `Inconsistencia: la sesión ${activeSessionId} pertenece a otra mesa`
       );
     }
+
+    transaction.set(
+      sessionRef,
+      {
+        billRequested: true,
+        billRequestedAt: now,
+        ordersLocked: true,
+        lockedReason: BILL_LOCKED_REASON,
+        updatedAt: now,
+      },
+      { merge: true }
+    );
 
     const ref = cuentaDocRef(restaurantId, activeSessionId);
     const cuentaSnapshot = await transaction.get(ref);
@@ -326,52 +334,22 @@ export const actualizarEstadoCuenta = async (
         estado,
         updatedAt: now,
       });
+
       return;
-    }
-
-    const mesaRef = mesaDocRef(normalizedRestaurantId, mesaObjetivo);
-    const mesaSnapshot = await transaction.get(mesaRef);
-
-    if (!mesaSnapshot.exists()) {
-      throw new Error(`La mesa ${mesaObjetivo} no existe`);
-    }
-
-    const mesaData = mesaSnapshot.data();
-    const activeSessionId = mesaData?.activeSessionId;
-
-    if (
-      activeSessionId !== null &&
-      activeSessionId !== undefined &&
-      activeSessionId !== sessionId
-    ) {
-      throw new Error(
-        `Inconsistencia: la mesa ${mesaObjetivo} tiene otra sesión activa`
-      );
     }
 
     transaction.update(cuentaRef, {
       estado: "pagada",
+      paidAt: now,
       updatedAt: now,
     });
 
-    if (sessionData?.status === "active") {
-      transaction.update(sessionRef, {
-        status: "closed",
-        closedAt: now,
-        closedReason: "bill_paid",
-        updatedAt: now,
-      });
-    }
-
     transaction.set(
-      mesaRef,
+      sessionRef,
       {
-        restaurantId: normalizedRestaurantId,
-        numero: mesaObjetivo,
-        estado: "needs_cleaning",
-        activeSessionId: null,
-        cleanedAt: null,
-        createdAt: mesaData?.createdAt ?? now,
+        billRequested: true,
+        ordersLocked: true,
+        lockedReason: BILL_LOCKED_REASON,
         updatedAt: now,
       },
       { merge: true }
