@@ -22,12 +22,13 @@ import {
   parseTableNumber,
   resolveRuntimeContext,
 } from "../lib/runtime-context";
-import { getOrCreateMesaSession } from "../lib/mesas";
+import { getOrCreateMesaSession, getMesa } from "../lib/mesas";
 import { getDb } from "../lib/firebase";
 import { useRestaurantConfig } from "../lib/restaurant-config";
 import type { MenuIngredient } from "../lib/store";
 import type { StockItem } from "../types/stock";
-import { saveTableSessionId } from "../lib/table-session";
+import { saveTableSessionId, getStoredTableSessionId, } from "../lib/table-session";
+import { getSessionById } from "../lib/sessions";
 import {
   buildMissingOptionalObservation,
   getMenuItemAvailability,
@@ -127,12 +128,28 @@ const Menu = () => {
         setIsInitializingSession(true);
         setSessionError(null);
 
-        const sessionId = await getOrCreateMesaSession(restaurantId, tableNumber);
-          saveTableSessionId({
+        const storedSessionId = getStoredTableSessionId({
             restaurantId,
             table: tableNumber,
-            sessionId,
           });
+
+          if (storedSessionId) {
+            const mesa = await getMesa(restaurantId, tableNumber);
+            const session = await getSessionById(restaurantId, storedSessionId);
+
+            const isStillValid =
+              mesa.estado === "occupied" &&
+              mesa.activeSessionId === storedSessionId &&
+              session?.status === "active";
+
+            if (!isStillValid) {
+              throw new Error(
+                "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
+              );
+            }
+
+            return;
+          }
           
       } catch (error) {
         console.error("Error inicializando sesión de mesa:", error);

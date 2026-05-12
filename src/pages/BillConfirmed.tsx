@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -7,18 +7,23 @@ import {
   Clock3,
   ArrowRight,
   ShieldCheck,
+  AlertTriangle,
 } from "lucide-react";
-import {
-  collection,
-  onSnapshot,
-  orderBy,
-  query,
-} from "firebase/firestore";
+import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { getDb } from "../lib/firebase";
 import type { CuentaRecord, FirestoreTimestampLike } from "../lib/restaurant";
-import { resolveRuntimeContext } from "../lib/runtime-context";
+import { resolveRuntimeContext, parseTableNumber } from "../lib/runtime-context";
+import { getMesa } from "../lib/mesas";
+import { getSessionById } from "../lib/sessions";
+import {
+  getStoredTableSessionId,
+  clearStoredTableSessionId,
+} from "../lib/table-session";
 
 const db = getDb();
+
+const CLOSED_TABLE_MESSAGE =
+  "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR.";
 
 const statusLabel = (estado?: string) => {
   switch (estado) {
@@ -74,9 +79,78 @@ const BillConfirmed = () => {
     location,
   });
 
+  const tableNumber = parseTableNumber(table);
+
   const [cuenta, setCuenta] = useState<CuentaRecord | null>(null);
   const [loading, setLoading] = useState(true);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [sessionClosed, setSessionClosed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const storedSessionId = useMemo(() => {
+    return getStoredTableSessionId({
+      restaurantId,
+      table: tableNumber,
+    });
+  }, [restaurantId, tableNumber]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const validateCurrentSession = async () => {
+      try {
+        setCheckingSession(true);
+
+        if (!storedSessionId) {
+          if (!cancelled) {
+            setSessionClosed(true);
+          }
+          return;
+        }
+
+        const mesa = await getMesa(restaurantId, tableNumber);
+        const session = await getSessionById(restaurantId, storedSessionId);
+
+        const isStillValid =
+          mesa.estado === "occupied" &&
+          mesa.activeSessionId === storedSessionId &&
+          session?.status === "active";
+
+        if (!isStillValid) {
+          clearStoredTableSessionId({
+            restaurantId,
+            table: tableNumber,
+          });
+
+          if (!cancelled) {
+            setSessionClosed(true);
+          }
+
+          return;
+        }
+
+        if (!cancelled) {
+          setSessionClosed(false);
+        }
+      } catch (err) {
+        console.error("Error validando sesión en BillConfirmed:", err);
+
+        if (!cancelled) {
+          setSessionClosed(true);
+        }
+      } finally {
+        if (!cancelled) {
+          setCheckingSession(false);
+        }
+      }
+    };
+
+    void validateCurrentSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [restaurantId, tableNumber, storedSessionId]);
 
   useEffect(() => {
     const q = query(
@@ -97,7 +171,17 @@ const BillConfirmed = () => {
         }) as CuentaRecord[];
 
         const cuentasMesa = cuentas
-          .filter((c) => Number(c.mesa) === Number(table))
+          .filter((c) => {
+            const sameMesa = Number(c.mesa) === Number(table);
+
+            if (!sameMesa) return false;
+
+            if (storedSessionId && c.sessionId) {
+              return c.sessionId === storedSessionId;
+            }
+
+            return sameMesa;
+          })
           .sort(
             (a, b) => getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt)
           );
@@ -113,10 +197,12 @@ const BillConfirmed = () => {
     );
 
     return () => unsubscribe();
-  }, [restaurantId, table]);
+  }, [restaurantId, table, storedSessionId]);
 
   const cuentaBloqueada =
     loading ||
+    checkingSession ||
+    sessionClosed ||
     !cuenta ||
     cuenta.estado === "pendiente" ||
     cuenta.estado === "en_camino";
@@ -125,22 +211,47 @@ const BillConfirmed = () => {
   const cuentaCerrada = !loading && cuenta?.estado === "cerrada";
   const cuentaFinalizada = cuentaPagada || cuentaCerrada;
 
+  const handleBackToMenu = async () => {
+    if (!cuentaPagada || !storedSessionId) return;
+
+    try {
+      const mesa = await getMesa(restaurantId, tableNumber);
+      const session = await getSessionById(restaurantId, storedSessionId);
+
+      const isStillValid =
+        mesa.estado === "occupied" &&
+        mesa.activeSessionId === storedSessionId &&
+        session?.status === "active";
+
+      if (!isStillValid) {
+        clearStoredTableSessionId({
+          restaurantId,
+          table: tableNumber,
+        });
+
+        setSessionClosed(true);
+        return;
+      }
+
+      navigate(`/menu?restaurantId=${restaurantId}&table=${table}`, {
+        replace: true,
+        state: { table, restaurantId },
+      });
+    } catch (err) {
+      console.error("Error volviendo al menú:", err);
+      setSessionClosed(true);
+    }
+  };
+
   const handleFinish = () => {
     if (!cuentaFinalizada) return;
 
-    navigate(`/menu?restaurantId=${restaurantId}&table=${table}`, {
-      replace: true,
-      state: { table, restaurantId },
-    });
-  };
+    if (sessionClosed) {
+      alert(CLOSED_TABLE_MESSAGE);
+      return;
+    }
 
-  const handleBackToMenu = () => {
-    if (!cuentaPagada) return;
-
-    navigate(`/menu?restaurantId=${restaurantId}&table=${table}`, {
-      replace: true,
-      state: { table, restaurantId },
-    });
+    alert("Para volver a pedir, escaneá nuevamente el QR de la mesa.");
   };
 
   return (
@@ -151,17 +262,24 @@ const BillConfirmed = () => {
           animate={{ opacity: 1, y: 0 }}
           className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
         >
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-            <Receipt size={30} />
+          <div
+            className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full ${
+              sessionClosed
+                ? "bg-red-100 text-red-700"
+                : "bg-emerald-100 text-emerald-700"
+            }`}
+          >
+            {sessionClosed ? <AlertTriangle size={30} /> : <Receipt size={30} />}
           </div>
 
           <h1 className="mt-5 text-center text-2xl font-black tracking-tight text-slate-950">
-            Cuenta solicitada
+            {sessionClosed ? "Mesa cerrada" : "Cuenta solicitada"}
           </h1>
 
           <p className="mt-2 text-center text-sm leading-relaxed text-slate-500">
-            Ya avisamos al staff. Te vamos a mostrar acá el estado de la cuenta
-            de la mesa {table}.
+            {sessionClosed
+              ? CLOSED_TABLE_MESSAGE
+              : `Ya avisamos al staff. Te vamos a mostrar acá el estado de la cuenta de la mesa ${table}.`}
           </p>
 
           <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -173,9 +291,13 @@ const BillConfirmed = () => {
             <div className="mt-3 flex items-center justify-between gap-3">
               <span className="text-sm font-medium text-slate-500">Estado</span>
 
-              {loading ? (
+              {loading || checkingSession ? (
                 <span className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">
                   Cargando...
+                </span>
+              ) : sessionClosed ? (
+                <span className="rounded-full border border-red-200 bg-red-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-red-700">
+                  Mesa cerrada
                 </span>
               ) : (
                 <span
@@ -195,7 +317,25 @@ const BillConfirmed = () => {
             </div>
           )}
 
-          {cuentaBloqueada ? (
+          {sessionClosed ? (
+            <div className="mt-5 rounded-2xl border border-red-300 bg-red-50 p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle
+                  className="mt-0.5 shrink-0 text-red-700"
+                  size={18}
+                />
+                <div>
+                  <p className="text-sm font-bold text-red-900">
+                    Sesión finalizada
+                  </p>
+                  <p className="mt-1 text-sm leading-relaxed text-red-800">
+                    El restaurante ya limpió o cerró esta mesa. Esta pantalla no
+                    puede abrir una nueva sesión.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : cuentaBloqueada ? (
             <div className="mt-5 rounded-2xl border border-amber-300 bg-amber-50 p-4">
               <div className="flex items-start gap-3">
                 <Clock3 className="mt-0.5 shrink-0 text-amber-800" size={18} />
@@ -222,8 +362,8 @@ const BillConfirmed = () => {
                     Cuenta pagada
                   </p>
                   <p className="mt-1 text-sm leading-relaxed text-emerald-800">
-                    El pago ya fue confirmado. Podés volver al menú y empezar un
-                    nuevo consumo si querés seguir pidiendo.
+                    El pago ya fue confirmado. Podés volver al menú mientras la
+                    mesa siga ocupada.
                   </p>
                 </div>
               </div>
@@ -248,7 +388,7 @@ const BillConfirmed = () => {
           )}
 
           <div className="mt-6 space-y-3">
-            {cuentaPagada && (
+            {cuentaPagada && !sessionClosed && (
               <button
                 onClick={handleBackToMenu}
                 className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-sm font-extrabold text-white transition hover:opacity-90"
@@ -259,11 +399,11 @@ const BillConfirmed = () => {
             )}
 
             <button
-              disabled={!cuentaFinalizada}
+              disabled={!cuentaFinalizada && !sessionClosed}
               onClick={handleFinish}
               className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 text-sm font-extrabold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <span>Finalizar</span>
+              <span>{sessionClosed ? "Mesa cerrada" : "Finalizar"}</span>
               <ArrowRight size={16} />
             </button>
 
@@ -273,9 +413,8 @@ const BillConfirmed = () => {
                 className="mt-0.5 shrink-0 text-slate-500"
               />
               <p className="text-xs leading-relaxed text-slate-500">
-                Esta pantalla queda bloqueada hasta que el restaurante confirme
-                el pago, para evitar que se sigan cargando pedidos sobre una
-                cuenta ya solicitada.
+                Esta pantalla valida que la sesión de la mesa siga activa antes
+                de permitir volver al menú.
               </p>
             </div>
           </div>
