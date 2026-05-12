@@ -203,6 +203,53 @@ const Menu = () => {
   }, [restaurantId, tableNumber]);
 
   useEffect(() => {
+    const validateOnReturn = async () => {
+      try {
+        const storedSessionId = getStoredTableSessionId({
+          restaurantId,
+          table: tableNumber,
+        });
+
+        if (!storedSessionId) return;
+
+        const session = await getSessionById(restaurantId, storedSessionId);
+
+        if (session?.ordersLocked === true) {
+          setSessionError(
+            "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa."
+          );
+        }
+
+        if (!session || session.status !== "active") {
+          setSessionError(
+            "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
+          );
+        }
+      } catch (error) {
+        console.error("Error revalidando sesión al volver:", error);
+      }
+    };
+
+    const handlePageShow = () => {
+      void validateOnReturn();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void validateOnReturn();
+      }
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [restaurantId, tableNumber]);
+
+  useEffect(() => {
     if (!restaurantId) return;
 
     setLoadingMenu(true);
@@ -317,6 +364,11 @@ const Menu = () => {
   };
 
   const canAddQuantity = (item: MenuItem) => {
+    if (sessionError) {
+      alert(sessionError);
+      return false;
+    }
+
     const availability = getMenuItemAvailability({
       ingredients: item.ingredients,
       stockItems,
