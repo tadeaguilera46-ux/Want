@@ -11,9 +11,10 @@ import {
 import { useState } from "react";
 import { useCart } from "@/lib/CartContext";
 import { crearPedido } from "../lib/orders";
-import type { PedidoItem } from "../lib/restaurant";
+import type { PedidoInput, PedidoItem } from "../lib/restaurant";
 import { resolveRuntimeContext } from "../lib/runtime-context";
 import type { MenuIngredient } from "../lib/store";
+import { getStoredTableSessionId } from "../lib/table-session";
 
 type CartItem = {
   id: string;
@@ -51,7 +52,7 @@ const Cart = () => {
     searchParams,
     location,
   });
-
+  const tableNumber = Number(table);
   const { cart, addToCart, removeFromCart, total, clearCart } = useCart();
 
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
@@ -65,7 +66,7 @@ const Cart = () => {
     return category === "drinks" ? "drinks" : "food";
   };
 
-  const buildPedido = () => {
+  const buildPedido = (): PedidoInput => {
     const items = (cart as CartItem[]).map((item) => {
       const observacion = normalizeObservation(item.observacion);
       const itemName = item.name || item.nombre || "Producto";
@@ -76,7 +77,9 @@ const Cart = () => {
         Number.isFinite(itemPrice) && itemPrice > 0 ? itemPrice : 0;
 
       const safeQuantity =
-        Number.isFinite(itemQuantity) && itemQuantity > 0 ? itemQuantity : 1;
+        Number.isFinite(itemQuantity) && itemQuantity > 0
+          ? itemQuantity
+          : 1;
 
       const baseItem = {
         id: item.id,
@@ -102,9 +105,21 @@ const Cart = () => {
       return baseItem;
     }) as unknown as PedidoItem[];
 
+    const sessionId = getStoredTableSessionId({
+      restaurantId,
+      table: tableNumber,
+    });
+
+    if (!sessionId) {
+      throw new Error(
+        "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
+      );
+    }
+
     return {
       restaurantId,
-      mesa: Number(table),
+      mesa: tableNumber,
+      sessionId,
       items,
       total,
     };

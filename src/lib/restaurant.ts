@@ -45,6 +45,7 @@ export type PedidoItem = {
 
 export interface PedidoInput extends RestaurantScoped {
   mesa: number;
+  sessionId: string;
   items: PedidoItem[];
   total: number;
 }

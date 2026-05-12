@@ -1,9 +1,13 @@
 import {
+  collection,
   doc,
   getDoc,
+  getDocs,
+  query,
   runTransaction,
   serverTimestamp,
   setDoc,
+  where,
   type DocumentData,
   type Timestamp,
 } from "firebase/firestore";
@@ -67,6 +71,30 @@ export const mesaDocRef = (restaurantId: string, numero: number) => {
   assertValidMesaNumber(numero);
 
   return doc(db, "restaurants", normalizedRestaurantId, "mesas", String(numero));
+};
+
+const sessionsCollectionRef = (restaurantId: string) => {
+  const normalizedRestaurantId = normalizeRestaurantId(restaurantId);
+
+  return collection(db, "restaurants", normalizedRestaurantId, "sessions");
+};
+
+const getActiveSessionIdsByMesa = async (
+  restaurantId: string,
+  numero: number
+) => {
+  const normalizedRestaurantId = normalizeRestaurantId(restaurantId);
+  assertValidMesaNumber(numero);
+
+  const q = query(
+    sessionsCollectionRef(normalizedRestaurantId),
+    where("tableNumber", "==", numero),
+    where("status", "==", "active")
+  );
+
+  const snapshot = await getDocs(q);
+
+  return snapshot.docs.map((docSnap) => docSnap.id);
 };
 
 const mapMesa = (
@@ -219,7 +247,8 @@ export const getOrCreateMesaSession = async (
           normalizedRestaurantId,
           mesa.activeSessionId
         );
-        const existingSessionSnapshot = await transaction.get(existingSessionRef);
+        const existingSessionSnapshot =
+          await transaction.get(existingSessionRef);
 
         if (!existingSessionSnapshot.exists()) {
           throw new Error(
@@ -301,6 +330,11 @@ export const markMesaNeedsCleaning = async (
   const normalizedRestaurantId = normalizeRestaurantId(restaurantId);
   assertValidMesaNumber(numero);
 
+  const activeSessionIds = await getActiveSessionIdsByMesa(
+    normalizedRestaurantId,
+    numero
+  );
+
   await runTransaction(db, async (transaction) => {
     const ref = mesaDocRef(normalizedRestaurantId, numero);
     const mesaSnapshot = await transaction.get(ref);
@@ -330,26 +364,27 @@ export const markMesaNeedsCleaning = async (
       mesaSnapshot.data()
     );
 
-    const sessionIdToKeep = mesa.activeSessionId ?? mesa.lastSessionId ?? null;
+    const sessionIdToKeep =
+      mesa.activeSessionId ?? activeSessionIds[0] ?? mesa.lastSessionId ?? null;
 
-    if (mesa.activeSessionId) {
-      const sessionRef = sessionDocRef(
-        normalizedRestaurantId,
-        mesa.activeSessionId
-      );
+    for (const sessionId of activeSessionIds) {
+      const sessionRef = sessionDocRef(normalizedRestaurantId, sessionId);
       const sessionSnapshot = await transaction.get(sessionRef);
 
-      if (sessionSnapshot.exists()) {
-        const sessionData = sessionSnapshot.data();
+      if (!sessionSnapshot.exists()) continue;
 
-        if (sessionData?.status === "active") {
-          transaction.update(sessionRef, {
-            status: "closed",
-            closedAt: now,
-            closedReason: "bill_paid",
-            updatedAt: now,
-          });
-        }
+      const sessionData = sessionSnapshot.data();
+
+      if (
+        sessionData?.status === "active" &&
+        sessionData?.tableNumber === numero
+      ) {
+        transaction.update(sessionRef, {
+          status: "closed",
+          closedAt: now,
+          closedReason: "staff_closed",
+          updatedAt: now,
+        });
       }
     }
 
@@ -377,6 +412,11 @@ export const markMesaAvailable = async (
   const normalizedRestaurantId = normalizeRestaurantId(restaurantId);
   assertValidMesaNumber(numero);
 
+  const activeSessionIds = await getActiveSessionIdsByMesa(
+    normalizedRestaurantId,
+    numero
+  );
+
   await runTransaction(db, async (transaction) => {
     const ref = mesaDocRef(normalizedRestaurantId, numero);
     const mesaSnapshot = await transaction.get(ref);
@@ -392,11 +432,34 @@ export const markMesaAvailable = async (
         mesaSnapshot.data()
       );
 
-      lastSessionId = mesa.lastSessionId ?? mesa.activeSessionId ?? null;
+      lastSessionId =
+        mesa.activeSessionId ?? activeSessionIds[0] ?? mesa.lastSessionId ?? null;
       createdAt = mesa.createdAt;
     }
 
-    if (lastSessionId) {
+    for (const sessionId of activeSessionIds) {
+      const sessionRef = sessionDocRef(normalizedRestaurantId, sessionId);
+      const sessionSnapshot = await transaction.get(sessionRef);
+
+      if (!sessionSnapshot.exists()) continue;
+
+      const sessionData = sessionSnapshot.data();
+
+      if (
+        sessionData?.status === "active" &&
+        sessionData?.tableNumber === numero
+      ) {
+        transaction.update(sessionRef, {
+          status: "closed",
+          closedAt: now,
+          closedReason: "table_reset",
+          cleanedAt: now,
+          updatedAt: now,
+        });
+      }
+    }
+
+    if (lastSessionId && !activeSessionIds.includes(lastSessionId)) {
       const sessionRef = sessionDocRef(normalizedRestaurantId, lastSessionId);
       const sessionSnapshot = await transaction.get(sessionRef);
 
@@ -436,6 +499,11 @@ export const closeMesaSessionManually = async (
   const normalizedRestaurantId = normalizeRestaurantId(restaurantId);
   assertValidMesaNumber(numero);
 
+  const activeSessionIds = await getActiveSessionIdsByMesa(
+    normalizedRestaurantId,
+    numero
+  );
+
   await runTransaction(db, async (transaction) => {
     const ref = mesaDocRef(normalizedRestaurantId, numero);
     const mesaSnapshot = await transaction.get(ref);
@@ -465,26 +533,27 @@ export const closeMesaSessionManually = async (
       mesaSnapshot.data()
     );
 
-    const sessionIdToKeep = mesa.activeSessionId ?? mesa.lastSessionId ?? null;
+    const sessionIdToKeep =
+      mesa.activeSessionId ?? activeSessionIds[0] ?? mesa.lastSessionId ?? null;
 
-    if (mesa.activeSessionId) {
-      const sessionRef = sessionDocRef(
-        normalizedRestaurantId,
-        mesa.activeSessionId
-      );
+    for (const sessionId of activeSessionIds) {
+      const sessionRef = sessionDocRef(normalizedRestaurantId, sessionId);
       const sessionSnapshot = await transaction.get(sessionRef);
 
-      if (sessionSnapshot.exists()) {
-        const sessionData = sessionSnapshot.data();
+      if (!sessionSnapshot.exists()) continue;
 
-        if (sessionData?.status === "active") {
-          transaction.update(sessionRef, {
-            status: "closed",
-            closedAt: now,
-            closedReason: "staff_closed",
-            updatedAt: now,
-          });
-        }
+      const sessionData = sessionSnapshot.data();
+
+      if (
+        sessionData?.status === "active" &&
+        sessionData?.tableNumber === numero
+      ) {
+        transaction.update(sessionRef, {
+          status: "closed",
+          closedAt: now,
+          closedReason: "staff_closed",
+          updatedAt: now,
+        });
       }
     }
 
@@ -544,6 +613,55 @@ export const setMesaActive = async (
     throw new Error("No se puede desactivar una mesa ocupada");
   }
 
+  if (!active) {
+    const activeSessionIds = await getActiveSessionIdsByMesa(
+      normalizedRestaurantId,
+      numero
+    );
+
+    await runTransaction(db, async (transaction) => {
+      const ref = mesaDocRef(normalizedRestaurantId, numero);
+      const now = serverTimestamp();
+
+      for (const sessionId of activeSessionIds) {
+        const sessionRef = sessionDocRef(normalizedRestaurantId, sessionId);
+        const sessionSnapshot = await transaction.get(sessionRef);
+
+        if (!sessionSnapshot.exists()) continue;
+
+        const sessionData = sessionSnapshot.data();
+
+        if (
+          sessionData?.status === "active" &&
+          sessionData?.tableNumber === numero
+        ) {
+          transaction.update(sessionRef, {
+            status: "closed",
+            closedAt: now,
+            closedReason: "table_reset",
+            updatedAt: now,
+          });
+        }
+      }
+
+      transaction.set(
+        ref,
+        {
+          restaurantId: normalizedRestaurantId,
+          numero,
+          active,
+          estado: "available",
+          activeSessionId: null,
+          lastSessionId: null,
+          updatedAt: now,
+        },
+        { merge: true }
+      );
+    });
+
+    return;
+  }
+
   await setDoc(
     mesaDocRef(normalizedRestaurantId, numero),
     {
@@ -551,13 +669,6 @@ export const setMesaActive = async (
       numero,
       active,
       updatedAt: serverTimestamp(),
-      ...(active
-        ? {}
-        : {
-            estado: "available",
-            activeSessionId: null,
-            lastSessionId: null,
-          }),
     },
     { merge: true }
   );

@@ -27,6 +27,7 @@ import { getDb } from "../lib/firebase";
 import { useRestaurantConfig } from "../lib/restaurant-config";
 import type { MenuIngredient } from "../lib/store";
 import type { StockItem } from "../types/stock";
+import { saveTableSessionId } from "../lib/table-session";
 import {
   buildMissingOptionalObservation,
   getMenuItemAvailability,
@@ -126,7 +127,13 @@ const Menu = () => {
         setIsInitializingSession(true);
         setSessionError(null);
 
-        await getOrCreateMesaSession(restaurantId, tableNumber);
+        const sessionId = await getOrCreateMesaSession(restaurantId, tableNumber);
+          saveTableSessionId({
+            restaurantId,
+            table: tableNumber,
+            sessionId,
+          });
+          
       } catch (error) {
         console.error("Error inicializando sesión de mesa:", error);
 

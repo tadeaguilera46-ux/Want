@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import admin from "firebase-admin";
-import { randomUUID } from "crypto";
+
 
 type StockUnit = "kg" | "g" | "l" | "ml" | "unit";
 
@@ -22,6 +22,7 @@ type PedidoItemInput = {
 type PedidoInput = {
   restaurantId: string;
   mesa: number;
+  sessionId: string;
   items: PedidoItemInput[];
   total: number;
 };
@@ -108,6 +109,11 @@ const validatePedido = (pedido: PedidoInput) => {
   if (!Array.isArray(pedido.items) || pedido.items.length === 0) {
     throw new Error("El pedido no tiene productos");
   }
+  if (!pedido.sessionId || typeof pedido.sessionId !== "string") {
+    throw new Error(
+      "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
+    );
+  }
 
   if (
     typeof pedido.total !== "number" ||
@@ -149,34 +155,49 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const isPremium = restaurantData.plan === "premium";
 
       const mesaData = mesaSnap.exists ? mesaSnap.data() || {} : {};
-      const activeSessionId = mesaData.activeSessionId;
+     const activeSessionId = mesaData.activeSessionId;
+     const requestedSessionId = pedido.sessionId.trim();
 
-      let sessionId: string | null = null;
-      let existingSessionSnap: FirebaseFirestore.DocumentSnapshot | null = null;
-
-      if (
-        typeof activeSessionId === "string" &&
-        activeSessionId.length > 0 &&
-        (mesaData.estado === "occupied" || mesaData.estado === "needs_cleaning")
-      ) {
-        const sessionRef = db.doc(
-          `restaurants/${restaurantId}/sessions/${activeSessionId}`
+     if (!mesaSnap.exists) {
+        throw new Error(
+          "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
         );
+     }
 
-        existingSessionSnap = await transaction.get(sessionRef);
+     if (
+      mesaData.estado !== "occupied" ||
+      typeof activeSessionId !== "string" ||
+      activeSessionId !== requestedSessionId
+     ) {
+      throw new Error(
+        "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
+      );
+     }
 
-        if (!existingSessionSnap.exists) {
-          throw new Error("La mesa tiene una sesión inválida");
-        }
+     const sessionRef = db.doc(
+      `restaurants/${restaurantId}/sessions/${requestedSessionId}`
+     );
 
-        const sessionData = existingSessionSnap.data() || {};
+     const existingSessionSnap = await transaction.get(sessionRef);
 
-        if (sessionData.status !== "active") {
-          throw new Error("La sesión de la mesa no está activa");
-        }
+     if (!existingSessionSnap.exists) {
+      throw new Error(
+        "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
+      );
+     }
 
-        sessionId = activeSessionId;
-      }
+     const sessionData = existingSessionSnap.data() || {};
+
+     if (
+      sessionData.status !== "active" ||
+      sessionData.tableNumber !== mesa
+     ) {
+      throw new Error(
+        "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
+      );
+     }
+
+     const sessionId = requestedSessionId;
 
       const menuReads: {
         rawItem: PedidoItemInput;
@@ -376,25 +397,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      if (!sessionId) {
-        sessionId = randomUUID();
-
-        const sessionRef = db.doc(
-          `restaurants/${restaurantId}/sessions/${sessionId}`
-        );
-
-        transaction.set(sessionRef, {
-          restaurantId,
-          tableNumber: mesa,
-          status: "active",
-          openedAt: admin.firestore.FieldValue.serverTimestamp(),
-          closedAt: null,
-          closedReason: null,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      }
-
       for (const [stockItemId, requiredBase] of stockRequiredBaseMap.entries()) {
         const stockRef = stockRefsById.get(stockItemId);
         const stockSnap = stockSnapsById.get(stockItemId);
@@ -472,4 +474,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           : "No se pudo crear el pedido",
     });
   }
-}
+}   
