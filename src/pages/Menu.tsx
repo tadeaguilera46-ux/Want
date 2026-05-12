@@ -144,15 +144,19 @@ const Menu = () => {
             session?.ordersLocked !== true;
 
           if (!isStillValid) {
+            if (session?.ordersLocked === true) {
+              throw new Error(
+                "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa."
+              );
+            }
+
             clearStoredTableSessionId({
               restaurantId,
               table: tableNumber,
             });
 
             throw new Error(
-              session?.ordersLocked === true
-                ? "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa."
-                : "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
+              "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
             );
           }
 
@@ -160,12 +164,20 @@ const Menu = () => {
         }
 
           const sessionId = await getOrCreateMesaSession(restaurantId, tableNumber);
+          const session = await getSessionById(restaurantId, sessionId);
+
+          if (session?.ordersLocked === true) {
+              throw new Error(
+                "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa."
+              );
+          }
 
           saveTableSessionId({
-            restaurantId,
-            table: tableNumber,
-            sessionId,
+              restaurantId,
+              table: tableNumber,
+              sessionId,
           });
+
         } catch (error) {
           console.error("Error inicializando sesión de mesa:", error);
 
