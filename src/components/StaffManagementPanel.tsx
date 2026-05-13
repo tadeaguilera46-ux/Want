@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  addDoc,
   collection,
   doc,
   onSnapshot,
   query,
+  serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
-import { UserCog } from "lucide-react";
+import { Plus, UserCog } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import type { StaffRole } from "../lib/staff";
 import {
@@ -66,6 +68,10 @@ export function StaffManagementPanel({ restaurantId }: Props) {
     useState<RestaurantPlan>("starter");
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  const [newEmail, setNewEmail] = useState("");
+  const [newRole, setNewRole] = useState<StaffRole>("cashier");
 
   useEffect(() => {
     if (!restaurantId) return;
@@ -145,6 +151,52 @@ export function StaffManagementPanel({ restaurantId }: Props) {
     );
   };
 
+  const createStaffMember = async () => {
+    const normalizedEmail = newEmail.trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      alert("Ingresá el email del empleado.");
+      return;
+    }
+
+    const alreadyExists = staff.some(
+      (member) => member.email?.trim().toLowerCase() === normalizedEmail
+    );
+
+    if (alreadyExists) {
+      alert("Ya existe un empleado con ese email.");
+      return;
+    }
+
+    if (!canCreateStaff(restaurantPlan, activeStaffCount)) {
+      alert(
+        `Tu plan ${PLAN_LABELS[restaurantPlan]} permite hasta ${staffLimitLabel} empleados activos.`
+      );
+      return;
+    }
+
+    try {
+      setCreating(true);
+
+      await addDoc(collection(db, "restaurants", restaurantId, "staff"), {
+        restaurantId,
+        email: normalizedEmail,
+        role: newRole,
+        active: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      setNewEmail("");
+      setNewRole("cashier");
+    } catch (error) {
+      console.error("Error creando empleado:", error);
+      alert("No se pudo crear el empleado.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const updateStaffRole = async (member: StaffMember, role: StaffRole) => {
     if (isLastActiveAdmin(member) && role !== "admin") {
       alert("No podés quitarle el rol admin al último admin activo.");
@@ -156,6 +208,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
 
       await updateDoc(doc(db, "restaurants", restaurantId, "staff", member.id), {
         role,
+        updatedAt: serverTimestamp(),
       });
     } catch (error) {
       console.error("Error actualizando rol:", error);
@@ -178,6 +231,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
 
       await updateDoc(doc(db, "restaurants", restaurantId, "staff", staffId), {
         email: normalizedEmail,
+        updatedAt: serverTimestamp(),
       });
     } catch (error) {
       console.error("Error actualizando email:", error);
@@ -207,6 +261,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
 
       await updateDoc(doc(db, "restaurants", restaurantId, "staff", member.id), {
         active: nextActive,
+        updatedAt: serverTimestamp(),
       });
     } catch (error) {
       console.error("Error actualizando empleado:", error);
@@ -229,7 +284,8 @@ export function StaffManagementPanel({ restaurantId }: Props) {
               Gestión de empleados
             </h2>
             <p className="mt-1 text-sm text-zinc-500">
-              Cambiá emails visibles, roles o accesos sin borrar usuarios.
+              Creá empleados, cambiá emails visibles, roles o accesos sin borrar
+              usuarios.
             </p>
 
             <div className="mt-3 flex flex-wrap gap-2">
@@ -258,6 +314,45 @@ export function StaffManagementPanel({ restaurantId }: Props) {
 
         <div className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-bold text-zinc-600">
           {sortedStaff.length} empleado(s)
+        </div>
+      </div>
+
+      <div className="mb-5 rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <Plus size={18} />
+          <h3 className="font-black text-zinc-950">Crear empleado</h3>
+        </div>
+
+        <div className="grid gap-3 lg:grid-cols-[1fr_180px_auto]">
+          <input
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            type="email"
+            placeholder="email@restaurante.com"
+            disabled={creating}
+            className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 font-semibold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10 disabled:opacity-60"
+          />
+
+          <select
+            value={newRole}
+            onChange={(e) => setNewRole(e.target.value as StaffRole)}
+            disabled={creating}
+            className="h-12 rounded-2xl border border-zinc-200 bg-white px-3 outline-none focus:ring-2 focus:ring-black/10 disabled:opacity-60"
+          >
+            <option value="cashier">Cajero</option>
+            <option value="runner">Runner</option>
+            <option value="kitchen">Cocina</option>
+            <option value="bar">Barra</option>
+            <option value="admin">Admin</option>
+          </select>
+
+          <button
+            onClick={createStaffMember}
+            disabled={creating || reachedStaffLimit}
+            className="h-12 rounded-2xl bg-zinc-950 px-5 font-black text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {creating ? "Creando..." : "Crear empleado"}
+          </button>
         </div>
       </div>
 
@@ -296,8 +391,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
                 const active = member.active === true;
                 const isOld = getCreatedAtMillis(member) === 0;
                 const lockedAdmin = isLastActiveAdmin(member);
-                const cannotActivateBecauseLimit =
-                  !active && reachedStaffLimit;
+                const cannotActivateBecauseLimit = !active && reachedStaffLimit;
 
                 return (
                   <tr
@@ -358,17 +452,17 @@ export function StaffManagementPanel({ restaurantId }: Props) {
                         <option value="runner">{roleLabel.runner}</option>
                         <option value="kitchen">{roleLabel.kitchen}</option>
                         <option value="bar">{roleLabel.bar}</option>
-                        <option value="admin">{roleLabel.admin}</option>
                         <option value="cashier">{roleLabel.cashier}</option>
+                        <option value="admin">{roleLabel.admin}</option>
                       </select>
                     </td>
 
                     <td className="py-4 pr-4">
                       <span
-                        className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${
+                        className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wide ${
                           active
-                            ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
-                            : "bg-red-100 text-red-700 border border-red-200"
+                            ? "border-emerald-200 bg-emerald-100 text-emerald-700"
+                            : "border-red-200 bg-red-100 text-red-700"
                         }`}
                       >
                         {active ? "Activo" : "Inactivo"}
@@ -377,10 +471,10 @@ export function StaffManagementPanel({ restaurantId }: Props) {
 
                     <td className="py-4 pr-4">
                       <span
-                        className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${
+                        className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wide ${
                           isOld
-                            ? "bg-zinc-100 text-zinc-600 border border-zinc-200"
-                            : "bg-blue-100 text-blue-700 border border-blue-200"
+                            ? "border-zinc-200 bg-zinc-100 text-zinc-600"
+                            : "border-blue-200 bg-blue-100 text-blue-700"
                         }`}
                       >
                         {isOld ? "Viejo" : "Nuevo"}

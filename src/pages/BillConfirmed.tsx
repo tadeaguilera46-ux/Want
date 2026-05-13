@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   CheckCircle2,
   Receipt,
   Clock3,
-  ArrowRight,
   ShieldCheck,
   AlertTriangle,
+  QrCode,
 } from "lucide-react";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { getDb } from "../lib/firebase";
@@ -22,8 +22,11 @@ import {
 
 const db = getDb();
 
+const RESCAN_QR_MESSAGE =
+  "Para volver a pedir, escaneá nuevamente el QR físico de la mesa.";
+
 const CLOSED_TABLE_MESSAGE =
-  "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR.";
+  "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR físico de la mesa.";
 
 const statusLabel = (estado?: string) => {
   switch (estado) {
@@ -49,7 +52,7 @@ const statusStyles = (estado?: string) => {
     case "pagada":
       return "bg-emerald-100 text-emerald-800 border border-emerald-200";
     case "cerrada":
-      return "bg-emerald-100 text-emerald-800 border border-emerald-200";
+      return "bg-slate-200 text-slate-800 border border-slate-300";
     default:
       return "bg-slate-100 text-slate-700 border border-slate-200";
   }
@@ -57,20 +60,12 @@ const statusStyles = (estado?: string) => {
 
 const getTimestampMs = (value?: FirestoreTimestampLike) => {
   if (!value) return 0;
-
-  if (typeof value.toMillis === "function") {
-    return value.toMillis();
-  }
-
-  if (typeof value.seconds === "number") {
-    return value.seconds * 1000;
-  }
-
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (typeof value.seconds === "number") return value.seconds * 1000;
   return 0;
 };
 
 const BillConfirmed = () => {
-  const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
 
@@ -102,9 +97,7 @@ const BillConfirmed = () => {
         setCheckingSession(true);
 
         if (!storedSessionId) {
-          if (!cancelled) {
-            setSessionClosed(true);
-          }
+          if (!cancelled) setSessionClosed(true);
           return;
         }
 
@@ -122,26 +115,16 @@ const BillConfirmed = () => {
             table: tableNumber,
           });
 
-          if (!cancelled) {
-            setSessionClosed(true);
-          }
-
+          if (!cancelled) setSessionClosed(true);
           return;
         }
 
-        if (!cancelled) {
-          setSessionClosed(false);
-        }
+        if (!cancelled) setSessionClosed(false);
       } catch (err) {
         console.error("Error validando sesión en BillConfirmed:", err);
-
-        if (!cancelled) {
-          setSessionClosed(true);
-        }
+        if (!cancelled) setSessionClosed(true);
       } finally {
-        if (!cancelled) {
-          setCheckingSession(false);
-        }
+        if (!cancelled) setCheckingSession(false);
       }
     };
 
@@ -163,17 +146,14 @@ const BillConfirmed = () => {
       (snapshot) => {
         setError(null);
 
-        const cuentas = snapshot.docs.map((cuentaDoc) => {
-          return {
-            id: cuentaDoc.id,
-            ...cuentaDoc.data(),
-          };
-        }) as CuentaRecord[];
+        const cuentas = snapshot.docs.map((cuentaDoc) => ({
+          id: cuentaDoc.id,
+          ...cuentaDoc.data(),
+        })) as CuentaRecord[];
 
         const cuentasMesa = cuentas
           .filter((c) => {
             const sameMesa = Number(c.mesa) === Number(table);
-
             if (!sameMesa) return false;
 
             if (storedSessionId && c.sessionId) {
@@ -199,60 +179,16 @@ const BillConfirmed = () => {
     return () => unsubscribe();
   }, [restaurantId, table, storedSessionId]);
 
-  const cuentaBloqueada =
+  const waitingForStaff =
     loading ||
     checkingSession ||
-    sessionClosed ||
     !cuenta ||
     cuenta.estado === "pendiente" ||
     cuenta.estado === "en_camino";
 
   const cuentaPagada = !loading && cuenta?.estado === "pagada";
   const cuentaCerrada = !loading && cuenta?.estado === "cerrada";
-  const cuentaFinalizada = cuentaPagada || cuentaCerrada;
-
-  const handleBackToMenu = async () => {
-    if (!cuentaPagada || !storedSessionId) return;
-
-    try {
-      const mesa = await getMesa(restaurantId, tableNumber);
-      const session = await getSessionById(restaurantId, storedSessionId);
-
-      const isStillValid =
-        mesa.estado === "occupied" &&
-        mesa.activeSessionId === storedSessionId &&
-        session?.status === "active";
-
-      if (!isStillValid) {
-        clearStoredTableSessionId({
-          restaurantId,
-          table: tableNumber,
-        });
-
-        setSessionClosed(true);
-        return;
-      }
-
-      navigate(`/menu?restaurantId=${restaurantId}&table=${table}`, {
-        replace: true,
-        state: { table, restaurantId },
-      });
-    } catch (err) {
-      console.error("Error volviendo al menú:", err);
-      setSessionClosed(true);
-    }
-  };
-
-  const handleFinish = () => {
-    if (!cuentaFinalizada) return;
-
-    if (sessionClosed) {
-      alert(CLOSED_TABLE_MESSAGE);
-      return;
-    }
-
-    alert("Para volver a pedir, escaneá nuevamente el QR de la mesa.");
-  };
+  const shouldShowRescanMessage = sessionClosed || cuentaPagada || cuentaCerrada;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -279,7 +215,7 @@ const BillConfirmed = () => {
           <p className="mt-2 text-center text-sm leading-relaxed text-slate-500">
             {sessionClosed
               ? CLOSED_TABLE_MESSAGE
-              : `Ya avisamos al staff. Te vamos a mostrar acá el estado de la cuenta de la mesa ${table}.`}
+              : `Ya avisamos al staff. Te mostramos acá el estado de la cuenta de la mesa ${table}.`}
           </p>
 
           <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -320,21 +256,20 @@ const BillConfirmed = () => {
           {sessionClosed ? (
             <div className="mt-5 rounded-2xl border border-red-300 bg-red-50 p-4">
               <div className="flex items-start gap-3">
-                <AlertTriangle
-                  className="mt-0.5 shrink-0 text-red-700"
-                  size={18}
-                />
+                <AlertTriangle className="mt-0.5 shrink-0 text-red-700" size={18} />
                 <div>
                   <p className="text-sm font-bold text-red-900">
                     Sesión finalizada
                   </p>
                   <p className="mt-1 text-sm leading-relaxed text-red-800">
-                    El restaurante ya limpió o cerró esta mesa. Para volver a pedir, necesitás escanear nuevamente el QR desde la mesa.
+                    El restaurante ya cerró o limpió esta mesa. Para volver a
+                    pedir, necesitás escanear nuevamente el QR físico desde la
+                    mesa.
                   </p>
                 </div>
               </div>
             </div>
-          ) : cuentaBloqueada ? (
+          ) : waitingForStaff ? (
             <div className="mt-5 rounded-2xl border border-amber-300 bg-amber-50 p-4">
               <div className="flex items-start gap-3">
                 <Clock3 className="mt-0.5 shrink-0 text-amber-800" size={18} />
@@ -343,8 +278,8 @@ const BillConfirmed = () => {
                     Esperando confirmación del staff
                   </p>
                   <p className="mt-1 text-sm leading-relaxed text-amber-800">
-                    Mientras la cuenta esté pendiente o en camino, no vas a poder
-                    volver al menú para seguir pidiendo.
+                    Mientras la cuenta esté pendiente o en camino, no se pueden
+                    cargar nuevos pedidos desde esta sesión.
                   </p>
                 </div>
               </div>
@@ -361,25 +296,26 @@ const BillConfirmed = () => {
                     Cuenta pagada
                   </p>
                   <p className="mt-1 text-sm leading-relaxed text-emerald-800">
-                    El pago ya fue confirmado. Podés volver al menú mientras la
-                    mesa siga ocupada.
+                    El pago ya fue confirmado. Si querés volver a pedir,
+                    escaneá nuevamente el QR físico de la mesa.
                   </p>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="mt-5 rounded-2xl border border-emerald-300 bg-emerald-50 p-4">
+            <div className="mt-5 rounded-2xl border border-slate-300 bg-slate-50 p-4">
               <div className="flex items-start gap-3">
                 <CheckCircle2
-                  className="mt-0.5 shrink-0 text-emerald-700"
+                  className="mt-0.5 shrink-0 text-slate-700"
                   size={18}
                 />
                 <div>
-                  <p className="text-sm font-bold text-emerald-900">
+                  <p className="text-sm font-bold text-slate-900">
                     Cuenta cerrada
                   </p>
-                  <p className="mt-1 text-sm leading-relaxed text-emerald-800">
-                    La cuenta ya fue cerrada por el restaurante.
+                  <p className="mt-1 text-sm leading-relaxed text-slate-700">
+                    La cuenta ya fue cerrada por el restaurante. Para volver a
+                    pedir, necesitás escanear nuevamente el QR físico de la mesa.
                   </p>
                 </div>
               </div>
@@ -387,24 +323,19 @@ const BillConfirmed = () => {
           )}
 
           <div className="mt-6 space-y-3">
-            {cuentaPagada && !sessionClosed && (
-              <button
-                onClick={handleBackToMenu}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-sm font-extrabold text-white transition hover:opacity-90"
-              >
-                <span>Volver al menú</span>
-                <ArrowRight size={16} />
-              </button>
+            {shouldShowRescanMessage && (
+              <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                <QrCode size={20} className="mt-0.5 shrink-0 text-slate-700" />
+                <div>
+                  <p className="text-sm font-black text-slate-950">
+                    Escaneá el QR para volver a pedir
+                  </p>
+                  <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                    {RESCAN_QR_MESSAGE}
+                  </p>
+                </div>
+              </div>
             )}
-
-            <button
-              disabled={!cuentaFinalizada && !sessionClosed}
-              onClick={handleFinish}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-950 text-sm font-extrabold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <span>{sessionClosed ? "Mesa cerrada" : "Finalizar"}</span>
-              <ArrowRight size={16} />
-            </button>
 
             <div className="flex items-start gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
               <ShieldCheck
@@ -412,8 +343,9 @@ const BillConfirmed = () => {
                 className="mt-0.5 shrink-0 text-slate-500"
               />
               <p className="text-xs leading-relaxed text-slate-500">
-                Esta pantalla valida que la sesión de la mesa siga activa antes
-                de permitir volver al menú.
+                Por seguridad, esta pantalla no permite volver al menú desde un
+                link anterior. El acceso al menú debe iniciarse desde el QR de la
+                mesa.
               </p>
             </div>
           </div>
