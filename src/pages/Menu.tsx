@@ -22,12 +22,12 @@ import {
   parseTableNumber,
   resolveRuntimeContext,
 } from "../lib/runtime-context";
-import { getOrCreateMesaSession, getMesa } from "../lib/mesas";
+import { getMesa } from "../lib/mesas";
 import { getDb } from "../lib/firebase";
 import { useRestaurantConfig } from "../lib/restaurant-config";
 import type { MenuIngredient } from "../lib/store";
 import type { StockItem } from "../types/stock";
-import { saveTableSessionId, getStoredTableSessionId, clearStoredTableSessionId, } from "../lib/table-session";
+import { getStoredTableSessionId, clearStoredTableSessionId, } from "../lib/table-session";
 import { getSessionById } from "../lib/sessions";
 import {
   buildMissingOptionalObservation,
@@ -123,7 +123,7 @@ const Menu = () => {
   useEffect(() => {
     let isMounted = true;
 
-    const initializeMesaSession = async () => {
+   const initializeMesaSession = async () => {
       try {
         setIsInitializingSession(true);
         setSessionError(null);
@@ -133,65 +133,50 @@ const Menu = () => {
           table: tableNumber,
         });
 
-        if (storedSessionId) {
-          const mesa = await getMesa(restaurantId, tableNumber);
-          const session = await getSessionById(restaurantId, storedSessionId);
-
-          const isStillValid =
-            mesa.estado === "occupied" &&
-            mesa.activeSessionId === storedSessionId &&
-            session?.status === "active" &&
-            session?.ordersLocked !== true;
-
-          if (!isStillValid) {
-            if (session?.ordersLocked === true) {
-              throw new Error(
-                "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa."
-              );
-            }
-
-            clearStoredTableSessionId({
-              restaurantId,
-              table: tableNumber,
-            });
-
-            throw new Error(
-              "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
-            );
-          }
-
-          return;
+        if (!storedSessionId) {
+          throw new Error(
+            "Para abrir esta mesa tenés que escanear el QR nuevamente."
+          );
         }
 
-          const sessionId = await getOrCreateMesaSession(restaurantId, tableNumber);
-          const session = await getSessionById(restaurantId, sessionId);
+        const mesa = await getMesa(restaurantId, tableNumber);
+        const session = await getSessionById(restaurantId, storedSessionId);
 
-          if (session?.ordersLocked === true) {
-              throw new Error(
-                "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa."
-              );
-          }
+        const isStillValid =
+          mesa.estado === "occupied" &&
+          mesa.activeSessionId === storedSessionId &&
+          session?.status === "active";
 
-          saveTableSessionId({
-              restaurantId,
-              table: tableNumber,
-              sessionId,
+        if (!isStillValid) {
+          clearStoredTableSessionId({
+            restaurantId,
+            table: tableNumber,
           });
 
-        } catch (error) {
-          console.error("Error inicializando sesión de mesa:", error);
+          throw new Error(
+            "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
+          );
+        }
 
-          if (isMounted) {
-            setSessionError(
-              error instanceof Error
-                ? error.message
-                : "No se pudo inicializar la sesión de la mesa"
-            );
-          }
-        } finally {
-          if (isMounted) {
-            setIsInitializingSession(false);
-         }
+        if (session?.ordersLocked === true) {
+          throw new Error(
+            "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa."
+          );
+        }
+      } catch (error) {
+        console.error("Error inicializando sesión de mesa:", error);
+
+        if (isMounted) {
+          setSessionError(
+            error instanceof Error
+              ? error.message
+              : "No se pudo inicializar la sesión de la mesa"
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsInitializingSession(false);
+        }
       }
     };
 

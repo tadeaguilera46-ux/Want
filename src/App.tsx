@@ -17,6 +17,7 @@ const OrderConfirmed = lazy(() => import("./pages/OrderConfirmed"));
 const RequestBill = lazy(() => import("./pages/RequestBill"));
 const BillConfirmed = lazy(() => import("./pages/BillConfirmed"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
+const QrEntry = lazy(() => import("./pages/QrEntry"));
 
 // Staff
 const Kitchen = lazy(() => import("./pages/Kitchen"));
@@ -105,6 +106,15 @@ const App = () => (
             }
           />
 
+          <Route
+            path="/qr"
+            element={
+              <ClientApp>
+                <QrEntry />
+              </ClientApp>
+            }
+          />
+          
           <Route
             path="/order-confirmed"
             element={
