@@ -1032,7 +1032,11 @@ const Admin = () => {
           </div>
         )}
         <div className="mt-8">
-      <MesaManagementPanel restaurantId={restaurantId} />
+      <MesaManagementPanel
+        restaurantId={restaurantId}
+        qrBasePath="/qr"
+      />
+      
 </div>
 <RestaurantBrandingPanel restaurantId={restaurantId} />
         <section className="mb-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">

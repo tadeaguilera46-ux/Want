@@ -26,19 +26,26 @@ type RestaurantBillingData = {
 
 type Props = {
   restaurantId: string;
+  qrBasePath?: string;
 };
 
 const db = getDb();
 
-const getMenuUrl = (restaurantId: string, mesa: number) => {
+const getMenuUrl = (
+  restaurantId: string,
+  mesa: number,
+  qrBasePath: string
+) => {
   const origin = window.location.origin;
 
-  return `${origin}/menu?restaurantId=${encodeURIComponent(
+  return `${origin}${qrBasePath}?restaurantId=${encodeURIComponent(
     restaurantId
   )}&table=${encodeURIComponent(String(mesa))}`;
 };
-
-export function MesaManagementPanel({ restaurantId }: Props) {
+export function MesaManagementPanel({
+  restaurantId,
+  qrBasePath = "/menu",
+}: Props) {
   const [mesas, setMesas] = useState<MesaAdmin[]>([]);
   const [restaurantPlan, setRestaurantPlan] = useState<RestaurantPlan>("starter");
   const [newMesaNumber, setNewMesaNumber] = useState("");
@@ -171,7 +178,7 @@ export function MesaManagementPanel({ restaurantId }: Props) {
 
     if (!Number.isInteger(numero) || numero <= 0) return;
 
-    const url = getMenuUrl(restaurantId, numero);
+    const url = getMenuUrl(restaurantId, mesa.numero, qrBasePath)
 
     try {
       await navigator.clipboard.writeText(url);
@@ -200,9 +207,10 @@ export function MesaManagementPanel({ restaurantId }: Props) {
   };
 
   const qrMesaNumber = qrMesa ? Number(qrMesa.numero ?? qrMesa.id) : null;
+
   const qrUrl =
     qrMesaNumber && Number.isInteger(qrMesaNumber)
-      ? getMenuUrl(restaurantId, qrMesaNumber)
+      ? getMenuUrl(restaurantId, qrMesaNumber, qrBasePath)
       : "";
 
   return (
