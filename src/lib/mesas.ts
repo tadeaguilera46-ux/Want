@@ -247,6 +247,7 @@ export const getOrCreateMesaSession = async (
           normalizedRestaurantId,
           mesa.activeSessionId
         );
+
         const existingSessionSnapshot =
           await transaction.get(existingSessionRef);
 
@@ -355,6 +356,7 @@ export const markMesaNeedsCleaning = async (
         },
         { merge: true }
       );
+
       return;
     }
 
@@ -367,10 +369,19 @@ export const markMesaNeedsCleaning = async (
     const sessionIdToKeep =
       mesa.activeSessionId ?? activeSessionIds[0] ?? mesa.lastSessionId ?? null;
 
-    for (const sessionId of activeSessionIds) {
-      const sessionRef = sessionDocRef(normalizedRestaurantId, sessionId);
-      const sessionSnapshot = await transaction.get(sessionRef);
+    const sessionReads = await Promise.all(
+      activeSessionIds.map(async (sessionId) => {
+        const sessionRef = sessionDocRef(normalizedRestaurantId, sessionId);
+        const sessionSnapshot = await transaction.get(sessionRef);
 
+        return {
+          sessionRef,
+          sessionSnapshot,
+        };
+      })
+    );
+
+    for (const { sessionRef, sessionSnapshot } of sessionReads) {
       if (!sessionSnapshot.exists()) continue;
 
       const sessionData = sessionSnapshot.data();
@@ -434,13 +445,40 @@ export const markMesaAvailable = async (
 
       lastSessionId =
         mesa.activeSessionId ?? activeSessionIds[0] ?? mesa.lastSessionId ?? null;
+
       createdAt = mesa.createdAt;
     }
 
-    for (const sessionId of activeSessionIds) {
-      const sessionRef = sessionDocRef(normalizedRestaurantId, sessionId);
+    const activeSessionReads = await Promise.all(
+      activeSessionIds.map(async (sessionId) => {
+        const sessionRef = sessionDocRef(normalizedRestaurantId, sessionId);
+        const sessionSnapshot = await transaction.get(sessionRef);
+
+        return {
+          sessionRef,
+          sessionSnapshot,
+        };
+      })
+    );
+
+    let lastSessionRead:
+      | {
+          sessionRef: ReturnType<typeof sessionDocRef>;
+          sessionSnapshot: Awaited<ReturnType<typeof transaction.get>>;
+        }
+      | null = null;
+
+    if (lastSessionId && !activeSessionIds.includes(lastSessionId)) {
+      const sessionRef = sessionDocRef(normalizedRestaurantId, lastSessionId);
       const sessionSnapshot = await transaction.get(sessionRef);
 
+      lastSessionRead = {
+        sessionRef,
+        sessionSnapshot,
+      };
+    }
+
+    for (const { sessionRef, sessionSnapshot } of activeSessionReads) {
       if (!sessionSnapshot.exists()) continue;
 
       const sessionData = sessionSnapshot.data();
@@ -459,20 +497,15 @@ export const markMesaAvailable = async (
       }
     }
 
-    if (lastSessionId && !activeSessionIds.includes(lastSessionId)) {
-      const sessionRef = sessionDocRef(normalizedRestaurantId, lastSessionId);
-      const sessionSnapshot = await transaction.get(sessionRef);
-
-      if (sessionSnapshot.exists()) {
-        transaction.set(
-          sessionRef,
-          {
-            cleanedAt: now,
-            updatedAt: now,
-          },
-          { merge: true }
-        );
-      }
+    if (lastSessionRead?.sessionSnapshot.exists()) {
+      transaction.set(
+        lastSessionRead.sessionRef,
+        {
+          cleanedAt: now,
+          updatedAt: now,
+        },
+        { merge: true }
+      );
     }
 
     transaction.set(
@@ -524,6 +557,7 @@ export const closeMesaSessionManually = async (
         },
         { merge: true }
       );
+
       return;
     }
 
@@ -536,10 +570,19 @@ export const closeMesaSessionManually = async (
     const sessionIdToKeep =
       mesa.activeSessionId ?? activeSessionIds[0] ?? mesa.lastSessionId ?? null;
 
-    for (const sessionId of activeSessionIds) {
-      const sessionRef = sessionDocRef(normalizedRestaurantId, sessionId);
-      const sessionSnapshot = await transaction.get(sessionRef);
+    const sessionReads = await Promise.all(
+      activeSessionIds.map(async (sessionId) => {
+        const sessionRef = sessionDocRef(normalizedRestaurantId, sessionId);
+        const sessionSnapshot = await transaction.get(sessionRef);
 
+        return {
+          sessionRef,
+          sessionSnapshot,
+        };
+      })
+    );
+
+    for (const { sessionRef, sessionSnapshot } of sessionReads) {
       if (!sessionSnapshot.exists()) continue;
 
       const sessionData = sessionSnapshot.data();
@@ -623,10 +666,19 @@ export const setMesaActive = async (
       const ref = mesaDocRef(normalizedRestaurantId, numero);
       const now = serverTimestamp();
 
-      for (const sessionId of activeSessionIds) {
-        const sessionRef = sessionDocRef(normalizedRestaurantId, sessionId);
-        const sessionSnapshot = await transaction.get(sessionRef);
+      const sessionReads = await Promise.all(
+        activeSessionIds.map(async (sessionId) => {
+          const sessionRef = sessionDocRef(normalizedRestaurantId, sessionId);
+          const sessionSnapshot = await transaction.get(sessionRef);
 
+          return {
+            sessionRef,
+            sessionSnapshot,
+          };
+        })
+      );
+
+      for (const { sessionRef, sessionSnapshot } of sessionReads) {
         if (!sessionSnapshot.exists()) continue;
 
         const sessionData = sessionSnapshot.data();
