@@ -196,6 +196,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
       );
      }
+     if (
+      sessionData.ordersLocked === true ||
+      sessionData.billRequested === true
+     ) {
+      throw new Error(
+        "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa."
+      );
+     }
+
+      const cuentaRef = db.doc(
+        `restaurants/${restaurantId}/cuentas/${requestedSessionId}`
+      );
+
+      const cuentaSnap = await transaction.get(cuentaRef);
+
+      if (cuentaSnap.exists) {
+        const cuentaData = cuentaSnap.data() || {};
+        const estadoCuenta = cuentaData.estado;
+
+        if (
+          estadoCuenta === "pendiente" ||
+          estadoCuenta === "en_camino" ||
+          estadoCuenta === "pagada" ||
+          estadoCuenta === "cerrada"
+        ) {
+          throw new Error(
+            "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa."
+          );
+        }
+      }
      
      if (sessionData.ordersLocked === true) {
         throw new Error(
