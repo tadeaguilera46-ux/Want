@@ -193,7 +193,7 @@ const Cashier = () => {
   const restaurantId =
     contextRestaurantId || searchParams.get("restaurantId") || "";
 
-  const invoiceRequestsPath = `/invoice-requests?restaurantId=${encodeURIComponent(
+  const invoiceRequestsPath = `/staff/cashier/invoices?restaurantId=${encodeURIComponent(
     restaurantId
   )}`;
 
