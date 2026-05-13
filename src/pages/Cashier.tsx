@@ -15,7 +15,7 @@ import {
   Trash2,
   Wallet,
 } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { getDb } from "../lib/firebase";
 import { useAuth } from "../lib/auth-context";
 import { useRestaurant } from "../lib/restaurant-context";
@@ -193,6 +193,10 @@ const Cashier = () => {
   const restaurantId =
     contextRestaurantId || searchParams.get("restaurantId") || "";
 
+  const invoiceRequestsPath = `/invoice-requests?restaurantId=${encodeURIComponent(
+    restaurantId
+  )}`;
+
   const [sessions, setSessions] = useState<Session[]>([]);
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
   const [orders, setOrders] = useState<Pedido[]>([]);
@@ -241,20 +245,14 @@ const Cashier = () => {
 
     const q = query(collection(db, "restaurants", restaurantId, "sessions"));
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const data = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        })) as Session[];
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      })) as Session[];
 
-        setSessions(data);
-      },
-      (err) => {
-        console.error("Error cargando sesiones:", err);
-      }
-    );
+      setSessions(data);
+    });
 
     return () => unsubscribe();
   }, [restaurantId]);
@@ -296,20 +294,14 @@ const Cashier = () => {
       orderBy("createdAt", "desc")
     );
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const data = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        })) as Pedido[];
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      })) as Pedido[];
 
-        setOrders(data);
-      },
-      (err) => {
-        console.error("Error cargando pedidos:", err);
-      }
-    );
+      setOrders(data);
+    });
 
     return () => unsubscribe();
   }, [restaurantId]);
@@ -322,20 +314,14 @@ const Cashier = () => {
       where("active", "==", true)
     );
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const data = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        })) as MenuItem[];
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      })) as MenuItem[];
 
-        setMenuItems(data.sort((a, b) => a.name.localeCompare(b.name)));
-      },
-      (err) => {
-        console.error("Error cargando menú:", err);
-      }
-    );
+      setMenuItems(data.sort((a, b) => a.name.localeCompare(b.name)));
+    });
 
     return () => unsubscribe();
   }, [restaurantId]);
@@ -350,10 +336,7 @@ const Cashier = () => {
 
   const activeBills = useMemo(() => {
     return cuentas.filter((cuenta) => {
-      if (cuenta.sessionId) {
-        return activeSessionIds.has(cuenta.sessionId);
-      }
-
+      if (cuenta.sessionId) return activeSessionIds.has(cuenta.sessionId);
       return cuenta.estado !== "cerrada";
     });
   }, [cuentas, activeSessionIds]);
@@ -363,6 +346,11 @@ const Cashier = () => {
       (cuenta) => cuenta.estado !== "pagada" && cuenta.estado !== "cerrada"
     );
   }, [activeBills]);
+
+  const invoiceRequestsCount = useMemo(() => {
+    return cuentas.filter((cuenta) => cuenta.invoice?.status === "requested")
+      .length;
+  }, [cuentas]);
 
   const selectedCuenta = useMemo(() => {
     if (!selectedCuentaId) return null;
@@ -384,8 +372,7 @@ const Cashier = () => {
     setManualExtraAmount(String(selectedCuenta.manualExtraAmount || ""));
     setManualExtraReason(selectedCuenta.manualExtraReason || "");
 
-    const total = Number(selectedCuenta.total || 0);
-    setPaymentAmount(String(total));
+    setPaymentAmount(String(Number(selectedCuenta.total || 0)));
 
     setInvoiceType(selectedCuenta.invoice?.type || "B");
     setInvoiceCustomerName(selectedCuenta.invoice?.customerName || "");
@@ -432,9 +419,7 @@ const Cashier = () => {
     const value = Number(discountValue || 0);
 
     if (!Number.isFinite(value) || value <= 0) return 0;
-
-    if (discountType === "fixed") return value;
-
+    if (discountType === "fixed") return Math.min(realSubtotal, value);
     if (discountType === "percentage") {
       return Math.min(realSubtotal, (realSubtotal * value) / 100);
     }
@@ -450,6 +435,29 @@ const Cashier = () => {
   const finalTotal = useMemo(() => {
     return Math.max(0, realSubtotal - discountAmount + extraAmount);
   }, [realSubtotal, discountAmount, extraAmount]);
+
+  const paidTotal = useMemo(() => {
+    if (!selectedCuenta) return 0;
+
+    if (selectedCuenta.payments && selectedCuenta.payments.length > 0) {
+      return selectedCuenta.payments.reduce((sum, payment) => {
+        return sum + Number(payment.amount || 0);
+      }, 0);
+    }
+
+    return Number(selectedCuenta.paidAmount || 0);
+  }, [selectedCuenta]);
+
+  const remainingAmount = useMemo(() => {
+    return Math.max(0, finalTotal - paidTotal);
+  }, [finalTotal, paidTotal]);
+
+  const currentPaymentAmount = Number(paymentAmount || 0);
+
+  const isPaymentAmountInvalid =
+    !Number.isFinite(currentPaymentAmount) ||
+    currentPaymentAmount <= 0 ||
+    currentPaymentAmount < remainingAmount;
 
   const manualTotal = useMemo(() => {
     return manualItems.reduce((sum, item) => {
@@ -468,14 +476,9 @@ const Cashier = () => {
     const menuItem = menuItems.find((item) => item.id === manualSelectedMenuId);
     const quantity = Number(manualQuantity);
 
-    if (!menuItem) {
-      alert("Seleccioná un producto.");
-      return;
-    }
-
+    if (!menuItem) return alert("Seleccioná un producto.");
     if (!Number.isFinite(quantity) || quantity <= 0) {
-      alert("Cantidad inválida.");
-      return;
+      return alert("Cantidad inválida.");
     }
 
     setManualItems((prev) => {
@@ -537,9 +540,10 @@ const Cashier = () => {
         };
       }) as unknown as PedidoItem[];
 
-      await crearPedido({
+     await crearPedido({
         restaurantId,
         mesa,
+        sessionId: `manual-${Date.now()}`,
         items,
         total: manualTotal,
       });
@@ -577,14 +581,9 @@ const Cashier = () => {
     const menuItem = menuItems.find((item) => item.id === addSelectedMenuId);
     const quantity = Number(addQuantity);
 
-    if (!menuItem) {
-      alert("Seleccioná un producto.");
-      return;
-    }
-
+    if (!menuItem) return alert("Seleccioná un producto.");
     if (!Number.isFinite(quantity) || quantity <= 0) {
-      alert("Cantidad inválida.");
-      return;
+      return alert("Cantidad inválida.");
     }
 
     try {
@@ -593,27 +592,28 @@ const Cashier = () => {
 
       const category = getMenuItemType(menuItem);
 
-      await crearPedido({
-        restaurantId,
-        mesa: Number(selectedCuenta.mesa),
-        items: [
-          {
-            id: menuItem.id,
-            nombre: menuItem.name,
-            name: menuItem.name,
-            cantidad: quantity,
-            quantity,
-            precio: menuItem.price,
-            price: menuItem.price,
-            subtotal: menuItem.price * quantity,
-            category,
-            displayCategory: menuItem.category || "",
-            observacion: "Producto agregado manualmente por caja",
-            ingredients: menuItem.ingredients || [],
-          } as unknown as PedidoItem,
-        ],
-        total: menuItem.price * quantity,
-      });
+   await crearPedido({
+      restaurantId,
+      mesa: Number(selectedCuenta.mesa),
+      sessionId: selectedCuenta.sessionId || "",
+      items: [
+        {
+          id: menuItem.id,
+          nombre: menuItem.name,
+          name: menuItem.name,
+          cantidad: quantity,
+          quantity,
+          precio: menuItem.price,
+          price: menuItem.price,
+          subtotal: menuItem.price * quantity,
+          category,
+          displayCategory: menuItem.category || "",
+          observacion: "Producto agregado manualmente por caja",
+          ingredients: menuItem.ingredients || [],
+        } as unknown as PedidoItem,
+      ],
+      total: menuItem.price * quantity,
+    });
 
       await createOrRefreshCashierBill({
         data: {
@@ -632,9 +632,7 @@ const Cashier = () => {
     } catch (err) {
       console.error("Error agregando producto:", err);
       setError(
-        err instanceof Error
-          ? err.message
-          : "No se pudo agregar el producto."
+        err instanceof Error ? err.message : "No se pudo agregar el producto."
       );
     } finally {
       setProcessing(false);
@@ -676,10 +674,18 @@ const Cashier = () => {
       setProcessing(true);
       setError(null);
 
-      const amount = Number(paymentAmount || finalTotal);
+      const amount = Number(paymentAmount);
 
       if (!Number.isFinite(amount) || amount <= 0) {
         throw new Error("Monto de pago inválido.");
+      }
+
+      if (amount < remainingAmount) {
+        throw new Error(
+          `El monto pagado no puede ser menor al saldo pendiente. Faltan ${formatPriceARS(
+            remainingAmount - amount
+          )}.`
+        );
       }
 
       await registerCashierPayment({
@@ -729,30 +735,11 @@ const Cashier = () => {
   const handleRequestInvoice = async () => {
     if (!user || !restaurantId || !selectedCuenta) return;
 
-    if (!invoiceCustomerName.trim()) {
-      alert("Ingresá el nombre del cliente.");
-      return;
-    }
-
-    if (!invoiceDocumentNumber.trim()) {
-      alert("Ingresá el documento del cliente.");
-      return;
-    }
-
-    if (!invoiceIvaCondition.trim()) {
-      alert("Ingresá la condición frente al IVA.");
-      return;
-    }
-
-    if (!invoiceFiscalAddress.trim()) {
-      alert("Ingresá la dirección fiscal.");
-      return;
-    }
-
-    if (!invoicePostalCode.trim()) {
-      alert("Ingresá el código postal.");
-      return;
-    }
+    if (!invoiceCustomerName.trim()) return alert("Ingresá el nombre del cliente.");
+    if (!invoiceDocumentNumber.trim()) return alert("Ingresá el documento del cliente.");
+    if (!invoiceIvaCondition.trim()) return alert("Ingresá la condición frente al IVA.");
+    if (!invoiceFiscalAddress.trim()) return alert("Ingresá la dirección fiscal.");
+    if (!invoicePostalCode.trim()) return alert("Ingresá el código postal.");
 
     try {
       setProcessing(true);
@@ -779,16 +766,6 @@ const Cashier = () => {
           provider: "manual",
         },
       });
-
-      setInvoiceCustomerName("");
-      setInvoiceDocumentNumber("");
-      setInvoiceEmail("");
-      setInvoiceIvaCondition("");
-      setInvoiceFiscalRegime("");
-      setInvoiceFiscalAddress("");
-      setInvoicePostalCode("");
-      setInvoiceProvince("");
-      setInvoiceCity("");
     } catch (err) {
       console.error("Error solicitando factura:", err);
       setError(
@@ -830,7 +807,7 @@ const Cashier = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div className="rounded-3xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
               <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">
                 Pendientes
@@ -848,6 +825,23 @@ const Cashier = () => {
                 {activeBills.length}
               </p>
             </div>
+
+            <Link
+              to={invoiceRequestsPath}
+              className="col-span-2 flex rounded-3xl border border-zinc-950 bg-zinc-950 px-5 py-4 text-white shadow-sm transition hover:bg-zinc-800 sm:col-span-1"
+            >
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-white/70">
+                  Facturas
+                </p>
+                <p className="mt-1 text-3xl font-black">
+                  {invoiceRequestsCount}
+                </p>
+                <p className="mt-1 text-xs font-bold text-white/70">
+                  Ver solicitudes
+                </p>
+              </div>
+            </Link>
           </div>
         </div>
 
@@ -1238,12 +1232,20 @@ const Cashier = () => {
                         <strong>{formatPriceARS(extraAmount)}</strong>
                       </div>
 
+                      <div className="flex justify-between text-sm">
+                        <span>Pagado</span>
+                        <strong>{formatPriceARS(paidTotal)}</strong>
+                      </div>
+
                       <div className="border-t border-zinc-200 pt-4">
                         <p className="text-xs font-black uppercase tracking-[0.2em] text-zinc-500">
                           Total final
                         </p>
                         <p className="mt-1 text-5xl font-black text-zinc-950">
                           {formatPriceARS(finalTotal)}
+                        </p>
+                        <p className="mt-2 text-sm font-bold text-zinc-600">
+                          Saldo pendiente: {formatPriceARS(remainingAmount)}
                         </p>
                       </div>
                     </div>
@@ -1276,20 +1278,35 @@ const Cashier = () => {
                       value={paymentAmount}
                       onChange={(e) => setPaymentAmount(e.target.value)}
                       type="number"
-                      min={0}
+                      min={remainingAmount}
                       placeholder="Monto"
-                      className="h-12 rounded-2xl border border-zinc-200 px-4"
+                      className={`h-12 rounded-2xl border px-4 ${
+                        isPaymentAmountInvalid
+                          ? "border-red-300 bg-red-50"
+                          : "border-zinc-200"
+                      }`}
                     />
 
                     <button
                       onClick={handleMarkPaid}
-                      disabled={processing || selectedCuenta.estado === "pagada"}
+                      disabled={
+                        processing ||
+                        selectedCuenta.estado === "pagada" ||
+                        isPaymentAmountInvalid
+                      }
                       className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 font-black text-white disabled:opacity-50"
                     >
                       <Wallet size={18} />
                       Cobrar
                     </button>
                   </div>
+
+                  {isPaymentAmountInvalid && selectedCuenta.estado !== "pagada" && (
+                    <p className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                      El monto a cobrar debe ser igual o mayor al saldo pendiente:{" "}
+                      {formatPriceARS(remainingAmount)}.
+                    </p>
+                  )}
 
                   {selectedCuenta.payments &&
                     selectedCuenta.payments.length > 0 && (

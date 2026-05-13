@@ -329,8 +329,7 @@ const BillConfirmed = () => {
                     Sesión finalizada
                   </p>
                   <p className="mt-1 text-sm leading-relaxed text-red-800">
-                    El restaurante ya limpió o cerró esta mesa. Esta pantalla no
-                    puede abrir una nueva sesión.
+                    El restaurante ya limpió o cerró esta mesa. Para volver a pedir, necesitás escanear nuevamente el QR desde la mesa.
                   </p>
                 </div>
               </div>
