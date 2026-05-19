@@ -10,6 +10,7 @@ import {
 import {
   collection,
   onSnapshot,
+  getDocs,
   orderBy,
   query,
   where,
@@ -300,32 +301,45 @@ const Menu = () => {
   useEffect(() => {
     if (!restaurantId) return;
 
-    setLoadingStock(true);
+    let cancelled = false;
 
-    const q = query(
-      collection(db, "restaurants", restaurantId, "stock"),
-      orderBy("name")
-    );
+    const loadMenu = async () => {
+      try {
+        setLoadingMenu(true);
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
+        const q = query(
+          collection(db, "restaurants", restaurantId, "menu"),
+          where("active", "==", true)
+        );
+
+        const snapshot = await getDocs(q);
+
+        if (cancelled) return;
+
         const data = snapshot.docs.map((docSnap) => ({
           id: docSnap.id,
           ...docSnap.data(),
-        })) as StockItem[];
+        })) as MenuItem[];
 
-        setStockItems(data);
-        setLoadingStock(false);
-      },
-      (error) => {
-        console.error("Error cargando stock:", error);
-        setStockItems([]);
-        setLoadingStock(false);
+        setMenuItems(data);
+      } catch (error) {
+        console.error("Error cargando menú:", error);
+
+        if (!cancelled) {
+          setMenuItems([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoadingMenu(false);
+        }
       }
-    );
+    };
 
-    return () => unsubscribe();
+    void loadMenu();
+
+    return () => {
+      cancelled = true;
+    };
   }, [restaurantId]);
 
   const availableMenuItems = useMemo(() => {
