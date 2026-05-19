@@ -1,53 +1,28 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  ShoppingCart,
-  Receipt,
-  X,
-  ChevronRight,
-} from "lucide-react";
-import {
-  collection,
-  onSnapshot,
-  getDocs,
-  orderBy,
-  query,
-  where,
-} from "firebase/firestore";
+import { AnimatePresence, motion } from "framer-motion";
+import { ChevronRight, Receipt, ShoppingCart, X } from "lucide-react";
 import { useCart } from "@/lib/CartContext";
-import {
-  parseTableNumber,
-  resolveRuntimeContext,
-} from "../lib/runtime-context";
+import { parseTableNumber, resolveRuntimeContext } from "../lib/runtime-context";
 import { getMesa } from "../lib/mesas";
-import { getDb } from "../lib/firebase";
 import { useRestaurantConfig } from "../lib/restaurant-config";
-import type { MenuIngredient } from "../lib/store";
-import type { StockItem } from "../types/stock";
-import { getStoredTableSessionId, clearStoredTableSessionId, } from "../lib/table-session";
+import {
+  clearStoredTableSessionId,
+  getStoredTableSessionId,
+} from "../lib/table-session";
 import { getSessionById } from "../lib/sessions";
 import MenuItemCard from "@/components/menu/MenuItemCard";
+import {
+  getDisplayCategory,
+  getItemTags,
+  getItemType,
+  useMenuData,
+  type MenuItem,
+} from "@/hooks/useMenuData";
 import {
   buildMissingOptionalObservation,
   getMenuItemAvailability,
 } from "../lib/stock-availability";
-
-const db = getDb();
-
-type MenuType = "food" | "drinks";
-
-type MenuItem = {
-  id: string;
-  name: string;
-  price: number;
-  description?: string;
-  type?: MenuType;
-  category: string;
-  active: boolean;
-  image?: string;
-  ingredients?: MenuIngredient[];
-};
 
 const formatPriceARS = (value: number) =>
   new Intl.NumberFormat("es-AR", {
@@ -55,28 +30,6 @@ const formatPriceARS = (value: number) =>
     currency: "ARS",
     maximumFractionDigits: 0,
   }).format(value || 0);
-
-const getItemType = (item: MenuItem): MenuType => {
-  if (item.type === "food" || item.type === "drinks") return item.type;
-  if (item.category === "drinks") return "drinks";
-  return "food";
-};
-
-const getDisplayCategory = (item: MenuItem) => {
-  if (item.type && item.category) return item.category;
-  if (item.category === "food") return "Comida";
-  if (item.category === "drinks") return "Bebidas";
-  return item.category || "General";
-};
-
-const getItemTags = (item: MenuItem) => {
-  const tags: string[] = [];
-
-  tags.push(getItemType(item) === "drinks" ? "Barra" : "Cocina");
-  tags.push(getDisplayCategory(item));
-
-  return tags;
-};
 
 const mergeObservations = (manualNote: string, automaticNote: string) => {
   const parts = [manualNote.trim(), automaticNote.trim()].filter(Boolean);
@@ -86,27 +39,16 @@ const mergeObservations = (manualNote: string, automaticNote: string) => {
 const MenuSkeleton = () => {
   return (
     <div className="animate-pulse space-y-5">
-      <div className="no-scrollbar flex gap-2 overflow-x-auto">
-        {[1, 2, 3, 4].map((item) => (
-          <div
-            key={item}
-            className="h-9 w-24 shrink-0 rounded-full bg-white/70"
-          />
-        ))}
-      </div>
-
       {[1, 2, 3].map((item) => (
         <div
           key={item}
           className="overflow-hidden rounded-[30px] border border-black/5 bg-white shadow-[0_12px_30px_-16px_rgba(0,0,0,0.22)]"
         >
           <div className="aspect-[16/10] w-full bg-zinc-200" />
-
           <div className="space-y-3 p-4">
             <div className="h-5 w-2/3 rounded-full bg-zinc-200" />
             <div className="h-4 w-full rounded-full bg-zinc-100" />
             <div className="h-4 w-4/5 rounded-full bg-zinc-100" />
-
             <div className="flex items-center justify-between pt-3">
               <div className="h-10 w-28 rounded-2xl bg-zinc-100" />
               <div className="h-11 w-11 rounded-full bg-zinc-200" />
@@ -131,11 +73,14 @@ const Menu = () => {
   const tableNumber = parseTableNumber(table);
   const { config } = useRestaurantConfig(restaurantId);
 
-  const [activeCategory, setActiveCategory] = useState("");
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [stockItems, setStockItems] = useState<StockItem[]>([]);
-  const [loadingMenu, setLoadingMenu] = useState(true);
-  const [loadingStock, setLoadingStock] = useState(true);
+  const {
+    stockItems,
+    loading,
+    categories,
+    activeCategory,
+    setActiveCategory,
+    filteredItems,
+  } = useMenuData(restaurantId);
 
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [note, setNote] = useState("");
@@ -157,7 +102,7 @@ const Menu = () => {
   useEffect(() => {
     let isMounted = true;
 
-   const initializeMesaSession = async () => {
+    const initializeMesaSession = async () => {
       try {
         setIsInitializingSession(true);
         setSessionError(null);
@@ -249,9 +194,7 @@ const Menu = () => {
       }
     };
 
-    const handlePageShow = () => {
-      void validateOnReturn();
-    };
+    const handlePageShow = () => void validateOnReturn();
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
@@ -267,122 +210,6 @@ const Menu = () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [restaurantId, tableNumber]);
-
-  useEffect(() => {
-    if (!restaurantId) return;
-
-    setLoadingMenu(true);
-
-    const q = query(
-      collection(db, "restaurants", restaurantId, "menu"),
-      where("active", "==", true)
-    );
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const data = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        })) as MenuItem[];
-
-        setMenuItems(data);
-        setLoadingMenu(false);
-      },
-      (error) => {
-        console.error("Error cargando menú:", error);
-        setLoadingMenu(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [restaurantId]);
-
-  useEffect(() => {
-    if (!restaurantId) return;
-
-    let cancelled = false;
-
-    const loadMenu = async () => {
-      try {
-        setLoadingMenu(true);
-
-        const q = query(
-          collection(db, "restaurants", restaurantId, "menu"),
-          where("active", "==", true)
-        );
-
-        const snapshot = await getDocs(q);
-
-        if (cancelled) return;
-
-        const data = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        })) as MenuItem[];
-
-        setMenuItems(data);
-      } catch (error) {
-        console.error("Error cargando menú:", error);
-
-        if (!cancelled) {
-          setMenuItems([]);
-        }
-      } finally {
-        if (!cancelled) {
-          setLoadingMenu(false);
-        }
-      }
-    };
-
-    void loadMenu();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [restaurantId]);
-
-  const availableMenuItems = useMemo(() => {
-    return menuItems.filter((item) => {
-      const availability = getMenuItemAvailability({
-        ingredients: item.ingredients,
-        stockItems,
-      });
-
-      return availability.visible;
-    });
-  }, [menuItems, stockItems]);
-
-  const categories = useMemo(() => {
-    const unique = Array.from(
-      new Set(availableMenuItems.map((item) => getDisplayCategory(item)))
-    ).filter(Boolean);
-
-    return unique.map((category) => ({
-      key: category,
-      label: category,
-    }));
-  }, [availableMenuItems]);
-
-  useEffect(() => {
-    if (categories.length > 0 && !activeCategory) {
-      setActiveCategory(categories[0].key);
-    }
-
-    if (
-      categories.length > 0 &&
-      activeCategory &&
-      !categories.some((category) => category.key === activeCategory)
-    ) {
-      setActiveCategory(categories[0].key);
-    }
-  }, [categories, activeCategory]);
-
-  const filteredItems = useMemo(() => {
-    return availableMenuItems.filter(
-      (item) => getDisplayCategory(item) === activeCategory
-    );
-  }, [availableMenuItems, activeCategory]);
 
   const getAutomaticObservation = (item: MenuItem) => {
     const availability = getMenuItemAvailability({
@@ -423,9 +250,7 @@ const Menu = () => {
       stockItems,
     });
 
-    if (availability.missingOptionalIngredients.length === 0) {
-      return true;
-    }
+    if (availability.missingOptionalIngredients.length === 0) return true;
 
     return window.confirm(
       `No tenemos ${availability.missingOptionalIngredients.join(
@@ -436,7 +261,6 @@ const Menu = () => {
 
   const openNoteModal = (item: MenuItem) => {
     if (!canAddQuantity(item)) return;
-
     setSelectedItem(item);
     setNote("");
   };
@@ -523,164 +347,162 @@ const Menu = () => {
     );
   }
 
-  const loading = loadingMenu;
-
   return (
-  <div
-    className="min-h-screen pb-32"
-    style={{ backgroundColor: pageBackground }}
-  >
-    <div className="mx-auto w-full max-w-lg">
-      <header
-        className="sticky top-0 z-40 border-b border-black/5 backdrop-blur"
-        style={{ backgroundColor: `${pageBackground}F2` }}
-      >
-        <div className="px-4 pb-2 pt-[max(12px,env(safe-area-inset-top))]">
-          <div className="flex items-center justify-between gap-3">
-            <div
-              className="rounded-full px-3 py-1.5 text-xs font-bold text-white shadow-sm"
-              style={{ backgroundColor: primaryColor }}
-            >
-              Mesa {table}
+    <div
+      className="min-h-screen pb-32"
+      style={{ backgroundColor: pageBackground }}
+    >
+      <div className="mx-auto w-full max-w-lg">
+        <header
+          className="sticky top-0 z-40 border-b border-black/5 backdrop-blur"
+          style={{ backgroundColor: `${pageBackground}F2` }}
+        >
+          <div className="px-4 pb-2 pt-[max(12px,env(safe-area-inset-top))]">
+            <div className="flex items-center justify-between gap-3">
+              <div
+                className="rounded-full px-3 py-1.5 text-xs font-bold text-white shadow-sm"
+                style={{ backgroundColor: primaryColor }}
+              >
+                Mesa {table}
+              </div>
+
+              <button
+                onClick={() =>
+                  navigate(
+                    `/bill?restaurantId=${restaurantId}&table=${table}&total=${total}`,
+                    { state: { table, restaurantId } }
+                  )
+                }
+                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-extrabold text-white shadow-want transition-all hover:scale-[1.03] active:scale-[0.98]"
+                style={{ backgroundColor: primaryColor }}
+              >
+                <Receipt size={16} />
+                Pedir cuenta
+              </button>
             </div>
 
-            <button
-              onClick={() =>
-                navigate(
-                  `/bill?restaurantId=${restaurantId}&table=${table}&total=${total}`,
-                  { state: { table, restaurantId } }
-                )
-              }
-              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-extrabold text-white shadow-want transition-all hover:scale-[1.03] active:scale-[0.98]"
-              style={{ backgroundColor: primaryColor }}
-            >
-              <Receipt size={16} />
-              Pedir cuenta
-            </button>
-          </div>
-
-          <div className="mt-3 overflow-hidden rounded-[24px] border border-black/5 bg-white shadow-[0_8px_24px_-14px_rgba(0,0,0,0.18)]">
-            {coverUrl ? (
-              <div className="h-[150px] w-full overflow-hidden bg-zinc-100 sm:h-[184px]">
-                <img
-                  src={coverUrl}
-                  alt={restaurantName}
-                  loading="lazy"
-                  decoding="async"
-                  className="h-full w-full object-cover"
-                />
-              </div>
-            ) : (
-              <div
-                className="h-[150px] w-full sm:h-[184px]"
-                style={{ backgroundColor: primaryColor }}
-              />
-            )}
-
-            <div className="flex items-center gap-3 px-4 py-2.5">
-              {logoUrl && (
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
+            <div className="mt-3 overflow-hidden rounded-[24px] border border-black/5 bg-white shadow-[0_8px_24px_-14px_rgba(0,0,0,0.18)]">
+              {coverUrl ? (
+                <div className="h-[150px] w-full overflow-hidden bg-zinc-100 sm:h-[184px]">
                   <img
-                    src={logoUrl}
+                    src={coverUrl}
                     alt={restaurantName}
                     loading="lazy"
                     decoding="async"
-                    className="h-full w-full object-contain"
+                    className="h-full w-full object-cover"
                   />
                 </div>
+              ) : (
+                <div
+                  className="h-[150px] w-full sm:h-[184px]"
+                  style={{ backgroundColor: primaryColor }}
+                />
               )}
 
-              <div className="min-w-0 flex-1">
-                <p className="text-[9px] font-extrabold uppercase tracking-[0.22em] text-zinc-500">
-                  Menú digital
-                </p>
-
-                <h1 className="mt-0.5 truncate text-xl font-black leading-tight tracking-tight text-zinc-950">
-                  {restaurantName}
-                </h1>
-
-                {welcomeMessage && (
-                  <p className="mt-0.5 truncate text-sm leading-tight text-zinc-500">
-                    {welcomeMessage}
-                  </p>
+              <div className="flex items-center gap-3 px-4 py-2.5">
+                {logoUrl && (
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
+                    <img
+                      src={logoUrl}
+                      alt={restaurantName}
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
                 )}
+
+                <div className="min-w-0 flex-1">
+                  <p className="text-[9px] font-extrabold uppercase tracking-[0.22em] text-zinc-500">
+                    Menú digital
+                  </p>
+
+                  <h1 className="mt-0.5 truncate text-xl font-black leading-tight tracking-tight text-zinc-950">
+                    {restaurantName}
+                  </h1>
+
+                  {welcomeMessage && (
+                    <p className="mt-0.5 truncate text-sm leading-tight text-zinc-500">
+                      {welcomeMessage}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-2 pt-0">
-          {categories.map((category) => (
-            <button
-              key={category.key}
-              onClick={() => setActiveCategory(category.key)}
-              className={`inline-flex h-9 shrink-0 items-center rounded-full px-4 text-sm font-semibold transition-all ${
-                activeCategory === category.key
-                  ? "text-white shadow-sm"
-                  : "border border-black/10 bg-white text-zinc-700 shadow-sm"
-              }`}
-              style={
-                activeCategory === category.key
-                  ? { backgroundColor: primaryColor }
-                  : undefined
-              }
-            >
-              {category.label}
-            </button>
-          ))}
-        </div>
-      </header>
-
-      <main className="px-4 py-4">
-        {loading ? (
-          <MenuSkeleton />
-        ) : filteredItems.length === 0 ? (
-          <div className="rounded-3xl border border-black/5 bg-white p-6 text-center shadow-sm">
-            <p className="font-bold text-zinc-950">
-              No hay productos disponibles
-            </p>
-            <p className="mt-1 text-sm text-zinc-500">
-              Probá otra categoría o consultá al staff.
-            </p>
+          <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-2 pt-0">
+            {categories.map((category) => (
+              <button
+                key={category.key}
+                onClick={() => setActiveCategory(category.key)}
+                className={`inline-flex h-9 shrink-0 items-center rounded-full px-4 text-sm font-semibold transition-all ${
+                  activeCategory === category.key
+                    ? "text-white shadow-sm"
+                    : "border border-black/10 bg-white text-zinc-700 shadow-sm"
+                }`}
+                style={
+                  activeCategory === category.key
+                    ? { backgroundColor: primaryColor }
+                    : undefined
+                }
+              >
+                {category.label}
+              </button>
+            ))}
           </div>
-        ) : (
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeCategory}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.18 }}
-              className="space-y-5"
-            >
-              {filteredItems.map((item) => {
-                const quantity = getQuantity(item.id);
-                const tags = getItemTags(item);
+        </header>
 
-                const availability = getMenuItemAvailability({
-                  ingredients: item.ingredients,
-                  stockItems,
-                });
+        <main className="px-4 py-4">
+          {loading ? (
+            <MenuSkeleton />
+          ) : filteredItems.length === 0 ? (
+            <div className="rounded-3xl border border-black/5 bg-white p-6 text-center shadow-sm">
+              <p className="font-bold text-zinc-950">
+                No hay productos disponibles
+              </p>
+              <p className="mt-1 text-sm text-zinc-500">
+                Probá otra categoría o consultá al staff.
+              </p>
+            </div>
+          ) : (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeCategory}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.18 }}
+                className="space-y-5"
+              >
+                {filteredItems.map((item) => {
+                  const quantity = getQuantity(item.id);
+                  const tags = getItemTags(item);
 
-                return (
-                  <MenuItemCard
-                    key={item.id}
-                    item={item}
-                    quantity={quantity}
-                    tags={tags}
-                    availability={availability}
-                    primaryColor={primaryColor}
-                    formatPrice={formatPriceARS}
-                    onAdd={handleAddWithoutNote}
-                    onNote={openNoteModal}
-                  />
-                );
-              })}
-            </motion.div>
-          </AnimatePresence>
-        )}
-      </main>
-    </div>
+                  const availability = getMenuItemAvailability({
+                    ingredients: item.ingredients,
+                    stockItems,
+                  });
+
+                  return (
+                    <MenuItemCard
+                      key={item.id}
+                      item={item}
+                      quantity={quantity}
+                      tags={tags}
+                      availability={availability}
+                      primaryColor={primaryColor}
+                      formatPrice={formatPriceARS}
+                      onAdd={handleAddWithoutNote}
+                      onNote={openNoteModal}
+                    />
+                  );
+                })}
+              </motion.div>
+            </AnimatePresence>
+          )}
+        </main>
+      </div>
 
       {totalItems > 0 && (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 px-4 pb-[max(16px,env(safe-area-inset-bottom))]">
