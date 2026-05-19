@@ -1,21 +1,26 @@
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
-  Plus,
+  ChevronRight,
   Minus,
   MessageSquareText,
+  Plus,
   ShoppingBag,
-  ChevronRight,
+  X,
 } from "lucide-react";
-import { useState, useEffect } from "react";
 import { useCart } from "@/lib/CartContext";
 import { crearPedido } from "../lib/orders";
+import { getMesa } from "../lib/mesas";
 import { getSessionById } from "../lib/sessions";
 import type { PedidoInput, PedidoItem } from "../lib/restaurant";
-import { resolveRuntimeContext } from "../lib/runtime-context";
+import { parseTableNumber, resolveRuntimeContext } from "../lib/runtime-context";
 import type { MenuIngredient } from "../lib/store";
-import { getStoredTableSessionId, clearStoredTableSessionId, } from "../lib/table-session";
+import {
+  clearStoredTableSessionId,
+  getStoredTableSessionId,
+} from "../lib/table-session";
 
 type CartItem = {
   id: string;
@@ -44,6 +49,12 @@ const formatPriceARS = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value || 0);
 
+const mapMenuCategoryToOrderCategory = (
+  category: MenuOperationalCategory
+): PedidoItem["category"] => {
+  return category === "drinks" ? "drinks" : "food";
+};
+
 const Cart = () => {
   const [searchParams] = useSearchParams();
   const location = useLocation();
@@ -53,69 +64,96 @@ const Cart = () => {
     searchParams,
     location,
   });
-  const tableNumber = Number(table);
+
+  const tableNumber = parseTableNumber(table);
   const { cart, addToCart, removeFromCart, total, clearCart } = useCart();
 
+  const [isValidatingSession, setIsValidatingSession] = useState(true);
   const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
   const [isSubmittingOrderAndBill, setIsSubmittingOrderAndBill] =
     useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {   
-  const validateSession = async () => {
-    try {
-      const sessionId = getStoredTableSessionId({
+  const isBusy =
+    isValidatingSession || isSubmittingOrder || isSubmittingOrderAndBill;
+
+  const redirectToClosedBill = () => {
+    navigate(`/bill-confirmed?restaurantId=${restaurantId}&table=${table}`, {
+      replace: true,
+      state: { restaurantId, table },
+    });
+  };
+
+  const validateActiveSession = async () => {
+    const sessionId = getStoredTableSessionId({
+      restaurantId,
+      table: tableNumber,
+    });
+
+    if (!sessionId) {
+      throw new Error(
+        "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
+      );
+    }
+
+    const [mesa, session] = await Promise.all([
+      getMesa(restaurantId, tableNumber),
+      getSessionById(restaurantId, sessionId),
+    ]);
+
+    const isStillValid =
+      mesa.estado === "occupied" &&
+      mesa.activeSessionId === sessionId &&
+      session?.status === "active" &&
+      session.ordersLocked !== true &&
+      session.billRequested !== true;
+
+    if (!isStillValid) {
+      clearStoredTableSessionId({
         restaurantId,
         table: tableNumber,
       });
 
-      if (!sessionId) {
-        navigate(
-          `/menu?restaurantId=${restaurantId}&table=${table}`,
-          {
-            replace: true,
-          }
-        );
-
-        return;
-      }
-
-      const session = await getSessionById(
-        restaurantId,
-        sessionId
+      throw new Error(
+        "La mesa ya no acepta pedidos. Para volver a pedir, escaneá nuevamente el QR."
       );
-
-      if (
-        !session ||
-        session.status !== "active" ||
-        session.ordersLocked === true
-      ) {
-        clearStoredTableSessionId({
-          restaurantId,
-          table: tableNumber,
-        });
-
-        navigate(
-          `/bill-confirmed?restaurantId=${restaurantId}&table=${table}`,
-          {
-            replace: true,
-          }
-        );
-      }
-    } catch (error) {
-      console.error("Error validando sesión:", error);
     }
+
+    return sessionId;
   };
 
-  void validateSession();
-}, [restaurantId, table, tableNumber, navigate]);
-  const mapMenuCategoryToOrderCategory = (
-    category: MenuOperationalCategory
-  ): PedidoItem["category"] => {
-    return category === "drinks" ? "drinks" : "food";
-  };
+  useEffect(() => {
+    let cancelled = false;
 
-  const buildPedido = (): PedidoInput => {
+    const runValidation = async () => {
+      try {
+        setIsValidatingSession(true);
+        setError(null);
+
+        await validateActiveSession();
+      } catch (err) {
+        console.error("Error validando sesión en carrito:", err);
+
+        if (!cancelled) {
+          redirectToClosedBill();
+        }
+      } finally {
+        if (!cancelled) {
+          setIsValidatingSession(false);
+        }
+      }
+    };
+
+    void runValidation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [restaurantId, table, tableNumber]);
+
+  const buildPedido = async (): Promise<PedidoInput> => {
+    const sessionId = await validateActiveSession();
+
     const items = (cart as CartItem[]).map((item) => {
       const observacion = normalizeObservation(item.observacion);
       const itemName = item.name || item.nombre || "Producto";
@@ -126,9 +164,7 @@ const Cart = () => {
         Number.isFinite(itemPrice) && itemPrice > 0 ? itemPrice : 0;
 
       const safeQuantity =
-        Number.isFinite(itemQuantity) && itemQuantity > 0
-          ? itemQuantity
-          : 1;
+        Number.isFinite(itemQuantity) && itemQuantity > 0 ? itemQuantity : 1;
 
       const baseItem = {
         id: item.id,
@@ -154,15 +190,8 @@ const Cart = () => {
       return baseItem;
     }) as unknown as PedidoItem[];
 
-    const sessionId = getStoredTableSessionId({
-      restaurantId,
-      table: tableNumber,
-    });
-
-    if (!sessionId) {
-      throw new Error(
-        "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
-      );
+    if (items.length === 0) {
+      throw new Error("Agregá al menos un producto antes de enviar el pedido.");
     }
 
     return {
@@ -183,54 +212,62 @@ const Cart = () => {
   };
 
   const handlePedido = async () => {
-    if (isSubmittingOrder || isSubmittingOrderAndBill || cart.length === 0) {
-      return;
-    }
+    if (isBusy || cart.length === 0) return;
 
     try {
       setError(null);
       setIsSubmittingOrder(true);
 
-      const pedido = buildPedido();
+      const pedido = await buildPedido();
       await crearPedido(pedido);
 
       clearCart();
+
       navigate(`/order-confirmed?restaurantId=${restaurantId}&table=${table}`, {
+        replace: true,
         state: { table, restaurantId },
       });
     } catch (err) {
       console.error("Error creando pedido:", err);
-      setError(getOrderErrorMessage(err));
+      const message = getOrderErrorMessage(err);
+      setError(message);
+
+      if (message.includes("QR") || message.includes("no acepta pedidos")) {
+        redirectToClosedBill();
+      }
     } finally {
       setIsSubmittingOrder(false);
     }
   };
 
   const handlePedidoYCuenta = async () => {
-    if (isSubmittingOrder || isSubmittingOrderAndBill || cart.length === 0) {
-      return;
-    }
+    if (isBusy || cart.length === 0) return;
 
     try {
       setError(null);
       setIsSubmittingOrderAndBill(true);
 
-      const pedido = buildPedido();
+      const pedido = await buildPedido();
       await crearPedido(pedido);
 
       clearCart();
+
       navigate(`/bill?restaurantId=${restaurantId}&table=${table}`, {
+        replace: true,
         state: { table, restaurantId },
       });
     } catch (err) {
       console.error("Error creando pedido y solicitando cuenta:", err);
-      setError(getOrderErrorMessage(err));
+      const message = getOrderErrorMessage(err);
+      setError(message);
+
+      if (message.includes("QR") || message.includes("no acepta pedidos")) {
+        redirectToClosedBill();
+      }
     } finally {
       setIsSubmittingOrderAndBill(false);
     }
   };
-
-  const isBusy = isSubmittingOrder || isSubmittingOrderAndBill;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-44">
@@ -239,7 +276,11 @@ const Cart = () => {
           <div className="px-4 pb-4 pt-[max(12px,env(safe-area-inset-top))]">
             <div className="flex items-center gap-3">
               <button
-                onClick={() => navigate(-1)}
+                onClick={() =>
+                  navigate(`/menu?restaurantId=${restaurantId}&table=${table}`, {
+                    state: { table, restaurantId },
+                  })
+                }
                 disabled={isBusy}
                 className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 shadow-sm disabled:opacity-50"
               >
@@ -270,7 +311,15 @@ const Cart = () => {
           </div>
         )}
 
-        {cart.length === 0 ? (
+        {isValidatingSession ? (
+          <div className="px-4 py-10">
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+              <p className="text-sm font-semibold text-slate-500">
+                Validando mesa...
+              </p>
+            </div>
+          </div>
+        ) : cart.length === 0 ? (
           <div className="px-4 py-10">
             <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center shadow-sm">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-slate-500">
@@ -326,6 +375,8 @@ const Cart = () => {
                         <img
                           src={item.image}
                           alt={itemName}
+                          loading="lazy"
+                          decoding="async"
                           className="h-full w-full object-cover"
                         />
                       ) : (
@@ -414,9 +465,7 @@ const Cart = () => {
           <div className="mx-auto max-w-lg">
             <div className="mb-3 rounded-2xl bg-slate-50 px-4 py-3">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-sm font-medium text-slate-500">
-                  Total
-                </span>
+                <span className="text-sm font-medium text-slate-500">Total</span>
                 <span className="text-2xl font-black tracking-tight text-slate-950">
                   {formatPriceARS(total)}
                 </span>
@@ -430,7 +479,9 @@ const Cart = () => {
                 disabled={isBusy}
                 className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-base font-black text-primary-foreground shadow-want disabled:opacity-50"
               >
-                <span>{isSubmittingOrder ? "Enviando..." : "Enviar pedido"}</span>
+                <span>
+                  {isSubmittingOrder ? "Enviando..." : "Enviar pedido"}
+                </span>
                 {!isSubmittingOrder && <ChevronRight size={18} />}
               </motion.button>
 

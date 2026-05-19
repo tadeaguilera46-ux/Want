@@ -8,6 +8,7 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
+import { toast } from "sonner";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -157,7 +158,7 @@ const CashierInvoices = () => {
     if (!restaurantId || !selectedCuenta) return;
 
     if (!invoiceNumber.trim()) {
-      alert("Ingresá el número de factura o comprobante.");
+      toast.error("Ingresá el número de factura o comprobante.");
       return;
     }
 
@@ -178,7 +179,7 @@ const CashierInvoices = () => {
       );
     } catch (error) {
       console.error("Error marcando factura emitida:", error);
-      alert("No se pudo marcar como emitida.");
+      toast.error("No se pudo marcar como emitida.");
     } finally {
       setSaving(false);
     }
@@ -188,7 +189,7 @@ const CashierInvoices = () => {
     if (!restaurantId || !selectedCuenta) return;
 
     if (!failureReason.trim()) {
-      alert("Ingresá el motivo del fallo.");
+      toast.error("Ingresá el motivo del fallo.");
       return;
     }
 
@@ -206,7 +207,7 @@ const CashierInvoices = () => {
       );
     } catch (error) {
       console.error("Error marcando factura fallida:", error);
-      alert("No se pudo marcar como fallida.");
+      toast.error("No se pudo marcar como fallida.");
     } finally {
       setSaving(false);
     }

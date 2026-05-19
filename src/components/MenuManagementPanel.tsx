@@ -28,6 +28,7 @@ import {
 } from "../lib/menu";
 import type { MenuIngredient, RecipeUnit } from "../lib/store";
 import type { StockItem } from "../types/stock";
+import { toast } from "sonner";
 
 const db = getDb();
 const storage = getStorageService();
@@ -148,7 +149,7 @@ const IngredientsEditor = ({
     const ingredient = buildIngredient(stockItems, form);
 
     if (!ingredient) {
-      alert("Seleccioná un insumo y una cantidad válida.");
+      toast.success("Seleccioná un insumo y una cantidad válida.");
       return;
     }
 
@@ -157,7 +158,7 @@ const IngredientsEditor = ({
     );
 
     if (alreadyExists) {
-      alert("Ese insumo ya está cargado en este producto.");
+      toast.warning("Ese insumo ya está cargado en este producto.");
       return;
     }
 
@@ -481,7 +482,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       }
     } catch (error) {
       console.error("Error subiendo imagen del producto:", error);
-      alert("No se pudo subir la imagen.");
+      toast.error("No se pudo subir la imagen.");
     } finally {
       setUploadingCreateImage(false);
       setUploadProgress(0);
@@ -508,7 +509,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       }
     } catch (error) {
       console.error("Error subiendo imagen del producto:", error);
-      alert("No se pudo subir la imagen.");
+      toast.error("No se pudo subir la imagen.");
     } finally {
       setUploadingEditImageId(null);
       setUploadProgress(0);
@@ -522,12 +523,12 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       category.trim() || (type === "food" ? "Comida" : "Bebidas");
 
     if (!normalizedName) {
-      alert("Ingresá el nombre del producto");
+      toast.error("Ingresá el nombre del producto");
       return;
     }
 
     if (!Number.isFinite(normalizedPrice) || normalizedPrice <= 0) {
-      alert("Ingresá un precio válido");
+      toast.error("Ingresá un precio válido");
       return;
     }
 
@@ -554,7 +555,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       setIngredients([]);
     } catch (error) {
       console.error("Error creando producto:", error);
-      alert("No se pudo crear el producto");
+     toast.error("No se pudo crear el producto");
     }
   };
 
@@ -585,12 +586,12 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       draft.category.trim() || (draft.type === "food" ? "Comida" : "Bebidas");
 
     if (!normalizedName) {
-      alert("El nombre no puede estar vacío");
+      toast.error("El nombre no puede estar vacío");
       return;
     }
 
     if (!Number.isFinite(normalizedPrice) || normalizedPrice <= 0) {
-      alert("Ingresá un precio válido");
+      toast.error("Ingresá un precio válido");
       return;
     }
 
@@ -610,7 +611,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       cancelEditing();
     } catch (error) {
       console.error("Error guardando producto:", error);
-      alert("No se pudo guardar el producto");
+      toast.error("No se pudo guardar el producto");
     } finally {
       setSavingId(null);
     }
@@ -625,7 +626,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       });
     } catch (error) {
       console.error("Error pausando/activando producto:", error);
-      alert("No se pudo actualizar el producto");
+      toast.error("No se pudo actualizar el producto");
     } finally {
       setSavingId(null);
     }
@@ -643,7 +644,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       await deleteMenuItem(restaurantId, item.id);
     } catch (error) {
       console.error("Error eliminando producto:", error);
-      alert("No se pudo eliminar el producto");
+      toast.error("No se pudo eliminar el producto");
     } finally {
       setSavingId(null);
     }

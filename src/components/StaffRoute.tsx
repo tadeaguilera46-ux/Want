@@ -9,6 +9,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { LogOut } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import { useAuth } from "../lib/auth-context";
+import { toast } from "sonner";
 import { useRestaurant } from "../lib/restaurant-context";
 
 type StaffRole = "admin" | "kitchen" | "bar" | "runner" | "cashier";
@@ -151,7 +152,7 @@ const StaffRoute = ({ children, allowedRoles }: StaffRouteProps) => {
       navigate(loginPath, { replace: true });
     } catch (error) {
       console.error("Error cerrando sesión:", error);
-      alert("No se pudo cerrar la sesión");
+      toast.error("No se pudo cerrar la sesión");
     } finally {
       setLoggingOut(false);
     }

@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Smartphone, LockKeyhole } from "lucide-react";
 import logo from "@/assets/logo-want.webp";
 import { useRestaurant } from "../lib/restaurant-context";
+import { toast } from "sonner";
 
 const normalizeString = (value: unknown) => {
   if (typeof value !== "string") return "";
@@ -31,7 +32,7 @@ const Index = () => {
 
   const handleCustomer = () => {
     if (!restaurantId || !table) {
-      alert("El acceso de cliente solo está disponible desde el QR de una mesa.");
+      toast.error("El acceso de cliente solo está disponible desde el QR de una mesa.");
       return;
     }
 

@@ -11,6 +11,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { ChefHat, Clock3, Flame, CheckCircle2, LogOut } from "lucide-react";
+import { toast } from "sonner";
 import type {
   PedidoRecord,
   EstadoCocinaBarra,
@@ -67,7 +68,7 @@ const Kitchen = () => {
       navigate(nextPath, { replace: true });
     } catch (error) {
       console.error("Error cerrando sesión:", error);
-      alert("No se pudo cerrar la sesión");
+      toast.error("No se pudo cerrar la sesión");
     } finally {
       setLoggingOut(false);
     }

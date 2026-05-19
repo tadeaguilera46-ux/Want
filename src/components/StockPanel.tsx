@@ -16,7 +16,7 @@ import {
 
 import { getDb } from "../lib/firebase";
 import { canUseStock } from "../lib/plan";
-
+import { toast } from "sonner";
 import {
   addStock,
   createStockItem,
@@ -105,7 +105,7 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
       setNotes("");
     } catch (error) {
       console.error(error);
-      alert("No se pudo crear el insumo");
+      toast.error("No se pudo crear el insumo");
     } finally {
       setSaving(false);
     }

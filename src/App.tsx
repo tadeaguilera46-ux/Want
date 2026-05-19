@@ -7,6 +7,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 // Guards
 import SubscriptionGuard from "@/components/guards/SubscriptionGuard";
+import AppErrorBoundary from "@/components/AppErrorBoundary";
+
 
 // Cliente
 const Index = lazy(() => import("./pages/Index"));
@@ -62,8 +64,8 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
-      <Sonner />
-
+      <Sonner position="top-center" richColors closeButton />
+      <AppErrorBoundary>
       <Suspense fallback={<AppLoader />}>
         <Routes>
           {/* =========================
@@ -114,7 +116,7 @@ const App = () => (
               </ClientApp>
             }
           />
-          
+
           <Route
             path="/order-confirmed"
             element={
@@ -270,6 +272,7 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
       </Suspense>
+      </AppErrorBoundary>
     </TooltipProvider>
   </QueryClientProvider>
 );

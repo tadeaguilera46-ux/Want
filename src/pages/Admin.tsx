@@ -15,6 +15,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { getDb } from "../lib/firebase";
+import { toast } from "sonner";
 import {
   markMesaAvailable,
   markMesaNeedsCleaning,
@@ -591,7 +592,7 @@ const Admin = () => {
       }
     } catch (error) {
       console.error("Error al actualizar cuenta:", error);
-      alert("No se pudo actualizar la cuenta");
+      toast.error("No se pudo actualizar la cuenta");
     }
   };
 
@@ -605,10 +606,10 @@ const Admin = () => {
 
     try {
       await markMesaAvailable(restaurantId, numeroMesa);
-      alert("Mesa marcada como disponible");
+      toast.success("Mesa marcada como disponible");
     } catch (error) {
       console.error("Error al marcar mesa disponible:", error);
-      alert("Error al actualizar la mesa");
+      toast.error("Error al actualizar la mesa");
     }
   };
 
@@ -622,10 +623,10 @@ const Admin = () => {
 
     try {
       await markMesaNeedsCleaning(restaurantId, numeroMesa);
-      alert("Mesa marcada como pendiente de limpieza");
+      toast.success("Mesa marcada como pendiente de limpieza");
     } catch (error) {
       console.error("Error al marcar mesa para limpieza:", error);
-      alert("Error al actualizar la mesa");
+      toast.error("Error al actualizar la mesa");
     }
   };
 
@@ -641,7 +642,7 @@ const Admin = () => {
       navigate(nextPath, { replace: true });
     } catch (error) {
       console.error("Error cerrando sesión:", error);
-      alert("No se pudo cerrar la sesión");
+      toast.error("No se pudo cerrar la sesión");
     } finally {
       setLoggingOut(false);
     }
@@ -1036,7 +1037,7 @@ const Admin = () => {
         restaurantId={restaurantId}
         qrBasePath="/qr"
       />
-      
+
 </div>
 <RestaurantBrandingPanel restaurantId={restaurantId} />
         <section className="mb-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">

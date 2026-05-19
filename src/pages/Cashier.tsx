@@ -6,6 +6,7 @@ import {
   query,
   where,
 } from "firebase/firestore";
+import { toast } from "sonner";
 import {
   AlertTriangle,
   FileText,
@@ -478,7 +479,7 @@ const Cashier = () => {
 
     if (!menuItem) return alert("Seleccioná un producto.");
     if (!Number.isFinite(quantity) || quantity <= 0) {
-      return alert("Cantidad inválida.");
+      return toast.error("Cantidad inválida.");
     }
 
     setManualItems((prev) => {
@@ -508,12 +509,12 @@ const Cashier = () => {
     const mesa = Number(manualMesa);
 
     if (!Number.isInteger(mesa) || mesa <= 0) {
-      alert("Ingresá una mesa válida.");
+      toast.error("Ingresá una mesa válida.");
       return;
     }
 
     if (manualItems.length === 0) {
-      alert("Agregá al menos un producto.");
+      toast.error("Agregá al menos un producto.");
       return;
     }
 
@@ -581,7 +582,7 @@ const Cashier = () => {
     const menuItem = menuItems.find((item) => item.id === addSelectedMenuId);
     const quantity = Number(addQuantity);
 
-    if (!menuItem) return alert("Seleccioná un producto.");
+    if (!menuItem) return  toast.error("Seleccioná un producto.");
     if (!Number.isFinite(quantity) || quantity <= 0) {
       return alert("Cantidad inválida.");
     }

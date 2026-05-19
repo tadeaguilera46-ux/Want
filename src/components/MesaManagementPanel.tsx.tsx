@@ -4,6 +4,7 @@ import { Copy, DoorOpen, Download, Plus, QrCode, X } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
 import { getDb } from "../lib/firebase";
 import { createMesaIfNotExists, setMesaActive } from "../lib/mesas";
+import { toast } from "sonner";
 import {
   canCreateTable,
   getPlanLimits,
@@ -120,12 +121,12 @@ export function MesaManagementPanel({
     const numero = Number(newMesaNumber);
 
     if (!Number.isInteger(numero) || numero <= 0) {
-      alert("Ingresá un número de mesa válido");
+      toast.error("Ingresá un número de mesa válido");
       return;
     }
 
     if (!canCreateTable(restaurantPlan, activeMesasCount)) {
-      alert(
+      toast.warning(
         `Tu plan ${PLAN_LABELS[restaurantPlan]} permite hasta ${tableLimitLabel} mesas activas.`
       );
       return;
@@ -137,7 +138,7 @@ export function MesaManagementPanel({
       setNewMesaNumber("");
     } catch (error) {
       console.error("Error creando mesa:", error);
-      alert("No se pudo crear la mesa");
+      toast.error("No se pudo crear la mesa");
     } finally {
       setSaving(false);
     }
@@ -151,14 +152,14 @@ export function MesaManagementPanel({
     const nextActive = mesa.active === false;
 
     if (nextActive && !canCreateTable(restaurantPlan, activeMesasCount)) {
-      alert(
+      toast.error(
         `Tu plan ${PLAN_LABELS[restaurantPlan]} permite hasta ${tableLimitLabel} mesas activas.`
       );
       return;
     }
 
     if (!nextActive && mesa.estado === "occupied") {
-      alert("No podés desactivar una mesa ocupada.");
+      toast.error("No podés desactivar una mesa ocupada.");
       return;
     }
 
@@ -167,7 +168,7 @@ export function MesaManagementPanel({
       await setMesaActive(restaurantId, numero, nextActive);
     } catch (error) {
       console.error("Error actualizando mesa:", error);
-      alert("No se pudo actualizar la mesa");
+      toast.error("No se pudo actualizar la mesa");
     } finally {
       setSaving(false);
     }

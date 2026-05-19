@@ -11,6 +11,7 @@ import {
 import { Plus, UserCog } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import type { StaffRole } from "../lib/staff";
+import { toast } from "sonner";
 import {
   canCreateStaff,
   getPlanLimits,
@@ -155,7 +156,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
     const normalizedEmail = newEmail.trim().toLowerCase();
 
     if (!normalizedEmail) {
-      alert("Ingresá el email del empleado.");
+      toast.warning("Ingresá el email del empleado.");
       return;
     }
 
@@ -164,12 +165,12 @@ export function StaffManagementPanel({ restaurantId }: Props) {
     );
 
     if (alreadyExists) {
-      alert("Ya existe un empleado con ese email.");
+      toast.error("Ya existe un empleado con ese email.");
       return;
     }
 
     if (!canCreateStaff(restaurantPlan, activeStaffCount)) {
-      alert(
+      toast.error(
         `Tu plan ${PLAN_LABELS[restaurantPlan]} permite hasta ${staffLimitLabel} empleados activos.`
       );
       return;
@@ -191,7 +192,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
       setNewRole("cashier");
     } catch (error) {
       console.error("Error creando empleado:", error);
-      alert("No se pudo crear el empleado.");
+      toast.error("No se pudo crear el empleado.");
     } finally {
       setCreating(false);
     }
@@ -199,7 +200,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
 
   const updateStaffRole = async (member: StaffMember, role: StaffRole) => {
     if (isLastActiveAdmin(member) && role !== "admin") {
-      alert("No podés quitarle el rol admin al último admin activo.");
+      toast.error("No podés quitarle el rol admin al último admin activo.");
       return;
     }
 
@@ -212,7 +213,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
       });
     } catch (error) {
       console.error("Error actualizando rol:", error);
-      alert("No se pudo actualizar el rol");
+      toast.error("No se pudo actualizar el rol");
     } finally {
       setUpdatingId(null);
     }
@@ -222,7 +223,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
     const normalizedEmail = email.trim().toLowerCase();
 
     if (!normalizedEmail) {
-      alert("El email no puede quedar vacío");
+      toast.error("El email no puede quedar vacío");
       return;
     }
 
@@ -235,7 +236,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
       });
     } catch (error) {
       console.error("Error actualizando email:", error);
-      alert("No se pudo actualizar el email");
+      toast.error("No se pudo actualizar el email");
     } finally {
       setUpdatingId(null);
     }
@@ -245,12 +246,12 @@ export function StaffManagementPanel({ restaurantId }: Props) {
     const nextActive = member.active !== true;
 
     if (isLastActiveAdmin(member)) {
-      alert("No podés desactivar al último admin activo.");
+      toast.error("No podés desactivar al último admin activo.");
       return;
     }
 
     if (nextActive && !canCreateStaff(restaurantPlan, activeStaffCount)) {
-      alert(
+      toast.error(
         `Tu plan ${PLAN_LABELS[restaurantPlan]} permite hasta ${staffLimitLabel} empleados activos.`
       );
       return;
@@ -265,7 +266,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
       });
     } catch (error) {
       console.error("Error actualizando empleado:", error);
-      alert("No se pudo actualizar el empleado");
+      toast.error("No se pudo actualizar el empleado");
     } finally {
       setUpdatingId(null);
     }

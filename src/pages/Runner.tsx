@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth-context";
+import { toast } from "sonner";
 import { getDb } from "../lib/firebase";
 import {
   collection,
@@ -22,6 +23,8 @@ import {
   updateDoc,
   doc,
   serverTimestamp,
+  where,
+  limit,
 } from "firebase/firestore";
 import { actualizarEstadoCuenta } from "../lib/bill";
 import { markMesaAvailable } from "../lib/mesas";
@@ -91,7 +94,7 @@ const Runner = () => {
       navigate(nextPath, { replace: true });
     } catch (error) {
       console.error("Error cerrando sesión:", error);
-      alert("No se pudo cerrar la sesión");
+      toast.error("No se pudo cerrar la sesión");
     } finally {
       setLoggingOut(false);
     }
@@ -303,8 +306,11 @@ const Runner = () => {
     }
 
     const q = query(
-      collection(db, "restaurants", restaurantId, "pedidos"),
-      orderBy("createdAt", "asc")
+      collection(db, "restaurants", restaurantId, "cuentas"),
+      where("estado", "!=", "cerrada"),
+      orderBy("estado"),
+      orderBy("createdAt", "asc"),
+      limit(50)
     );
 
     const unsubscribe = onSnapshot(
@@ -357,8 +363,11 @@ const Runner = () => {
     }
 
     const q = query(
-      collection(db, "restaurants", restaurantId, "cuentas"),
-      orderBy("createdAt", "asc")
+      collection(db, "restaurants", restaurantId, "pedidos"),
+      where("estado", "!=", "entregado"),
+      orderBy("estado"),
+      orderBy("createdAt", "asc"),
+      limit(50)
     );
 
     const unsubscribe = onSnapshot(

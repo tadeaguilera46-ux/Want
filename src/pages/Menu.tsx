@@ -6,6 +6,7 @@ import { useCart } from "@/lib/CartContext";
 import { parseTableNumber, resolveRuntimeContext } from "../lib/runtime-context";
 import { getMesa } from "../lib/mesas";
 import { useRestaurantConfig } from "../lib/restaurant-config";
+import { toast } from "sonner";
 import {
   clearStoredTableSessionId,
   getStoredTableSessionId,
@@ -237,7 +238,7 @@ const Menu = () => {
     const maxQuantity = availability.maxQuantity;
 
     if (maxQuantity !== null && currentQuantity >= maxQuantity) {
-      alert(`Nos quedan ${maxQuantity} ${item.name} en stock.`);
+      toast.error(`Nos quedan ${maxQuantity} ${item.name} en stock.`);
       return false;
     }
 
