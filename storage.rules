@@ -7,16 +7,80 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function staffPath(restaurantId) {
+      return /databases/(default)/documents/restaurants/$(restaurantId)/staff/$(request.auth.uid);
+    }
+
+    function isActiveStaff(restaurantId) {
+      return isSignedIn()
+        && firestore.exists(staffPath(restaurantId))
+        && firestore.get(staffPath(restaurantId)).data.active == true;
+    }
+
+    function hasRole(restaurantId, role) {
+      return isActiveStaff(restaurantId)
+        && firestore.get(staffPath(restaurantId)).data.role == role;
+    }
+
+    function isAdmin(restaurantId) {
+      return hasRole(restaurantId, "admin");
+    }
+
+    function isCashier(restaurantId) {
+      return hasRole(restaurantId, "cashier");
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+
+    function validImageSize(maxMb) {
+      return request.resource.size < maxMb * 1024 * 1024;
+    }
+
+    /*
+    ============================================
+    BRANDING
+    restaurants/{restaurantId}/branding/
+    ============================================
+    */
+
     match /restaurants/{restaurantId}/branding/{fileName} {
       allow read: if true;
 
-      allow write: if isSignedIn();
+      allow write:
+        if (
+          isAdmin(restaurantId)
+          || isCashier(restaurantId)
+        )
+        && isImage()
+        && validImageSize(5);
     }
 
-    match /restaurants/{restaurantId}/menu/{fileName} {
+    /*
+    ============================================
+    MENU IMAGES
+    restaurants/{restaurantId}/menu/{itemId}/
+    ============================================
+    */
+
+    match /restaurants/{restaurantId}/menu/{itemId}/{fileName} {
       allow read: if true;
 
-      allow write: if isSignedIn();
+      allow write:
+        if isAdmin(restaurantId)
+        && isImage()
+        && validImageSize(8);
+    }
+
+    /*
+    ============================================
+    BLOCK EVERYTHING ELSE
+    ============================================
+    */
+
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

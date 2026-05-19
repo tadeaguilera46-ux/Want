@@ -1,0 +1,313 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn()
+        && request.auth.uid == "avMRl4526tYfAZkOmSebwxvLCAb2";
+    }
+
+    function staffPath(restaurantId) {
+      return /databases/$(database)/documents/restaurants/$(restaurantId)/staff/$(request.auth.uid);
+    }
+
+    function sessionPath(restaurantId, sessionId) {
+      return /databases/$(database)/documents/restaurants/$(restaurantId)/sessions/$(sessionId);
+    }
+
+    function isActiveStaff(restaurantId) {
+      return isSignedIn()
+        && exists(staffPath(restaurantId))
+        && get(staffPath(restaurantId)).data.active == true;
+    }
+
+    function hasRole(restaurantId, role) {
+      return isActiveStaff(restaurantId)
+        && get(staffPath(restaurantId)).data.role == role;
+    }
+
+    function isAdmin(restaurantId) {
+      return hasRole(restaurantId, "admin");
+    }
+
+    function isRunner(restaurantId) {
+      return hasRole(restaurantId, "runner");
+    }
+
+    function isCashier(restaurantId) {
+      return hasRole(restaurantId, "cashier");
+    }
+
+    function isKitchen(restaurantId) {
+      return hasRole(restaurantId, "kitchen");
+    }
+
+    function isBar(restaurantId) {
+      return hasRole(restaurantId, "bar");
+    }
+
+    function isCashierOrAdmin(restaurantId) {
+      return isCashier(restaurantId) || isAdmin(restaurantId);
+    }
+
+    function isRunnerOrAdmin(restaurantId) {
+      return isRunner(restaurantId) || isAdmin(restaurantId);
+    }
+
+    function isRunnerCashierOrAdmin(restaurantId) {
+      return isRunner(restaurantId)
+        || isCashier(restaurantId)
+        || isAdmin(restaurantId);
+    }
+
+    function isKitchenBarRunnerCashierOrAdmin(restaurantId) {
+      return isKitchen(restaurantId)
+        || isBar(restaurantId)
+        || isRunner(restaurantId)
+        || isCashier(restaurantId)
+        || isAdmin(restaurantId);
+    }
+
+    function isPremiumRestaurant(restaurantId) {
+      return get(
+        /databases/$(database)/documents/restaurants/$(restaurantId)
+      ).data.plan == "premium";
+    }
+
+    function isOwnerCreatingRestaurant() {
+      return isSignedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerEmail == request.auth.token.email
+        && request.resource.data.subscriptionStatus == "trial"
+        && request.resource.data.active == true;
+    }
+
+    function isOwnerCreatingOwnStaff(staffId) {
+      return isSignedIn()
+        && staffId == request.auth.uid
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role == "admin"
+        && request.resource.data.active == true;
+    }
+
+    function isValidTableNumber(value) {
+      return value is int && value > 0 && value <= 500;
+    }
+
+    function isValidOptionalString(value) {
+      return value == null || value is string;
+    }
+
+    function isValidOptionalColor(value) {
+      return value == null || value is string;
+    }
+
+    function isValidRestaurantUpdate() {
+      return isValidOptionalString(request.resource.data.name)
+        && isValidOptionalString(request.resource.data.logoUrl)
+        && isValidOptionalString(request.resource.data.coverUrl)
+        && isValidOptionalString(request.resource.data.welcomeMessage)
+        && isValidOptionalColor(request.resource.data.primaryColor)
+        && isValidOptionalColor(request.resource.data.secondaryColor);
+    }
+
+    function sessionExists(restaurantId, sessionId) {
+      return sessionId is string
+        && exists(sessionPath(restaurantId, sessionId));
+    }
+
+    function sessionIsActiveForTable(restaurantId, sessionId, tableNumber) {
+      return sessionExists(restaurantId, sessionId)
+        && get(sessionPath(restaurantId, sessionId)).data.restaurantId == restaurantId
+        && get(sessionPath(restaurantId, sessionId)).data.tableNumber == tableNumber
+        && get(sessionPath(restaurantId, sessionId)).data.status == "active"
+        && get(sessionPath(restaurantId, sessionId)).data.ordersLocked != true
+        && get(sessionPath(restaurantId, sessionId)).data.billRequested != true;
+    }
+
+    function validClientSessionCreate(restaurantId) {
+      return request.resource.data.restaurantId == restaurantId
+        && isValidTableNumber(request.resource.data.tableNumber)
+        && request.resource.data.status == "active";
+    }
+
+    function validMesaClientCreateOrUpdate(restaurantId) {
+      return request.resource.data.restaurantId == restaurantId
+        && isValidTableNumber(request.resource.data.numero)
+        && request.resource.data.estado in ["available", "occupied", "needs_cleaning"];
+    }
+
+    match /restaurants/{restaurantId} {
+      allow read: if true;
+
+      allow create: if isSuperAdmin() || isOwnerCreatingRestaurant();
+
+      allow update: if isSuperAdmin()
+        || (
+          isAdmin(restaurantId)
+          && isValidRestaurantUpdate()
+        );
+
+      allow delete: if isSuperAdmin();
+    }
+
+    match /restaurants/{restaurantId}/staff/{staffId} {
+      allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
+
+      allow create: if isSuperAdmin()
+        || isAdmin(restaurantId)
+        || isOwnerCreatingOwnStaff(staffId);
+
+      allow update, delete: if isSuperAdmin() || isAdmin(restaurantId);
+    }
+
+    match /restaurants/{restaurantId}/mesas/{mesaId} {
+      allow read: if true;
+
+      allow create: if (
+          isSuperAdmin()
+          || isAdmin(restaurantId)
+          || isCashier(restaurantId)
+          || validMesaClientCreateOrUpdate(restaurantId)
+        )
+        && request.resource.data.restaurantId == restaurantId
+        && isValidTableNumber(request.resource.data.numero)
+        && request.resource.data.estado in ["available", "occupied", "needs_cleaning"];
+
+      allow update: if isSuperAdmin()
+        || isRunnerCashierOrAdmin(restaurantId)
+        || (
+          validMesaClientCreateOrUpdate(restaurantId)
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && request.resource.data.numero == resource.data.numero
+          && request.resource.data.estado == "occupied"
+          && request.resource.data.activeSessionId is string
+        );
+
+      allow delete: if isSuperAdmin() || isAdmin(restaurantId);
+    }
+
+    match /restaurants/{restaurantId}/sessions/{sessionId} {
+      allow read: if true;
+
+      allow create: if isCashierOrAdmin(restaurantId)
+        || validClientSessionCreate(restaurantId);
+
+      allow update: if isSuperAdmin()
+        || isRunnerCashierOrAdmin(restaurantId)
+        || (
+          request.resource.data.restaurantId == resource.data.restaurantId
+          && request.resource.data.tableNumber == resource.data.tableNumber
+          && request.resource.data.status in ["active", "closed"]
+        );
+
+      allow delete: if isSuperAdmin() || isAdmin(restaurantId);
+    }
+
+    match /restaurants/{restaurantId}/menu/{itemId} {
+      allow read: if resource.data.active == true || isActiveStaff(restaurantId);
+
+      allow create, update, delete: if isSuperAdmin() || isAdmin(restaurantId);
+    }
+
+    match /restaurants/{restaurantId}/pedidos/{pedidoId} {
+      allow read: if true;
+
+      allow create: if request.resource.data.restaurantId == restaurantId
+        && isValidTableNumber(request.resource.data.mesa)
+        && request.resource.data.sessionId is string
+        && sessionIsActiveForTable(
+          restaurantId,
+          request.resource.data.sessionId,
+          request.resource.data.mesa
+        )
+        && request.resource.data.items is list
+        && request.resource.data.items.size() > 0
+        && request.resource.data.total is number
+        && request.resource.data.total >= 0;
+
+      allow update: if isKitchenBarRunnerCashierOrAdmin(restaurantId);
+
+      allow delete: if isSuperAdmin() || isAdmin(restaurantId);
+    }
+
+    match /restaurants/{restaurantId}/cuentas/{cuentaId} {
+      allow read: if true;
+
+      allow create: if (
+          request.resource.data.restaurantId == restaurantId
+          && isValidTableNumber(request.resource.data.mesa)
+          && request.resource.data.sessionId is string
+          && sessionExists(restaurantId, request.resource.data.sessionId)
+          && request.resource.data.total is number
+          && request.resource.data.total >= 0
+          && request.resource.data.estado == "pendiente"
+        )
+        || isCashierOrAdmin(restaurantId);
+
+      allow update: if isRunnerCashierOrAdmin(restaurantId);
+
+      allow delete: if isSuperAdmin() || isAdmin(restaurantId);
+    }
+
+    match /restaurants/{restaurantId}/payments/{paymentId} {
+      allow read: if isSuperAdmin() || isCashierOrAdmin(restaurantId);
+
+      allow create: if isSuperAdmin()
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.type is string
+        && request.resource.data.amount is number
+        && request.resource.data.amount >= 0;
+
+      allow update, delete: if isSuperAdmin();
+    }
+
+    match /restaurants/{restaurantId}/stock/{stockItemId} {
+      allow read: if true;
+
+      allow create: if (isSuperAdmin() || isAdmin(restaurantId))
+        && isPremiumRestaurant(restaurantId)
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.name is string
+        && request.resource.data.category is string
+        && request.resource.data.unit in ["kg", "g", "l", "ml", "unit"]
+        && request.resource.data.currentQuantity is number
+        && request.resource.data.currentQuantity >= 0
+        && request.resource.data.minimumQuantity is number
+        && request.resource.data.minimumQuantity >= 0
+        && request.resource.data.active is bool;
+
+      allow update: if (isSuperAdmin() || isAdmin(restaurantId))
+        && isPremiumRestaurant(restaurantId)
+        && request.resource.data.restaurantId == resource.data.restaurantId
+        && request.resource.data.name is string
+        && request.resource.data.category is string
+        && request.resource.data.unit in ["kg", "g", "l", "ml", "unit"]
+        && request.resource.data.currentQuantity is number
+        && request.resource.data.currentQuantity >= 0
+        && request.resource.data.minimumQuantity is number
+        && request.resource.data.minimumQuantity >= 0
+        && request.resource.data.active is bool;
+
+      allow delete: if false;
+    }
+
+    match /restaurants/{restaurantId}/auditLogs/{auditLogId} {
+      allow read: if isSuperAdmin() || isAdmin(restaurantId);
+
+      allow create: if isSuperAdmin()
+        || isAdmin(restaurantId)
+        || isCashier(restaurantId)
+        || isRunner(restaurantId)
+        || isKitchen(restaurantId)
+        || isBar(restaurantId);
+
+      allow update, delete: if false;
+    }
+  }
+}

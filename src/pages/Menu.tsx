@@ -4,11 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ShoppingCart,
   Receipt,
-  Plus,
   X,
-  MessageSquareText,
   ChevronRight,
-  AlertTriangle,
 } from "lucide-react";
 import {
   collection,
@@ -29,6 +26,7 @@ import type { MenuIngredient } from "../lib/store";
 import type { StockItem } from "../types/stock";
 import { getStoredTableSessionId, clearStoredTableSessionId, } from "../lib/table-session";
 import { getSessionById } from "../lib/sessions";
+import MenuItemCard from "@/components/menu/MenuItemCard";
 import {
   buildMissingOptionalObservation,
   getMenuItemAvailability,
@@ -82,6 +80,41 @@ const getItemTags = (item: MenuItem) => {
 const mergeObservations = (manualNote: string, automaticNote: string) => {
   const parts = [manualNote.trim(), automaticNote.trim()].filter(Boolean);
   return parts.join(" · ");
+};
+
+const MenuSkeleton = () => {
+  return (
+    <div className="animate-pulse space-y-5">
+      <div className="no-scrollbar flex gap-2 overflow-x-auto">
+        {[1, 2, 3, 4].map((item) => (
+          <div
+            key={item}
+            className="h-9 w-24 shrink-0 rounded-full bg-white/70"
+          />
+        ))}
+      </div>
+
+      {[1, 2, 3].map((item) => (
+        <div
+          key={item}
+          className="overflow-hidden rounded-[30px] border border-black/5 bg-white shadow-[0_12px_30px_-16px_rgba(0,0,0,0.22)]"
+        >
+          <div className="aspect-[16/10] w-full bg-zinc-200" />
+
+          <div className="space-y-3 p-4">
+            <div className="h-5 w-2/3 rounded-full bg-zinc-200" />
+            <div className="h-4 w-full rounded-full bg-zinc-100" />
+            <div className="h-4 w-4/5 rounded-full bg-zinc-100" />
+
+            <div className="flex items-center justify-between pt-3">
+              <div className="h-10 w-28 rounded-2xl bg-zinc-100" />
+              <div className="h-11 w-11 rounded-full bg-zinc-200" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 };
 
 const Menu = () => {
@@ -487,7 +520,7 @@ const Menu = () => {
         <header
           className="sticky top-0 z-40 border-b border-black/5 backdrop-blur"
           style={{ backgroundColor: `${pageBackground}F2` }}
-        >
+          >
           <div className="px-4 pb-2 pt-[max(12px,env(safe-area-inset-top))]">
             <div className="flex items-center justify-between gap-3">
               <div
@@ -511,205 +544,56 @@ const Menu = () => {
                 Pedir cuenta
               </button>
             </div>
-
-            <div className="mt-3 overflow-hidden rounded-[24px] border border-black/5 bg-white shadow-[0_8px_24px_-14px_rgba(0,0,0,0.18)]">
-              {coverUrl ? (
-                <div className="h-[150px] w-full overflow-hidden bg-zinc-100 sm:h-[184px]">
-                  <img
-                    src={coverUrl}
-                    alt={restaurantName}
-                    className="h-full w-full object-cover"
-                  />
-                </div>
-              ) : (
-                <div
-                  className="h-[150px] w-full sm:h-[184px]"
-                  style={{ backgroundColor: primaryColor }}
-                />
-              )}
-
-              <div className="flex items-center gap-3 px-4 py-2.5">
-                {logoUrl && (
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
-                    <img
-                      src={logoUrl}
-                      alt={restaurantName}
-                      className="h-full w-full object-contain"
-                    />
-                  </div>
-                )}
-
-                <div className="min-w-0 flex-1">
-                  <p className="text-[9px] font-extrabold uppercase tracking-[0.22em] text-zinc-500">
-                    Menú digital
-                  </p>
-
-                  <h1 className="mt-0.5 truncate text-xl font-black leading-tight tracking-tight text-zinc-950">
-                    {restaurantName}
-                  </h1>
-
-                  {welcomeMessage && (
-                    <p className="mt-0.5 truncate text-sm leading-tight text-zinc-500">
-                      {welcomeMessage}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-2 pt-0">
-            {categories.map((category) => (
-              <button
-                key={category.key}
-                onClick={() => setActiveCategory(category.key)}
-                className={`inline-flex h-9 shrink-0 items-center rounded-full px-4 text-sm font-semibold transition-all ${
-                  activeCategory === category.key
-                    ? "text-white shadow-sm"
-                    : "border border-black/10 bg-white text-zinc-700 shadow-sm"
-                }`}
-                style={
-                  activeCategory === category.key
-                    ? { backgroundColor: primaryColor }
-                    : undefined
-                }
-              >
-                {category.label}
-              </button>
-            ))}
           </div>
         </header>
-
-        <main className="px-4 py-4">
-          {loading ? (
-            <div className="rounded-3xl border border-black/5 bg-white p-6 text-center text-sm font-semibold text-zinc-500 shadow-sm">
-              Cargando menú...
-            </div>
-          ) : filteredItems.length === 0 ? (
-            <div className="rounded-3xl border border-black/5 bg-white p-6 text-center shadow-sm">
-              <p className="font-bold text-zinc-950">
-                No hay productos disponibles
-              </p>
-              <p className="mt-1 text-sm text-zinc-500">
-                Probá otra categoría o consultá al staff.
-              </p>
-            </div>
-          ) : (
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeCategory}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.18 }}
-                className="space-y-5"
-              >
-                {filteredItems.map((item) => {
-                  const qty = getQuantity(item.id);
-                  const tags = getItemTags(item);
-
-                  const availability = getMenuItemAvailability({
-                    ingredients: item.ingredients,
-                    stockItems,
-                  });
-
-                  return (
+    </div>
+              <main className="px-4 py-4">
+                {loading ? (
+                  <MenuSkeleton />
+                ) : filteredItems.length === 0 ? (
+                  <div className="rounded-3xl border border-black/5 bg-white p-6 text-center shadow-sm">
+                    <p className="font-bold text-zinc-950">No hay productos disponibles</p>
+                    <p className="mt-1 text-sm text-zinc-500">
+                      Probá otra categoría o consultá al staff.
+                    </p>
+                  </div>
+                ) : (
+                  <AnimatePresence mode="wait">
                     <motion.div
-                      key={item.id}
-                      layout
-                      initial={{ opacity: 0, y: 18 }}
+                      key={activeCategory}
+                      initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.22 }}
-                      className="overflow-hidden rounded-[30px] border border-black/5 bg-white shadow-[0_12px_30px_-16px_rgba(0,0,0,0.22)]"
+                      exit={{ opacity: 0, y: -8 }}
+                      transition={{ duration: 0.18 }}
+                      className="space-y-5"
                     >
-                      <div className="relative aspect-[16/10] w-full overflow-hidden bg-zinc-100">
-                        {item.image ? (
-                          <img
-                            src={item.image}
-                            alt={item.name}
-                            className="h-full w-full object-cover transition-transform duration-500 hover:scale-[1.03]"
+                      {filteredItems.map((item) => {
+                        const quantity = getQuantity(item.id);
+                        const tags = getItemTags(item);
+
+                        const availability = getMenuItemAvailability({
+                          ingredients: item.ingredients,
+                          stockItems,
+                        });
+
+                        return (
+                          <MenuItemCard
+                            key={item.id}
+                            item={item}
+                            quantity={quantity}
+                            tags={tags}
+                            availability={availability}
+                            primaryColor={primaryColor}
+                            formatPrice={formatPriceARS}
+                            onAdd={handleAddWithoutNote}
+                            onNote={openNoteModal}
                           />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center bg-zinc-200">
-                            <p className="text-sm font-semibold text-zinc-500">
-                              Sin imagen
-                            </p>
-                          </div>
-                        )}
-
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
-
-                        <div className="absolute left-4 right-4 top-4 flex items-start justify-between gap-3">
-                          <div className="flex flex-wrap gap-2">
-                            {tags.slice(0, 2).map((tag) => (
-                              <span
-                                key={tag}
-                                className="rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-zinc-800 backdrop-blur"
-                              >
-                                {tag}
-                              </span>
-                            ))}
-
-                            {availability.lowStock && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-black text-amber-800 backdrop-blur">
-                                <AlertTriangle size={12} />
-                                Quedan pocas unidades
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="shrink-0 rounded-full bg-white/95 px-3 py-1.5 text-sm font-extrabold text-zinc-950 shadow-sm backdrop-blur">
-                            {formatPriceARS(item.price)}
-                          </div>
-                        </div>
-
-                        <div className="absolute bottom-0 left-0 right-0 p-4">
-                          <h3 className="text-xl font-black leading-tight text-white drop-shadow-sm">
-                            {item.name}
-                          </h3>
-                        </div>
-                      </div>
-
-                      <div className="p-4">
-                        <p className="text-sm leading-relaxed text-zinc-600">
-                          {item.description || "Sin descripción"}
-                        </p>
-
-                        <div className="mt-4 flex items-center justify-between gap-3">
-                          <button
-                            onClick={() => openNoteModal(item)}
-                            className="inline-flex h-10 items-center gap-2 rounded-2xl border border-black/10 bg-white px-3 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
-                          >
-                            <MessageSquareText size={14} />
-                            Agregar nota
-                          </button>
-
-                          <div className="flex items-center gap-3">
-                            {qty > 0 && (
-                              <span className="min-w-[24px] text-center text-sm font-black text-zinc-700">
-                                {qty}
-                              </span>
-                            )}
-
-                            <motion.button
-                              whileTap={{ scale: 0.92 }}
-                              onClick={() => handleAddWithoutNote(item)}
-                              className="flex h-11 w-11 items-center justify-center rounded-full text-white shadow-want"
-                              style={{ backgroundColor: primaryColor }}
-                            >
-                              <Plus size={18} />
-                            </motion.button>
-                          </div>
-                        </div>
-                      </div>
+                        );
+                      })}
                     </motion.div>
-                  );
-                })}
-              </motion.div>
-            </AnimatePresence>
-          )}
-        </main>
-      </div>
+                  </AnimatePresence>
+                )}
+              </main>
 
       {totalItems > 0 && (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 px-4 pb-[max(16px,env(safe-area-inset-bottom))]">
