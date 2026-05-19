@@ -512,88 +512,161 @@ const Menu = () => {
   const loading = loadingMenu || loadingStock;
 
   return (
-    <div
-      className="min-h-screen pb-32"
-      style={{ backgroundColor: pageBackground }}
-    >
-      <div className="mx-auto w-full max-w-lg">
-        <header
-          className="sticky top-0 z-40 border-b border-black/5 backdrop-blur"
-          style={{ backgroundColor: `${pageBackground}F2` }}
-          >
-          <div className="px-4 pb-2 pt-[max(12px,env(safe-area-inset-top))]">
-            <div className="flex items-center justify-between gap-3">
-              <div
-                className="rounded-full px-3 py-1.5 text-xs font-bold text-white shadow-sm"
-                style={{ backgroundColor: primaryColor }}
-              >
-                Mesa {table}
-              </div>
+  <div
+    className="min-h-screen pb-32"
+    style={{ backgroundColor: pageBackground }}
+  >
+    <div className="mx-auto w-full max-w-lg">
+      <header
+        className="sticky top-0 z-40 border-b border-black/5 backdrop-blur"
+        style={{ backgroundColor: `${pageBackground}F2` }}
+      >
+        <div className="px-4 pb-2 pt-[max(12px,env(safe-area-inset-top))]">
+          <div className="flex items-center justify-between gap-3">
+            <div
+              className="rounded-full px-3 py-1.5 text-xs font-bold text-white shadow-sm"
+              style={{ backgroundColor: primaryColor }}
+            >
+              Mesa {table}
+            </div>
 
-              <button
-                onClick={() =>
-                  navigate(
-                    `/bill?restaurantId=${restaurantId}&table=${table}&total=${total}`,
-                    { state: { table, restaurantId } }
-                  )
-                }
-                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-extrabold text-white shadow-want transition-all hover:scale-[1.03] active:scale-[0.98]"
+            <button
+              onClick={() =>
+                navigate(
+                  `/bill?restaurantId=${restaurantId}&table=${table}&total=${total}`,
+                  { state: { table, restaurantId } }
+                )
+              }
+              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-extrabold text-white shadow-want transition-all hover:scale-[1.03] active:scale-[0.98]"
+              style={{ backgroundColor: primaryColor }}
+            >
+              <Receipt size={16} />
+              Pedir cuenta
+            </button>
+          </div>
+
+          <div className="mt-3 overflow-hidden rounded-[24px] border border-black/5 bg-white shadow-[0_8px_24px_-14px_rgba(0,0,0,0.18)]">
+            {coverUrl ? (
+              <div className="h-[150px] w-full overflow-hidden bg-zinc-100 sm:h-[184px]">
+                <img
+                  src={coverUrl}
+                  alt={restaurantName}
+                  loading="lazy"
+                  decoding="async"
+                  className="h-full w-full object-cover"
+                />
+              </div>
+            ) : (
+              <div
+                className="h-[150px] w-full sm:h-[184px]"
                 style={{ backgroundColor: primaryColor }}
-              >
-                <Receipt size={16} />
-                Pedir cuenta
-              </button>
+              />
+            )}
+
+            <div className="flex items-center gap-3 px-4 py-2.5">
+              {logoUrl && (
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
+                  <img
+                    src={logoUrl}
+                    alt={restaurantName}
+                    loading="lazy"
+                    decoding="async"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+              )}
+
+              <div className="min-w-0 flex-1">
+                <p className="text-[9px] font-extrabold uppercase tracking-[0.22em] text-zinc-500">
+                  Menú digital
+                </p>
+
+                <h1 className="mt-0.5 truncate text-xl font-black leading-tight tracking-tight text-zinc-950">
+                  {restaurantName}
+                </h1>
+
+                {welcomeMessage && (
+                  <p className="mt-0.5 truncate text-sm leading-tight text-zinc-500">
+                    {welcomeMessage}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
-        </header>
+        </div>
+
+        <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-2 pt-0">
+          {categories.map((category) => (
+            <button
+              key={category.key}
+              onClick={() => setActiveCategory(category.key)}
+              className={`inline-flex h-9 shrink-0 items-center rounded-full px-4 text-sm font-semibold transition-all ${
+                activeCategory === category.key
+                  ? "text-white shadow-sm"
+                  : "border border-black/10 bg-white text-zinc-700 shadow-sm"
+              }`}
+              style={
+                activeCategory === category.key
+                  ? { backgroundColor: primaryColor }
+                  : undefined
+              }
+            >
+              {category.label}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      <main className="px-4 py-4">
+        {loading ? (
+          <MenuSkeleton />
+        ) : filteredItems.length === 0 ? (
+          <div className="rounded-3xl border border-black/5 bg-white p-6 text-center shadow-sm">
+            <p className="font-bold text-zinc-950">
+              No hay productos disponibles
+            </p>
+            <p className="mt-1 text-sm text-zinc-500">
+              Probá otra categoría o consultá al staff.
+            </p>
+          </div>
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeCategory}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18 }}
+              className="space-y-5"
+            >
+              {filteredItems.map((item) => {
+                const quantity = getQuantity(item.id);
+                const tags = getItemTags(item);
+
+                const availability = getMenuItemAvailability({
+                  ingredients: item.ingredients,
+                  stockItems,
+                });
+
+                return (
+                  <MenuItemCard
+                    key={item.id}
+                    item={item}
+                    quantity={quantity}
+                    tags={tags}
+                    availability={availability}
+                    primaryColor={primaryColor}
+                    formatPrice={formatPriceARS}
+                    onAdd={handleAddWithoutNote}
+                    onNote={openNoteModal}
+                  />
+                );
+              })}
+            </motion.div>
+          </AnimatePresence>
+        )}
+      </main>
     </div>
-              <main className="px-4 py-4">
-                {loading ? (
-                  <MenuSkeleton />
-                ) : filteredItems.length === 0 ? (
-                  <div className="rounded-3xl border border-black/5 bg-white p-6 text-center shadow-sm">
-                    <p className="font-bold text-zinc-950">No hay productos disponibles</p>
-                    <p className="mt-1 text-sm text-zinc-500">
-                      Probá otra categoría o consultá al staff.
-                    </p>
-                  </div>
-                ) : (
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={activeCategory}
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -8 }}
-                      transition={{ duration: 0.18 }}
-                      className="space-y-5"
-                    >
-                      {filteredItems.map((item) => {
-                        const quantity = getQuantity(item.id);
-                        const tags = getItemTags(item);
-
-                        const availability = getMenuItemAvailability({
-                          ingredients: item.ingredients,
-                          stockItems,
-                        });
-
-                        return (
-                          <MenuItemCard
-                            key={item.id}
-                            item={item}
-                            quantity={quantity}
-                            tags={tags}
-                            availability={availability}
-                            primaryColor={primaryColor}
-                            formatPrice={formatPriceARS}
-                            onAdd={handleAddWithoutNote}
-                            onNote={openNoteModal}
-                          />
-                        );
-                      })}
-                    </motion.div>
-                  </AnimatePresence>
-                )}
-              </main>
 
       {totalItems > 0 && (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 px-4 pb-[max(16px,env(safe-area-inset-bottom))]">
