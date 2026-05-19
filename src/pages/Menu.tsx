@@ -523,7 +523,7 @@ const Menu = () => {
     );
   }
 
-  const loading = loadingMenu || loadingStock;
+  const loading = loadingMenu;
 
   return (
   <div
