@@ -23,7 +23,6 @@ import {
   updateDoc,
   doc,
   serverTimestamp,
-  where,
   limit,
 } from "firebase/firestore";
 import { actualizarEstadoCuenta } from "../lib/bill";
@@ -307,9 +306,7 @@ const Runner = () => {
 
     const q = query(
       collection(db, "restaurants", restaurantId, "cuentas"),
-      where("estado", "!=", "cerrada"),
-      orderBy("estado"),
-      orderBy("createdAt", "asc"),
+      orderBy("createdAt", "desc"),
       limit(50)
     );
 
@@ -364,8 +361,6 @@ const Runner = () => {
 
     const q = query(
       collection(db, "restaurants", restaurantId, "pedidos"),
-      where("estado", "!=", "entregado"),
-      orderBy("estado"),
       orderBy("createdAt", "asc"),
       limit(50)
     );
