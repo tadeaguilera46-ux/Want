@@ -305,7 +305,7 @@ const Runner = () => {
     }
 
     const q = query(
-      collection(db, "restaurants", restaurantId, "cuentas"),
+      collection(db, "restaurants", restaurantId, "pedidos"),
       orderBy("createdAt", "desc"),
       limit(50)
     );
@@ -341,7 +341,13 @@ const Runner = () => {
           }
         }
 
-        setOrders(data);
+        const pedidosActivos = data.filter(
+          (pedido) =>
+            pedido.estadoCocina === "listo" ||
+            pedido.estadoBarra === "listo"
+        );
+
+        setOrders(pedidosActivos);
       },
       (err) => {
         console.error("Error escuchando pedidos listos:", err);
@@ -360,7 +366,7 @@ const Runner = () => {
     }
 
     const q = query(
-      collection(db, "restaurants", restaurantId, "pedidos"),
+      collection(db, "restaurants", restaurantId, "cuentas"),
       orderBy("createdAt", "asc"),
       limit(50)
     );
@@ -398,7 +404,11 @@ const Runner = () => {
           }
         }
 
-        setBills(data);
+        const cuentasActivas = data.filter(
+          (bill) => bill.estado !== "cerrada"
+        );
+
+        setBills(cuentasActivas);
       },
       (err) => {
         console.error("Error escuchando cuentas:", err);
