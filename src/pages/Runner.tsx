@@ -359,65 +359,68 @@ const Runner = () => {
   }, [restaurantId, soundEnabled]);
 
   useEffect(() => {
-    if (!restaurantId) {
-      setBills([]);
-      setError("Falta restaurante activo.");
-      return;
-    }
+  if (!restaurantId) {
+    setBills([]);
+    setError("Falta restaurante activo.");
+    return;
+  }
 
-    const q = query(
-      collection(db, "restaurants", restaurantId, "cuentas"),
-      orderBy("createdAt", "asc"),
-      limit(50)
-    );
+  const q = query(
+    collection(db, "restaurants", restaurantId, "cuentas"),
+    orderBy("createdAt", "desc"),
+    limit(50)
+  );
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        setError(null);
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      setError(null);
 
-        const data = snapshot.docs.map((document) => ({
-          id: document.id,
-          ...document.data(),
-        })) as CuentaRecord[];
+      const data = snapshot.docs.map((document) => ({
+        id: document.id,
+        ...document.data(),
+      })) as CuentaRecord[];
 
-        const pendingBillsData = data.filter(
-          (bill) => bill.estado === "pendiente"
+      const cuentasActivas = data.filter(
+        (bill) =>
+          bill.estado === "pendiente" ||
+          bill.estado === "en_camino" ||
+          bill.estado === "pagada"
+      );
+
+      const pendingBillsData = cuentasActivas.filter(
+        (bill) => bill.estado === "pendiente"
+      );
+
+      if (firstBillsLoadRef.current) {
+        pendingBillsData.forEach((bill) => {
+          notifiedBillIdsRef.current.add(bill.id);
+        });
+        firstBillsLoadRef.current = false;
+      } else {
+        const newBills = pendingBillsData.filter(
+          (bill) => !notifiedBillIdsRef.current.has(bill.id)
         );
 
-        if (firstBillsLoadRef.current) {
-          pendingBillsData.forEach((bill) => {
+        if (newBills.length > 0) {
+          void playSound();
+
+          newBills.forEach((bill) => {
             notifiedBillIdsRef.current.add(bill.id);
           });
-          firstBillsLoadRef.current = false;
-        } else {
-          const newBills = pendingBillsData.filter(
-            (bill) => !notifiedBillIdsRef.current.has(bill.id)
-          );
-
-          if (newBills.length > 0) {
-            void playSound();
-
-            newBills.forEach((bill) => {
-              notifiedBillIdsRef.current.add(bill.id);
-            });
-          }
         }
-
-        const cuentasActivas = data.filter(
-          (bill) => bill.estado !== "cerrada"
-        );
-
-        setBills(cuentasActivas);
-      },
-      (err) => {
-        console.error("Error escuchando cuentas:", err);
-        setError("No se pudieron cargar las cuentas.");
       }
-    );
 
-    return () => unsubscribe();
-  }, [restaurantId, soundEnabled]);
+      setBills(cuentasActivas);
+    },
+    (err) => {
+      console.error("Error escuchando cuentas:", err);
+      setError("No se pudieron cargar las cuentas.");
+    }
+  );
+
+  return () => unsubscribe();
+}, [restaurantId, soundEnabled]);
 
   const markDelivered = async (task: ReadyTask) => {
     if (loadingOrdersById[task.id] || !restaurantId) return;
