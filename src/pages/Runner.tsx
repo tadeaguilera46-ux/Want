@@ -15,6 +15,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth-context";
 import { toast } from "sonner";
 import { getDb } from "../lib/firebase";
+import { createAuditLog } from "../lib/audit-logs";
 import {
   collection,
   onSnapshot,
@@ -436,8 +437,20 @@ const Runner = () => {
           estadoCocina: "entregado",
           cocinaDeliveredAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
+          
         });
       }
+
+     await createAuditLog({
+        restaurantId,
+        action: "pedido_entregado",
+        userUid: user?.uid,
+        userEmail: user?.email || "",
+        userRole: "runner",
+        mesa: Number(task.order.mesa),
+        pedidoId: task.order.id,
+        description: `Runner entregó bebidas de mesa ${task.order.mesa}`,
+      });
 
       if (task.type === "drinks") {
         await updateDoc(ref, {
@@ -473,6 +486,27 @@ const Runner = () => {
         estado,
         Number(bill.mesa)
       );
+
+      await createAuditLog({
+        restaurantId,
+        action:
+          estado === "pagada"
+            ? "cuenta_pagada"
+            : "cuenta_solicitada",
+
+        userUid: user?.uid,
+        userEmail: user?.email || "",
+        userRole: "runner",
+
+        mesa: Number(bill.mesa),
+        cuentaId: bill.id,
+
+        description:
+          estado === "pagada"
+            ? `Runner marcó cuenta pagada mesa ${bill.mesa}`
+            : `Runner llevó cuenta a mesa ${bill.mesa}`,
+      });
+
     } catch (err) {
       console.error("Error actualizando cuenta:", err);
       setError("No se pudo actualizar la cuenta.");
@@ -501,6 +535,16 @@ const Runner = () => {
         "cerrada",
         Number(bill.mesa)
       );
+      await createAuditLog({
+        restaurantId,
+        action: "mesa_limpiada",
+        userUid: user?.uid,
+        userEmail: user?.email || "",
+        userRole: "runner",
+        mesa: Number(bill.mesa),
+        cuentaId: bill.id,
+        description: `Runner marcó mesa ${bill.mesa} como limpia`,
+      });
     } catch (err) {
       console.error("Error marcando mesa limpia:", err);
       setError("No se pudo marcar la mesa como limpia.");

@@ -33,6 +33,7 @@ import { MesaManagementPanel } from "../components/MesaManagementPanel.tsx";
 import { MenuManagementPanel } from "../components/MenuManagementPanel";
 import { StockPanel } from "../components/StockPanel";
 import { canUseStock } from "../lib/plan";
+import { ReceiptText, Activity } from "lucide-react";
 import type {
   CuentaRecord,
   EstadoCocinaBarra,
@@ -697,6 +698,42 @@ const Admin = () => {
                 )}
               </div>
             </div>
+            <button
+              onClick={() => navigate("/staff/admin/audit-logs")}
+              className="flex items-center gap-3 rounded-3xl border border-zinc-200 bg-white px-5 py-4 shadow-sm transition hover:scale-[1.01]"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-950 text-white">
+                <Activity size={22} />
+              </div>
+
+              <div className="text-left">
+                <p className="text-sm font-black text-zinc-950">
+                  Actividad
+                </p>
+
+                <p className="text-xs text-zinc-500">
+                  Ver auditoría y eventos del sistema
+                </p>
+              </div>
+            </button>
+            <button
+              onClick={() => navigate("/staff/cashier/invoices")}
+              className="flex items-center gap-3 rounded-3xl border border-zinc-200 bg-white px-5 py-4 shadow-sm transition hover:scale-[1.01]"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-950 text-white">
+                <ReceiptText size={22} />
+              </div>
+
+              <div className="text-left">
+                <p className="text-sm font-black text-zinc-950">
+                  Facturas
+                </p>
+
+                <p className="text-xs text-zinc-500">
+                  Ver comprobantes y pagos
+                </p>
+              </div>
+            </button>
 
             <div className="flex flex-wrap gap-3">
               <button
