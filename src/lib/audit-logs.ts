@@ -9,6 +9,12 @@ export type AuditAction =
   | "pedido_entregado"
   | "cuenta_solicitada"
   | "cuenta_pagada"
+  | "cuenta_cobrada"
+  | "cuenta_manual_creada"
+  | "producto_agregado_cuenta"
+  | "ajuste_cuenta"
+  | "precuenta_impresa"
+  | "factura_solicitada"
   | "mesa_limpiada"
   | "branding_actualizado"
   | "empleado_actualizado";
