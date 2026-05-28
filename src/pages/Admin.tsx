@@ -13,6 +13,9 @@ import {
   ArrowRight,
   LogOut,
   UserPlus,
+  Clock3,
+  Sparkles,
+  Wifi,
 } from "lucide-react";
 import { createAuditLog } from "../lib/audit-logs";
 import { getDb } from "../lib/firebase";
@@ -304,6 +307,7 @@ const Admin = () => {
   const analyticsEnabled = canUseAnalytics(restaurant?.plan);
   const stockEnabled = canUseStock(restaurant?.plan); 
   const { logout, user } = useAuth();
+  const [liveNow, setLiveNow] = useState(Date.now());
 
   const [mesas, setMesas] = useState<MesaDoc[]>([]);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
@@ -334,6 +338,14 @@ const Admin = () => {
     }
 
     setLoading(true);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setLiveNow(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
 
     const unsubMesas = onSnapshot(
       collection(db, "restaurants", restaurantId, "mesas"),
@@ -710,6 +722,12 @@ const Admin = () => {
     );
   }
 
+  const formattedLiveTime = new Intl.DateTimeFormat("es-AR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(liveNow);
+
 return (
   <div className="min-h-screen bg-gradient-to-br from-zinc-100 via-zinc-50 to-white">
     <div className="flex min-h-screen">
@@ -732,9 +750,60 @@ return (
         userEmail={user?.email}
         auditLogsEnabled={auditLogsEnabled}
         invoicesEnabled={invoicesEnabled}
-      />
+      />  
 
       <main className="min-w-0 flex-1">
+          <div className="sticky top-0 z-30 border-b border-white/60 bg-white/70 backdrop-blur-2xl">
+            <div className="mx-auto flex w-full max-w-[1800px] items-center justify-between px-4 py-4 md:px-6 lg:px-8">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-950 text-white shadow-lg shadow-black/10">
+                  <Sparkles size={18} />
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-[0.24em] text-zinc-400">
+                    WANT OS
+                  </p>
+
+                  <h1 className="text-lg font-black tracking-tight text-zinc-950">
+                    {restaurant?.name || "Restaurante"}
+                  </h1>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="hidden items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 lg:flex">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.14)]" />
+
+                  <span className="text-sm font-black text-emerald-700">
+                    Operativo
+                  </span>
+                </div>
+
+                <div className="hidden items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-2 xl:flex">
+                  <Wifi size={15} className="text-zinc-500" />
+
+                  <span className="text-sm font-bold text-zinc-700">
+                    Tiempo real conectado
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-2 shadow-sm">
+                  <Clock3 size={15} className="text-zinc-500" />
+
+                  <span className="min-w-[74px] text-sm font-black tracking-wide text-zinc-900">
+                    {formattedLiveTime}
+                  </span>
+                </div>
+
+                <div className="hidden rounded-2xl border border-zinc-200 bg-zinc-950 px-4 py-2 lg:block">
+                  <span className="text-sm font-black uppercase tracking-wide text-white">
+                    PLAN {restaurant?.plan || "starter"}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
         <div className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/85 px-4 py-3 backdrop-blur lg:hidden">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
