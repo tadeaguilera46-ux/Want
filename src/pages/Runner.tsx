@@ -449,7 +449,7 @@ const Runner = () => {
         userRole: "runner",
         mesa: Number(task.order.mesa),
         pedidoId: task.order.id,
-        description: `Runner entregó bebidas de mesa ${task.order.mesa}`,
+        description: `Runner entregó la comida de mesa ${task.order.mesa}`,
       });
 
       if (task.type === "drinks") {
