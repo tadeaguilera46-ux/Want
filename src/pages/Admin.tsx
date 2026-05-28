@@ -335,7 +335,7 @@ const Admin = () => {
 
     return () => clearInterval(interval);
   }, []);
-  
+
   useEffect(() => {
     if (!restaurantId) {
       setMesas([]);
@@ -862,54 +862,42 @@ return (
               title="Panel administrativo"
               description="Controlá mesas, estado operativo y flujo del restaurante en tiempo real."
             >
-              <section className="relative overflow-hidden rounded-[2.25rem] border border-white/70 bg-zinc-950 p-6 text-white shadow-xl">
+              <section className="relative overflow-hidden rounded-[2.25rem] border border-white/70 bg-zinc-950 p-7 text-white shadow-xl">
                 <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-emerald-400/20 blur-3xl" />
                 <div className="pointer-events-none absolute -bottom-28 left-10 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
 
-                <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
                   <div>
-                    <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.22em] text-white/70">
+                    <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.22em] text-white/70">
                       <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_0_4px_rgba(52,211,153,0.16)]" />
                       Operación en vivo
                     </div>
 
-                    <h2 className="max-w-3xl text-3xl font-black tracking-tight md:text-5xl">
+                    <h2 className="max-w-3xl text-4xl font-black tracking-tight md:text-6xl">
                       {restaurantName}
                     </h2>
 
-                    <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/60">
-                      Monitoreá mesas, cuentas, pedidos listos y consumo activo desde un panel
-                      diseñado para operar con velocidad y precisión.
+                    <p className="mt-4 max-w-2xl text-base leading-relaxed text-white/60">
+                      Un centro de control en tiempo real para tomar decisiones rápidas,
+                      detectar prioridades y mantener el servicio funcionando sin fricción.
                     </p>
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[520px]">
-                    <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur">
-                      <p className="text-xs font-bold uppercase tracking-wide text-white/50">
-                        Plan
-                      </p>
-                      <p className="mt-1 text-xl font-black">
-                        {restaurantPlan}
+                  <div className="rounded-[2rem] border border-white/10 bg-white/10 p-5 backdrop-blur lg:max-w-sm">
+                    <p className="text-xs font-black uppercase tracking-[0.22em] text-white/50">
+                      Estado del sistema
+                    </p>
+
+                    <div className="mt-3 flex items-center gap-3">
+                      <span className="h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_0_6px_rgba(52,211,153,0.14)]" />
+                      <p className="text-lg font-black">
+                        Todo sincronizado
                       </p>
                     </div>
 
-                    <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur">
-                      <p className="text-xs font-bold uppercase tracking-wide text-white/50">
-                        Mesas activas
-                      </p>
-                      <p className="mt-1 text-xl font-black">
-                        {stats.ocupadas}
-                      </p>
-                    </div>
-
-                    <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur">
-                      <p className="text-xs font-bold uppercase tracking-wide text-white/50">
-                        Consumo live
-                      </p>
-                      <p className="mt-1 text-xl font-black">
-                        {formatPrice(stats.consumoActivo)}
-                      </p>
-                    </div>
+                    <p className="mt-2 text-sm leading-relaxed text-white/50">
+                      Mesas, pedidos y cuentas actualizándose automáticamente desde Firebase.
+                    </p>
                   </div>
                 </div>
               </section>
