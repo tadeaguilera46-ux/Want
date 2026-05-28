@@ -737,14 +737,329 @@ return (
       <main className="min-w-0 flex-1">
         <div className="mx-auto w-full max-w-[1800px] px-4 py-4 md:px-6 lg:px-8">
           {adminSection === "dashboard" && (
-           <AdminSectionShell
-            title="Panel administrativo"
-            description="Controlá mesas, estado operativo y flujo del restaurante en tiempo real."
-          >
-            <div className="space-y-6">
+            <AdminSectionShell
+              title="Panel administrativo"
+              description="Controlá mesas, estado operativo y flujo del restaurante en tiempo real."
+            >
+              <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+                <div className="rounded-[2rem] border border-white/70 bg-white/85 p-5 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md">
+                  <div className="flex items-center gap-2 text-zinc-500">
+                    <Users size={16} />
+                    <p className="text-sm font-semibold">Mesas ocupadas</p>
+                  </div>
+                  <p className="mt-3 text-4xl font-black tracking-tight text-zinc-950">
+                    {stats.ocupadas}
+                  </p>
+                </div>
+
+                <div className="rounded-[2rem] border border-white/70 bg-white/85 p-5 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md">
+                  <div className="flex items-center gap-2 text-zinc-500">
+                    <DoorOpen size={16} />
+                    <p className="text-sm font-semibold">Mesas libres</p>
+                  </div>
+                  <p className="mt-3 text-4xl font-black tracking-tight text-zinc-950">
+                    {stats.libres}
+                  </p>
+                </div>
+
+                <div className="rounded-[2rem] border border-emerald-200/70 bg-emerald-50/80 p-5 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md">
+                  <div className="flex items-center gap-2 text-emerald-700">
+                    <ChefHat size={16} />
+                    <p className="text-sm font-semibold">Pedidos listos</p>
+                  </div>
+                  <p className="mt-3 text-4xl font-black tracking-tight text-emerald-900">
+                    {stats.pedidosListos}
+                  </p>
+                </div>
+
+                <div className="rounded-[2rem] border border-amber-200/70 bg-amber-50/80 p-5 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md">
+                  <div className="flex items-center gap-2 text-amber-700">
+                    <Receipt size={16} />
+                    <p className="text-sm font-semibold">Cuentas</p>
+                  </div>
+                  <p className="mt-3 text-4xl font-black tracking-tight text-amber-900">
+                    {stats.cuentasPendientes}
+                  </p>
+                </div>
+
+                <div className="rounded-[2rem] border border-white/70 bg-white/85 p-5 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md">
+                  <div className="flex items-center gap-2 text-zinc-500">
+                    <CircleDollarSign size={16} />
+                    <p className="text-sm font-semibold">Ventas hoy</p>
+                  </div>
+                  <p className="mt-3 text-2xl font-black tracking-tight text-zinc-950">
+                    {formatPrice(stats.ventasHoy)}
+                  </p>
+                </div>
+
+                <div className="rounded-[2rem] border border-white/70 bg-zinc-950 p-5 text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                  <div className="flex items-center gap-2 text-white/60">
+                    <CircleDollarSign size={16} />
+                    <p className="text-sm font-semibold">Consumo activo</p>
+                  </div>
+                  <p className="mt-3 text-2xl font-black tracking-tight">
+                    {formatPrice(stats.consumoActivo)}
+                  </p>
+                </div>
+              </section>
+
+              <section className="rounded-[2rem] border border-white/70 bg-white/85 p-4 shadow-sm backdrop-blur">
+                <div className="grid gap-3 lg:grid-cols-[1fr_220px_180px_220px]">
+                  <div className="relative">
+                    <Search
+                      size={16}
+                      className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400"
+                    />
+                    <input
+                      type="text"
+                      placeholder="Buscar mesa..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="h-12 w-full rounded-2xl border border-zinc-200 bg-white pl-11 pr-4 text-sm font-semibold outline-none transition focus:border-zinc-400 focus:ring-4 focus:ring-zinc-200/70"
+                    />
+                  </div>
+
+                  <select
+                    value={filterEstado}
+                    onChange={(e) =>
+                      setFilterEstado(
+                        e.target.value as
+                          | "todas"
+                          | "available"
+                          | "occupied"
+                          | "needs_cleaning"
+                      )
+                    }
+                    className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-semibold outline-none transition focus:border-zinc-400 focus:ring-4 focus:ring-zinc-200/70"
+                  >
+                    <option value="todas">Todas las mesas</option>
+                    <option value="occupied">Solo ocupadas</option>
+                    <option value="needs_cleaning">Pendientes de limpieza</option>
+                    <option value="available">Solo libres</option>
+                  </select>
+
+                  <div className="flex h-12 items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm font-bold text-zinc-600">
+                    {mesasFiltradas.length} mesa(s)
+                  </div>
+
+                  <div className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-black text-emerald-700">
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]" />
+                    Prioridad live
+                  </div>
+                </div>
+              </section>
+
+              <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                {mesasFiltradas.map((mesa) => {
+                  const priorityStyles = getPriorityStyles(mesa);
+
+                  return (
+                    <div
+                      key={mesa.id}
+                      className={`group rounded-[2rem] border p-5 shadow-sm backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${priorityStyles.card}`}
+                    >
+                      <div className="mb-4 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <h2 className="text-3xl font-black tracking-tight text-zinc-950">
+                            Mesa {mesa.numero}
+                          </h2>
+                          <p className="mt-1 truncate text-xs font-semibold text-zinc-500">
+                            Session: {mesa.activeSessionId ?? "sin sesión"}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-2">
+                          <span
+                            className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide ${priorityStyles.badge}`}
+                          >
+                            {mesa.prioridadLabel || mesa.estado.toUpperCase()}
+                          </span>
+
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-bold ${statusBadge(
+                              mesa.estado
+                            )}`}
+                          >
+                            {mesa.estado}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="mb-4 grid grid-cols-2 gap-3">
+                        <div className="rounded-2xl border border-white/70 bg-white/90 p-3">
+                          <p className="text-xs font-semibold text-zinc-500">
+                            Total actual
+                          </p>
+                          <p className="mt-1 font-black text-zinc-950">
+                            {formatPrice(mesa.totalActual)}
+                          </p>
+                        </div>
+
+                        <div className="rounded-2xl border border-white/70 bg-white/90 p-3">
+                          <p className="text-xs font-semibold text-zinc-500">
+                            Pedidos activos
+                          </p>
+                          <p className="mt-1 font-black text-zinc-950">
+                            {mesa.pedidosActivos.length}
+                          </p>
+                        </div>
+
+                        <div className="rounded-2xl border border-white/70 bg-white/90 p-3">
+                          <p className="text-xs font-semibold text-zinc-500">
+                            Pedidos listos
+                          </p>
+                          <p className="mt-1 font-black text-zinc-950">
+                            {mesa.pedidosListos.length}
+                          </p>
+                        </div>
+
+                        <div className="rounded-2xl border border-white/70 bg-white/90 p-3">
+                          <p className="text-xs font-semibold text-zinc-500">Cuenta</p>
+                          <p className="mt-1 font-black text-zinc-950">
+                            {mesa.cuentaActual ? mesa.cuentaActual.estado : "sin pedir"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {mesa.cuentaActual && (
+                        <button
+                          onClick={() => avanzarCuenta(mesa.cuentaActual)}
+                          className="mb-3 h-11 w-full rounded-2xl bg-emerald-600 font-black text-white shadow-sm transition hover:scale-[1.01] hover:opacity-95"
+                        >
+                          {mesa.cuentaActual.estado === "pendiente"
+                            ? "Marcar cuenta en camino"
+                            : mesa.cuentaActual.estado === "en_camino"
+                              ? "Marcar cuenta pagada"
+                              : "Cuenta cerrada"}
+                        </button>
+                      )}
+
+                      <div className="mb-4">
+                        <div className="mb-3 flex items-center justify-between gap-2">
+                          <h3 className="font-black text-zinc-950">Pedidos activos</h3>
+                          <span className="rounded-full bg-white/80 px-2.5 py-1 text-xs font-black text-zinc-600">
+                            {mesa.pedidosActivos.length}
+                          </span>
+                        </div>
+
+                        {mesa.pedidosActivos.length === 0 ? (
+                          <div className="rounded-2xl border border-white/70 bg-white/70 p-4 text-sm font-medium text-zinc-500">
+                            No hay pedidos activos
+                          </div>
+                        ) : (
+                          <div className="space-y-3">
+                            {mesa.pedidosActivos.slice(0, 2).map((pedido) => (
+                              <div
+                                key={pedido.id}
+                                className="rounded-2xl border border-white/70 bg-white/90 p-3"
+                              >
+                                <div className="mb-2 flex items-center justify-between gap-2">
+                                  <span className="font-black text-zinc-950">
+                                    Pedido #{pedido.id.slice(0, 6)}
+                                  </span>
+
+                                  <div className="flex items-center gap-2">
+                                    {pedidoTieneObservaciones(pedido) && (
+                                      <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wide text-amber-900">
+                                        CON OBS
+                                      </span>
+                                    )}
+
+                                    <span className="text-sm font-bold text-zinc-700">
+                                      {formatPrice(pedido.total)}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {renderPedidoItems(pedido)}
+
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {pedido.items?.some(
+                                    (item) => item.category === "food"
+                                  ) && (
+                                    <span
+                                      className={`rounded-full px-2 py-1 text-xs font-bold uppercase tracking-wide ${statusBadge(
+                                        getKitchenStatus(pedido)
+                                      )}`}
+                                    >
+                                      Cocina: {getKitchenStatus(pedido)}
+                                    </span>
+                                  )}
+
+                                  {pedido.items?.some(
+                                    (item) => item.category === "drinks"
+                                  ) && (
+                                    <span
+                                      className={`rounded-full px-2 py-1 text-xs font-bold uppercase tracking-wide ${statusBadge(
+                                        getBarStatus(pedido)
+                                      )}`}
+                                    >
+                                      Barra: {getBarStatus(pedido)}
+                                    </span>
+                                  )}
+
+                                  {isPedidoListo(pedido) && (
+                                    <span className="rounded-full bg-emerald-500 px-2 py-1 text-xs font-black uppercase tracking-wide text-white">
+                                      Listo
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+
+                            {mesa.pedidosActivos.length > 2 && (
+                              <p className="text-xs font-semibold text-zinc-500">
+                                + {mesa.pedidosActivos.length - 2} pedido(s) más
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => setMesaDetalle(mesa)}
+                          className="h-11 rounded-2xl border border-white/70 bg-white font-black text-zinc-900 transition hover:bg-zinc-50"
+                        >
+                          Ver detalle
+                        </button>
+
+                        {mesa.estado === "needs_cleaning" ? (
+                          <button
+                            onClick={() => marcarMesaLista(Number(mesa.numero))}
+                            className="h-11 rounded-2xl bg-zinc-950 font-black text-white transition hover:scale-[1.01]"
+                          >
+                            Marcar lista
+                          </button>
+                        ) : mesa.estado === "occupied" ? (
+                          <button
+                            onClick={() => marcarMesaParaLimpieza(Number(mesa.numero))}
+                            className="h-11 rounded-2xl bg-zinc-950 font-black text-white transition hover:scale-[1.01]"
+                          >
+                            A limpieza
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => marcarMesaLista(Number(mesa.numero))}
+                            className="h-11 rounded-2xl bg-zinc-950 font-black text-white transition hover:scale-[1.01]"
+                          >
+                            Disponible
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </section>
+
+              {mesasFiltradas.length === 0 && (
+                <div className="rounded-[2rem] border border-dashed border-zinc-300 bg-white/80 p-10 text-center text-zinc-500 shadow-sm">
+                  No se encontraron mesas con ese filtro.
+                </div>
+              )}
+
               <MesaManagementPanel restaurantId={restaurantId} qrBasePath="/qr" />
-            </div>
-          </AdminSectionShell>
+            </AdminSectionShell>
           )}
 
           {adminSection === "branding" && (
