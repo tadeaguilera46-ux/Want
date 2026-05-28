@@ -329,6 +329,14 @@ const Admin = () => {
   const [staffMessage, setStaffMessage] = useState("");
 
   useEffect(() => {
+    const interval = setInterval(() => {
+      setLiveNow(Date.now());
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, []);
+  
+  useEffect(() => {
     if (!restaurantId) {
       setMesas([]);
       setPedidos([]);
@@ -338,14 +346,6 @@ const Admin = () => {
     }
 
     setLoading(true);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setLiveNow(Date.now());
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
 
     const unsubMesas = onSnapshot(
       collection(db, "restaurants", restaurantId, "mesas"),
