@@ -314,8 +314,7 @@ const BillConfirmed = () => {
                     Cuenta cerrada
                   </p>
                   <p className="mt-1 text-sm leading-relaxed text-slate-700">
-                    La cuenta ya fue cerrada por el restaurante. Para volver a
-                    pedir, necesitás escanear nuevamente el QR físico de la mesa.
+                    La cuenta ya fue cerrada por el restaurante. Muchas gracias!
                   </p>
                 </div>
               </div>

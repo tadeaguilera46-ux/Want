@@ -992,208 +992,250 @@ return (
                     </div>
                   </div>
                 </section>
-              <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                {mesasFiltradas.map((mesa) => {
-                  const priorityStyles = getPriorityStyles(mesa);
+                <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                    {mesasFiltradas.map((mesa) => {
+                      const priorityStyles = getPriorityStyles(mesa);
 
-                  return (
-                    <div
-                      key={mesa.id}
-                      className={`group rounded-[2rem] border p-5 shadow-sm backdrop-blur transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${priorityStyles.card}`}
-                    >
-                      <div className="mb-4 flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <h2 className="text-3xl font-black tracking-tight text-zinc-950">
-                            Mesa {mesa.numero}
-                          </h2>
-                          <p className="mt-1 truncate text-xs font-semibold text-zinc-500">
-                            Session: {mesa.activeSessionId ?? "sin sesión"}
-                          </p>
-                        </div>
+                      const needsAttention =
+                        mesa.cuentaActual?.estado === "pendiente" ||
+                        mesa.cuentaActual?.estado === "en_camino" ||
+                        mesa.pedidosListos.length > 0;
 
-                        <div className="flex flex-col items-end gap-2">
-                          <span
-                            className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide ${priorityStyles.badge}`}
-                          >
-                            {mesa.prioridadLabel || mesa.estado.toUpperCase()}
-                          </span>
+                      const isOccupied = mesa.estado === "occupied";
+                      const isCleaning = mesa.estado === "needs_cleaning";
+                      const isAvailable = mesa.estado === "available";
 
-                          <span
-                            className={`rounded-full px-3 py-1 text-xs font-bold ${statusBadge(
-                              mesa.estado
-                            )}`}
-                          >
-                            {mesa.estado}
-                          </span>
-                        </div>
-                      </div>
+                      const statusLabel = needsAttention
+                        ? "Requiere atención"
+                        : isOccupied
+                          ? "En servicio"
+                          : isCleaning
+                            ? "Limpieza pendiente"
+                            : "Disponible";
 
-                      <div className="mb-4 grid grid-cols-2 gap-3">
-                        <div className="rounded-2xl border border-white/70 bg-white/90 p-3">
-                          <p className="text-xs font-semibold text-zinc-500">
-                            Total actual
-                          </p>
-                          <p className="mt-1 font-black text-zinc-950">
-                            {formatPrice(mesa.totalActual)}
-                          </p>
-                        </div>
-
-                        <div className="rounded-2xl border border-white/70 bg-white/90 p-3">
-                          <p className="text-xs font-semibold text-zinc-500">
-                            Pedidos activos
-                          </p>
-                          <p className="mt-1 font-black text-zinc-950">
-                            {mesa.pedidosActivos.length}
-                          </p>
-                        </div>
-
-                        <div className="rounded-2xl border border-white/70 bg-white/90 p-3">
-                          <p className="text-xs font-semibold text-zinc-500">
-                            Pedidos listos
-                          </p>
-                          <p className="mt-1 font-black text-zinc-950">
-                            {mesa.pedidosListos.length}
-                          </p>
-                        </div>
-
-                        <div className="rounded-2xl border border-white/70 bg-white/90 p-3">
-                          <p className="text-xs font-semibold text-zinc-500">Cuenta</p>
-                          <p className="mt-1 font-black text-zinc-950">
-                            {mesa.cuentaActual ? mesa.cuentaActual.estado : "sin pedir"}
-                          </p>
-                        </div>
-                      </div>
-
-                      {mesa.cuentaActual && (
-                        <button
-                          onClick={() => avanzarCuenta(mesa.cuentaActual)}
-                          className="mb-3 h-11 w-full rounded-2xl bg-emerald-600 font-black text-white shadow-sm transition hover:scale-[1.01] hover:opacity-95"
+                      return (
+                        <article
+                          key={mesa.id}
+                          className={[
+                            "group relative overflow-hidden rounded-[2rem] border p-5 shadow-sm backdrop-blur transition-all duration-300",
+                            "hover:-translate-y-1 hover:shadow-xl",
+                            needsAttention
+                              ? "border-zinc-300 bg-white ring-1 ring-zinc-950/5"
+                              : priorityStyles.card,
+                          ].join(" ")}
                         >
-                          {mesa.cuentaActual.estado === "pendiente"
-                            ? "Marcar cuenta en camino"
-                            : mesa.cuentaActual.estado === "en_camino"
-                              ? "Marcar cuenta pagada"
-                              : "Cuenta cerrada"}
-                        </button>
-                      )}
+                          <div className="pointer-events-none absolute -right-16 -top-16 h-40 w-40 rounded-full bg-zinc-950/[0.03] blur-3xl transition group-hover:bg-zinc-950/[0.06]" />
 
-                      <div className="mb-4">
-                        <div className="mb-3 flex items-center justify-between gap-2">
-                          <h3 className="font-black text-zinc-950">Pedidos activos</h3>
-                          <span className="rounded-full bg-white/80 px-2.5 py-1 text-xs font-black text-zinc-600">
-                            {mesa.pedidosActivos.length}
-                          </span>
-                        </div>
+                          <div className="relative mb-5 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className={[
+                                    "h-2.5 w-2.5 rounded-full",
+                                    needsAttention
+                                      ? "bg-emerald-500 shadow-[0_0_0_5px_rgba(16,185,129,0.12)]"
+                                      : isOccupied
+                                        ? "bg-amber-500"
+                                        : isCleaning
+                                          ? "bg-orange-500"
+                                          : "bg-zinc-300",
+                                  ].join(" ")}
+                                />
 
-                        {mesa.pedidosActivos.length === 0 ? (
-                          <div className="rounded-2xl border border-white/70 bg-white/70 p-4 text-sm font-medium text-zinc-500">
-                            No hay pedidos activos
-                          </div>
-                        ) : (
-                          <div className="space-y-3">
-                            {mesa.pedidosActivos.slice(0, 2).map((pedido) => (
-                              <div
-                                key={pedido.id}
-                                className="rounded-2xl border border-white/70 bg-white/90 p-3"
-                              >
-                                <div className="mb-2 flex items-center justify-between gap-2">
-                                  <span className="font-black text-zinc-950">
-                                    Pedido #{pedido.id.slice(0, 6)}
-                                  </span>
-
-                                  <div className="flex items-center gap-2">
-                                    {pedidoTieneObservaciones(pedido) && (
-                                      <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wide text-amber-900">
-                                        CON OBS
-                                      </span>
-                                    )}
-
-                                    <span className="text-sm font-bold text-zinc-700">
-                                      {formatPrice(pedido.total)}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                {renderPedidoItems(pedido)}
-
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                  {pedido.items?.some(
-                                    (item) => item.category === "food"
-                                  ) && (
-                                    <span
-                                      className={`rounded-full px-2 py-1 text-xs font-bold uppercase tracking-wide ${statusBadge(
-                                        getKitchenStatus(pedido)
-                                      )}`}
-                                    >
-                                      Cocina: {getKitchenStatus(pedido)}
-                                    </span>
-                                  )}
-
-                                  {pedido.items?.some(
-                                    (item) => item.category === "drinks"
-                                  ) && (
-                                    <span
-                                      className={`rounded-full px-2 py-1 text-xs font-bold uppercase tracking-wide ${statusBadge(
-                                        getBarStatus(pedido)
-                                      )}`}
-                                    >
-                                      Barra: {getBarStatus(pedido)}
-                                    </span>
-                                  )}
-
-                                  {isPedidoListo(pedido) && (
-                                    <span className="rounded-full bg-emerald-500 px-2 py-1 text-xs font-black uppercase tracking-wide text-white">
-                                      Listo
-                                    </span>
-                                  )}
-                                </div>
+                                <p className="text-xs font-black uppercase tracking-[0.18em] text-zinc-400">
+                                  {statusLabel}
+                                </p>
                               </div>
-                            ))}
 
-                            {mesa.pedidosActivos.length > 2 && (
-                              <p className="text-xs font-semibold text-zinc-500">
-                                + {mesa.pedidosActivos.length - 2} pedido(s) más
+                              <h2 className="mt-2 text-4xl font-black tracking-tight text-zinc-950">
+                                Mesa {mesa.numero}
+                              </h2>
+
+                              <p className="mt-1 truncate text-xs font-semibold text-zinc-500">
+                                {mesa.activeSessionId
+                                  ? `Sesión ${String(mesa.activeSessionId).slice(0, 8)}`
+                                  : "Sin sesión activa"}
                               </p>
+                            </div>
+
+                            <div className="flex flex-col items-end gap-2">
+                              <span
+                                className={[
+                                  "rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-wide",
+                                  needsAttention
+                                    ? "bg-zinc-950 text-white"
+                                    : priorityStyles.badge,
+                                ].join(" ")}
+                              >
+                                {mesa.prioridadLabel || mesa.estado}
+                              </span>
+
+                              {mesa.cuentaActual && (
+                                <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-violet-700">
+                                  Cuenta {mesa.cuentaActual.estado}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="relative mb-5 grid grid-cols-2 gap-3">
+                            <div className="rounded-2xl border border-zinc-200/70 bg-white/90 p-4">
+                              <p className="text-[11px] font-black uppercase tracking-wide text-zinc-400">
+                                Total actual
+                              </p>
+                              <p className="mt-1 text-lg font-black text-zinc-950">
+                                {formatPrice(mesa.totalActual)}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl border border-zinc-200/70 bg-white/90 p-4">
+                              <p className="text-[11px] font-black uppercase tracking-wide text-zinc-400">
+                                Pedidos
+                              </p>
+                              <p className="mt-1 text-lg font-black text-zinc-950">
+                                {mesa.pedidosActivos.length}
+                                <span className="ml-1 text-sm text-zinc-400">activos</span>
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl border border-zinc-200/70 bg-white/90 p-4">
+                              <p className="text-[11px] font-black uppercase tracking-wide text-zinc-400">
+                                Listos
+                              </p>
+                              <p className="mt-1 text-lg font-black text-emerald-700">
+                                {mesa.pedidosListos.length}
+                              </p>
+                            </div>
+
+                            <div className="rounded-2xl border border-zinc-200/70 bg-white/90 p-4">
+                              <p className="text-[11px] font-black uppercase tracking-wide text-zinc-400">
+                                Estado
+                              </p>
+                              <p className="mt-1 text-sm font-black text-zinc-950">
+                                {isAvailable ? "Libre" : isCleaning ? "Limpieza" : "Ocupada"}
+                              </p>
+                            </div>
+                          </div>
+
+                          {mesa.cuentaActual && (
+                            <button
+                              onClick={() => avanzarCuenta(mesa.cuentaActual)}
+                              className="relative mb-4 h-12 w-full rounded-2xl bg-emerald-600 font-black text-white shadow-sm transition hover:scale-[1.01] hover:bg-emerald-700"
+                            >
+                              {mesa.cuentaActual.estado === "pendiente"
+                                ? "Marcar cuenta en camino"
+                                : mesa.cuentaActual.estado === "en_camino"
+                                  ? "Marcar cuenta pagada"
+                                  : "Cuenta cerrada"}
+                            </button>
+                          )}
+
+                          <div className="relative mb-5">
+                            <div className="mb-3 flex items-center justify-between">
+                              <h3 className="text-sm font-black text-zinc-950">
+                                Actividad de la mesa
+                              </h3>
+
+                              <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-black text-zinc-600">
+                                {mesa.pedidosActivos.length}
+                              </span>
+                            </div>
+
+                            {mesa.pedidosActivos.length === 0 ? (
+                              <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-4 text-sm font-semibold text-zinc-500">
+                                Sin pedidos activos.
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                {mesa.pedidosActivos.slice(0, 2).map((pedido) => (
+                                  <div
+                                    key={pedido.id}
+                                    className="rounded-2xl border border-zinc-200/70 bg-white/90 p-3"
+                                  >
+                                    <div className="mb-2 flex items-center justify-between gap-2">
+                                      <span className="text-sm font-black text-zinc-950">
+                                        Pedido #{pedido.id.slice(0, 6)}
+                                      </span>
+
+                                      <span className="text-sm font-black text-zinc-700">
+                                        {formatPrice(pedido.total)}
+                                      </span>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-2">
+                                      {pedido.items?.some((item) => item.category === "food") && (
+                                        <span
+                                          className={`rounded-full px-2 py-1 text-[11px] font-black uppercase tracking-wide ${statusBadge(
+                                            getKitchenStatus(pedido)
+                                          )}`}
+                                        >
+                                          Cocina · {getKitchenStatus(pedido)}
+                                        </span>
+                                      )}
+
+                                      {pedido.items?.some((item) => item.category === "drinks") && (
+                                        <span
+                                          className={`rounded-full px-2 py-1 text-[11px] font-black uppercase tracking-wide ${statusBadge(
+                                            getBarStatus(pedido)
+                                          )}`}
+                                        >
+                                          Barra · {getBarStatus(pedido)}
+                                        </span>
+                                      )}
+
+                                      {pedidoTieneObservaciones(pedido) && (
+                                        <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-black uppercase tracking-wide text-amber-900">
+                                          Con obs
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+
+                                {mesa.pedidosActivos.length > 2 && (
+                                  <p className="pl-1 text-xs font-bold text-zinc-500">
+                                    + {mesa.pedidosActivos.length - 2} pedido(s) más
+                                  </p>
+                                )}
+                              </div>
                             )}
                           </div>
-                        )}
-                      </div>
 
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          onClick={() => setMesaDetalle(mesa)}
-                          className="h-11 rounded-2xl border border-white/70 bg-white font-black text-zinc-900 transition hover:bg-zinc-50"
-                        >
-                          Ver detalle
-                        </button>
+                          <div className="relative grid grid-cols-2 gap-2">
+                            <button
+                              onClick={() => setMesaDetalle(mesa)}
+                              className="h-11 rounded-2xl border border-zinc-200 bg-white font-black text-zinc-900 transition hover:bg-zinc-50"
+                            >
+                              Ver detalle
+                            </button>
 
-                        {mesa.estado === "needs_cleaning" ? (
-                          <button
-                            onClick={() => marcarMesaLista(Number(mesa.numero))}
-                            className="h-11 rounded-2xl bg-zinc-950 font-black text-white transition hover:scale-[1.01]"
-                          >
-                            Marcar lista
-                          </button>
-                        ) : mesa.estado === "occupied" ? (
-                          <button
-                            onClick={() => marcarMesaParaLimpieza(Number(mesa.numero))}
-                            className="h-11 rounded-2xl bg-zinc-950 font-black text-white transition hover:scale-[1.01]"
-                          >
-                            A limpieza
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => marcarMesaLista(Number(mesa.numero))}
-                            className="h-11 rounded-2xl bg-zinc-950 font-black text-white transition hover:scale-[1.01]"
-                          >
-                            Disponible
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </section>
+                            {mesa.estado === "needs_cleaning" ? (
+                              <button
+                                onClick={() => marcarMesaLista(Number(mesa.numero))}
+                                className="h-11 rounded-2xl bg-zinc-950 font-black text-white transition hover:scale-[1.01]"
+                              >
+                                Marcar lista
+                              </button>
+                            ) : mesa.estado === "occupied" ? (
+                              <button
+                                onClick={() => marcarMesaParaLimpieza(Number(mesa.numero))}
+                                className="h-11 rounded-2xl bg-zinc-950 font-black text-white transition hover:scale-[1.01]"
+                              >
+                                A limpieza
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => marcarMesaLista(Number(mesa.numero))}
+                                className="h-11 rounded-2xl bg-zinc-950 font-black text-white transition hover:scale-[1.01]"
+                              >
+                                Disponible
+                              </button>
+                            )}
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </section>
               
               {mesasFiltradas.length === 0 && (
                 <div className="rounded-[2rem] border border-dashed border-zinc-300 bg-white/80 p-10 text-center text-zinc-500 shadow-sm">
