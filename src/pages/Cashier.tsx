@@ -563,17 +563,6 @@ const Cashier = () => {
       });
 
       setSelectedCuentaId(cuentaId);
-
-      await createAuditLog({
-        restaurantId,
-        action: "cuenta_manual_creada",
-        userUid: user.uid,
-        userEmail: user.email || "",
-        userRole: "cashier",
-        mesa,
-        cuentaId,
-        description: `Caja creó cuenta manual para mesa ${mesa}`,
-      });
       setManualMesa("");
       setManualItems([]);
     } catch (err) {
@@ -638,17 +627,6 @@ const Cashier = () => {
         },
         actorUid: user.uid,
         actorEmail: user.email,
-      });
-
-      await createAuditLog({
-        restaurantId,
-        action: "producto_agregado_cuenta",
-        userUid: user.uid,
-        userEmail: user.email || "",
-        userRole: "cashier",
-        mesa: Number(selectedCuenta.mesa),
-        cuentaId: selectedCuenta.id,
-        description: `Caja agregó ${quantity}x ${menuItem.name} a mesa ${selectedCuenta.mesa}`,
       });
 
       setAddSelectedMenuId("");
@@ -835,7 +813,7 @@ const Cashier = () => {
         cuentaId: selectedCuenta.id,
         description: `Caja solicitó factura ${invoiceType} para mesa ${selectedCuenta.mesa}`,
       });
-      
+
     } catch (err) {
       console.error("Error solicitando factura:", err);
       setError(
