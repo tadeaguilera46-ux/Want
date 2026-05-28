@@ -14,6 +14,7 @@ import {
   LogOut,
   UserPlus,
 } from "lucide-react";
+import { createAuditLog } from "../lib/audit-logs";
 import { getDb } from "../lib/firebase";
 import { toast } from "sonner";
 import {
@@ -556,6 +557,14 @@ const Admin = () => {
         password: staffPassword,
         role: staffRole,
       });
+      await createAuditLog({
+        restaurantId,
+        action: "empleado_actualizado",
+        userUid: user?.uid,
+        userEmail: user?.email || "",
+        userRole: "admin",
+        description: `Admin creó empleado ${staffEmail} (${staffRole})`,
+      });
 
       setStaffEmail("");
       setStaffPassword("");
@@ -607,6 +616,15 @@ const Admin = () => {
 
     try {
       await markMesaAvailable(restaurantId, numeroMesa);
+      await createAuditLog({
+        restaurantId,
+        action: "mesa_limpiada",
+        userUid: user?.uid,
+        userEmail: user?.email || "",
+        userRole: "admin",
+        mesa: numeroMesa,
+        description: `Admin marcó mesa ${numeroMesa} como disponible`,
+      });
       toast.success("Mesa marcada como disponible");
     } catch (error) {
       console.error("Error al marcar mesa disponible:", error);
@@ -624,6 +642,15 @@ const Admin = () => {
 
     try {
       await markMesaNeedsCleaning(restaurantId, numeroMesa);
+      await createAuditLog({
+        restaurantId,
+        action: "mesa_limpiada",
+        userUid: user?.uid,
+        userEmail: user?.email || "",
+        userRole: "admin",
+        mesa: numeroMesa,
+        description: `Admin envió mesa ${numeroMesa} a limpieza`,
+      });
       toast.success("Mesa marcada como pendiente de limpieza");
     } catch (error) {
       console.error("Error al marcar mesa para limpieza:", error);
