@@ -728,6 +728,16 @@ const Admin = () => {
     second: "2-digit",
   }).format(liveNow);
 
+  const restaurantName =
+    typeof restaurant?.name === "string" && restaurant.name.trim()
+      ? restaurant.name
+      : "Restaurante";
+
+  const restaurantPlan =
+    typeof restaurant?.plan === "string" && restaurant.plan.trim()
+      ? restaurant.plan
+      : "starter";
+
 return (
   <div className="min-h-screen bg-gradient-to-br from-zinc-100 via-zinc-50 to-white">
     <div className="flex min-h-screen">
@@ -766,7 +776,7 @@ return (
                   </p>
 
                   <h1 className="text-lg font-black tracking-tight text-zinc-950">
-                    {restaurant?.name || "Restaurante"}
+                    {restaurantName}
                   </h1>
                 </div>
               </div>
@@ -798,7 +808,7 @@ return (
 
                 <div className="hidden rounded-2xl border border-zinc-200 bg-zinc-950 px-4 py-2 lg:block">
                   <span className="text-sm font-black uppercase tracking-wide text-white">
-                    PLAN {restaurant?.plan || "starter"}
+                    PLAN {restaurantPlan}
                   </span>
                 </div>
               </div>
@@ -864,7 +874,7 @@ return (
                     </div>
 
                     <h2 className="max-w-3xl text-3xl font-black tracking-tight md:text-5xl">
-                      {restaurant?.name || "Tu restaurante"}
+                      {restaurantName}
                     </h2>
 
                     <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/60">
@@ -879,7 +889,7 @@ return (
                         Plan
                       </p>
                       <p className="mt-1 text-xl font-black">
-                        {restaurant?.plan || "starter"}
+                        {restaurantPlan}
                       </p>
                     </div>
 
