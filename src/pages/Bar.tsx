@@ -11,6 +11,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { getDb } from "../lib/firebase";
+import { createAuditLog } from "../lib/audit-logs";
 import {
   collection,
   onSnapshot,
@@ -20,6 +21,7 @@ import {
   doc,
   serverTimestamp,
 } from "firebase/firestore";
+import { toast } from "sonner";
 import type {
   PedidoRecord,
   EstadoCocinaBarra,
@@ -83,7 +85,7 @@ const Bar = () => {
       navigate(nextPath, { replace: true });
     } catch (error) {
       console.error("Error cerrando sesión:", error);
-      alert("No se pudo cerrar la sesión");
+      toast.error("No se pudo cerrar la sesión");
     } finally {
       setLoggingOut(false);
     }
@@ -230,6 +232,20 @@ const Bar = () => {
       }
 
       await updateDoc(ref, updateData);
+      if (newStatus === "listo") {
+        const order = orders.find((currentOrder) => currentOrder.id === id);
+
+        await createAuditLog({
+          restaurantId,
+          action: "pedido_listo",
+          userUid: user?.uid,
+          userEmail: user?.email || "",
+          userRole: "bar",
+          mesa: Number(order?.mesa || 0),
+          pedidoId: id,
+          description: `Barra marcó bebidas listas en mesa ${order?.mesa || "-"}`,
+        });
+      }
     } catch (err) {
       console.error("Error actualizando estado de barra:", err);
       setError("No se pudo actualizar el estado. Reintentá.");
