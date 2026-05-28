@@ -735,12 +735,105 @@ return (
       />
 
       <main className="min-w-0 flex-1">
-        <div className="mx-auto w-full max-w-[1800px] px-4 py-4 md:px-6 lg:px-8">
+        <div className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/85 px-4 py-3 backdrop-blur lg:hidden">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.25em] text-zinc-400">
+                WANT Admin
+              </p>
+              <p className="text-lg font-black text-zinc-950">
+                Panel
+              </p>
+            </div>
+
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700 disabled:opacity-50"
+            >
+              {loggingOut ? "..." : "Salir"}
+            </button>
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+            {[
+              { id: "dashboard", label: "Panel" },
+              { id: "branding", label: "Branding" },
+              { id: "staff", label: "Empleados" },
+              { id: "menu", label: "Menú" },
+              { id: "stock", label: "Stock" },
+            ].map((item) => (
+              <button
+                key={item.id}
+                onClick={() => setAdminSection(item.id as AdminSection)}
+                className={`shrink-0 rounded-2xl px-4 py-2 text-sm font-black transition ${
+                  adminSection === item.id
+                    ? "bg-zinc-950 text-white shadow-sm"
+                    : "border border-zinc-200 bg-white text-zinc-600"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="mx-auto w-full max-w-[1800px] px-4 py-4 md:px-6 lg:px-8 lg:py-8">
           {adminSection === "dashboard" && (
             <AdminSectionShell
               title="Panel administrativo"
               description="Controlá mesas, estado operativo y flujo del restaurante en tiempo real."
             >
+              <section className="relative overflow-hidden rounded-[2.25rem] border border-white/70 bg-zinc-950 p-6 text-white shadow-xl">
+                <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-emerald-400/20 blur-3xl" />
+                <div className="pointer-events-none absolute -bottom-28 left-10 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
+
+                <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.22em] text-white/70">
+                      <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_0_4px_rgba(52,211,153,0.16)]" />
+                      Operación en vivo
+                    </div>
+
+                    <h2 className="max-w-3xl text-3xl font-black tracking-tight md:text-5xl">
+                      {restaurant?.name || "Tu restaurante"}
+                    </h2>
+
+                    <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/60">
+                      Monitoreá mesas, cuentas, pedidos listos y consumo activo desde un panel
+                      diseñado para operar con velocidad y precisión.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[520px]">
+                    <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur">
+                      <p className="text-xs font-bold uppercase tracking-wide text-white/50">
+                        Plan
+                      </p>
+                      <p className="mt-1 text-xl font-black">
+                        {restaurant?.plan || "starter"}
+                      </p>
+                    </div>
+
+                    <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur">
+                      <p className="text-xs font-bold uppercase tracking-wide text-white/50">
+                        Mesas activas
+                      </p>
+                      <p className="mt-1 text-xl font-black">
+                        {stats.ocupadas}
+                      </p>
+                    </div>
+
+                    <div className="rounded-3xl border border-white/10 bg-white/10 p-4 backdrop-blur">
+                      <p className="text-xs font-bold uppercase tracking-wide text-white/50">
+                        Consumo live
+                      </p>
+                      <p className="mt-1 text-xl font-black">
+                        {formatPrice(stats.consumoActivo)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </section>
               <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
                 <div className="rounded-[2rem] border border-white/70 bg-white/85 p-5 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md">
                   <div className="flex items-center gap-2 text-zinc-500">
