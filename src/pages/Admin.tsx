@@ -22,6 +22,7 @@ import { getDb } from "../lib/firebase";
 import { toast } from "sonner";
 import { AdminSidebar } from "../components/admin/AdminSidebar";
 import { AdminSectionShell } from "../components/admin/AdminSectionShell";
+import { AdminLiveActivityFeed } from "../components/admin/AdminLiveActivityFeed";
 import type { AdminSection } from "../types/admin";
 import {
   markMesaAvailable,
@@ -963,52 +964,6 @@ return (
                 </div>
               </section>
 
-              <section className="rounded-[2rem] border border-white/70 bg-white/85 p-4 shadow-sm backdrop-blur">
-                <div className="grid gap-3 lg:grid-cols-[1fr_220px_180px_220px]">
-                  <div className="relative">
-                    <Search
-                      size={16}
-                      className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Buscar mesa..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="h-12 w-full rounded-2xl border border-zinc-200 bg-white pl-11 pr-4 text-sm font-semibold outline-none transition focus:border-zinc-400 focus:ring-4 focus:ring-zinc-200/70"
-                    />
-                  </div>
-
-                  <select
-                    value={filterEstado}
-                    onChange={(e) =>
-                      setFilterEstado(
-                        e.target.value as
-                          | "todas"
-                          | "available"
-                          | "occupied"
-                          | "needs_cleaning"
-                      )
-                    }
-                    className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-semibold outline-none transition focus:border-zinc-400 focus:ring-4 focus:ring-zinc-200/70"
-                  >
-                    <option value="todas">Todas las mesas</option>
-                    <option value="occupied">Solo ocupadas</option>
-                    <option value="needs_cleaning">Pendientes de limpieza</option>
-                    <option value="available">Solo libres</option>
-                  </select>
-
-                  <div className="flex h-12 items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm font-bold text-zinc-600">
-                    {mesasFiltradas.length} mesa(s)
-                  </div>
-
-                  <div className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-black text-emerald-700">
-                    <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]" />
-                    Prioridad live
-                  </div>
-                </div>
-              </section>
-
               <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {mesasFiltradas.map((mesa) => {
                   const priorityStyles = getPriorityStyles(mesa);
@@ -1211,6 +1166,56 @@ return (
                   );
                 })}
               </section>
+              <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+                <section className="rounded-[2rem] border border-white/70 bg-white/85 p-4 shadow-sm backdrop-blur">
+                  <div className="grid gap-3 lg:grid-cols-[1fr_220px_180px_220px]">
+                    <div className="relative">
+                      <Search
+                        size={16}
+                        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400"
+                      />
+
+                      <input
+                        type="text"
+                        placeholder="Buscar mesa..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="h-12 w-full rounded-2xl border border-zinc-200 bg-white pl-11 pr-4 text-sm font-semibold outline-none transition focus:border-zinc-400 focus:ring-4 focus:ring-zinc-200/70"
+                      />
+                    </div>
+
+                    <select
+                      value={filterEstado}
+                      onChange={(e) =>
+                        setFilterEstado(
+                          e.target.value as
+                            | "todas"
+                            | "available"
+                            | "occupied"
+                            | "needs_cleaning"
+                        )
+                      }
+                      className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-semibold outline-none transition focus:border-zinc-400 focus:ring-4 focus:ring-zinc-200/70"
+                    >
+                      <option value="todas">Todas las mesas</option>
+                      <option value="occupied">Solo ocupadas</option>
+                      <option value="needs_cleaning">Pendientes de limpieza</option>
+                      <option value="available">Solo libres</option>
+                    </select>
+
+                    <div className="flex h-12 items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm font-bold text-zinc-600">
+                      {mesasFiltradas.length} mesa(s)
+                    </div>
+
+                    <div className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-black text-emerald-700">
+                      <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]" />
+                      Prioridad live
+                    </div>
+                  </div>
+                </section>
+
+                <AdminLiveActivityFeed restaurantId={restaurantId} />
+              </div>
 
               {mesasFiltradas.length === 0 && (
                 <div className="rounded-[2rem] border border-dashed border-zinc-300 bg-white/80 p-10 text-center text-zinc-500 shadow-sm">
