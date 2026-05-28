@@ -333,7 +333,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
     }
 
     const ok = window.confirm(
-      `¿Eliminar acceso de ${member.email || member.id}? Esto lo quita de WANT, pero no borra el usuario de Firebase Authentication.`
+      `¿Eliminar acceso de ${member.email || member.id}? Est lo quita del negocio ${member.id}`
     );
 
     if (!ok) return;

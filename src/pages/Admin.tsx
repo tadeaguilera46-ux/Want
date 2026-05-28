@@ -17,6 +17,9 @@ import {
 import { createAuditLog } from "../lib/audit-logs";
 import { getDb } from "../lib/firebase";
 import { toast } from "sonner";
+import { AdminSidebar } from "../components/admin/AdminSidebar";
+import { AdminSectionShell } from "../components/admin/AdminSectionShell";
+import type { AdminSection } from "../types/admin";
 import {
   markMesaAvailable,
   markMesaNeedsCleaning,
@@ -33,7 +36,7 @@ import { StaffManagementPanel } from "../components/StaffManagementPanel";
 import { MesaManagementPanel } from "../components/MesaManagementPanel.tsx";
 import { MenuManagementPanel } from "../components/MenuManagementPanel";
 import { StockPanel } from "../components/StockPanel";
-import { canUseStock } from "../lib/plan";
+import { canUseAnalytics, canUseAuditLogs, canUseInvoices, canUseStock } from "../lib/plan";
 import { ReceiptText, Activity } from "lucide-react";
 import type {
   CuentaRecord,
@@ -295,7 +298,11 @@ const renderPedidoItems = (pedido: Pedido) => {
 
 const Admin = () => {
   const navigate = useNavigate();
-  const { restaurantId, restaurant } = useRestaurant(); 
+  const { restaurantId, restaurant } = useRestaurant();
+  const auditLogsEnabled = canUseAuditLogs(restaurant?.plan);
+  const invoicesEnabled = canUseInvoices(restaurant?.plan);
+  const analyticsEnabled = canUseAnalytics(restaurant?.plan);
+  const stockEnabled = canUseStock(restaurant?.plan); 
   const { logout, user } = useAuth();
 
   const [mesas, setMesas] = useState<MesaDoc[]>([]);
@@ -309,6 +316,7 @@ const Admin = () => {
   >("todas");
   const [mesaDetalle, setMesaDetalle] = useState<MesaAdminData | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [adminSection, setAdminSection] = useState<AdminSection>("dashboard");
 
   const [staffEmail, setStaffEmail] = useState("");
   const [staffPassword, setStaffPassword] = useState("");
@@ -557,6 +565,7 @@ const Admin = () => {
         password: staffPassword,
         role: staffRole,
       });
+
       await createAuditLog({
         restaurantId,
         action: "empleado_actualizado",
@@ -701,482 +710,81 @@ const Admin = () => {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-zinc-100">
-      <div className="mx-auto max-w-[1800px] px-4 py-4 md:px-6 lg:px-8">
-        <header className="mb-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex items-start gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-zinc-950 text-white shadow-sm">
-                <LayoutDashboard size={22} />
-              </div>
-
-              <div>
-                <h1 className="text-3xl font-black tracking-tight text-zinc-950">
-                  Panel Admin
-                </h1>
-                <p className="mt-1 text-sm text-zinc-500">
-                  Estado en tiempo real de mesas, pedidos y cuentas
-                </p>
-                {user?.email && (
-                  <p className="mt-1 text-xs text-zinc-400">
-                    Sesión activa: {user.email}
-                  </p>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={() => navigate("/staff/admin/audit-logs")}
-              className="flex items-center gap-3 rounded-3xl border border-zinc-200 bg-white px-5 py-4 shadow-sm transition hover:scale-[1.01]"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-950 text-white">
-                <Activity size={22} />
-              </div>
-
-              <div className="text-left">
-                <p className="text-sm font-black text-zinc-950">
-                  Actividad
-                </p>
-
-                <p className="text-xs text-zinc-500">
-                  Ver auditoría y eventos del sistema
-                </p>
-              </div>
-            </button>
-            <button
-              onClick={() => navigate("/staff/cashier/invoices")}
-              className="flex items-center gap-3 rounded-3xl border border-zinc-200 bg-white px-5 py-4 shadow-sm transition hover:scale-[1.01]"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-950 text-white">
-                <ReceiptText size={22} />
-              </div>
-
-              <div className="text-left">
-                <p className="text-sm font-black text-zinc-950">
-                  Facturas
-                </p>
-
-                <p className="text-xs text-zinc-500">
-                  Ver comprobantes y pagos
-                </p>
-              </div>
-            </button>
-
-            <div className="flex flex-wrap gap-3">
-              <button
-                onClick={() => navigate("/staff/admin/analytics")}
-                className="flex h-11 items-center gap-2 rounded-2xl bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90"
-              >
-                <ArrowRight size={16} />
-                Ver analytics
-              </button>
-
-              <button
-                onClick={handleLogout}
-                disabled={loggingOut}
-                className="flex h-11 items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 font-semibold text-zinc-900 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <LogOut size={16} />
-                {loggingOut ? "Cerrando..." : "Cerrar sesión"}
-              </button>
-            </div>
-          </div>
-        </header>
-
-        <section className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-          <div className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center gap-2 text-zinc-500">
-              <Users size={16} />
-              <p className="text-sm">Mesas ocupadas</p>
-            </div>
-            <p className="mt-2 text-3xl font-black text-zinc-950">
-              {stats.ocupadas}
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center gap-2 text-zinc-500">
-              <DoorOpen size={16} />
-              <p className="text-sm">Mesas libres</p>
-            </div>
-            <p className="mt-2 text-3xl font-black text-zinc-950">
-              {stats.libres}
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center gap-2 text-zinc-500">
-              <ChefHat size={16} />
-              <p className="text-sm">Pedidos listos</p>
-            </div>
-            <p className="mt-2 text-3xl font-black text-zinc-950">
-              {stats.pedidosListos}
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center gap-2 text-zinc-500">
-              <Receipt size={16} />
-              <p className="text-sm">Cuentas por cobrar</p>
-            </div>
-            <p className="mt-2 text-3xl font-black text-zinc-950">
-              {stats.cuentasPendientes}
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center gap-2 text-zinc-500">
-              <CircleDollarSign size={16} />
-              <p className="text-sm">Ventas de hoy</p>
-            </div>
-            <p className="mt-2 text-3xl font-black text-zinc-950">
-              {formatPrice(stats.ventasHoy)}
-            </p>
-          </div>
-
-          <div className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center gap-2 text-zinc-500">
-              <CircleDollarSign size={16} />
-              <p className="text-sm">Consumo activo</p>
-            </div>
-            <p className="mt-2 text-3xl font-black text-zinc-950">
-              {formatPrice(stats.consumoActivo)}
-            </p>
-          </div>
-        </section>
-
-        <section className="mb-6 rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-3 lg:grid-cols-4">
-            <div className="relative">
-              <Search
-                size={16}
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
-              />
-              <input
-                type="text"
-                placeholder="Buscar mesa..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="h-11 w-full rounded-2xl border border-zinc-200 bg-white pl-9 pr-3 outline-none focus:ring-2 focus:ring-black/10"
-              />
-            </div>
-
-            <select
-              value={filterEstado}
-              onChange={(e) =>
-                setFilterEstado(
-                  e.target.value as
-                    | "todas"
-                    | "available"
-                    | "occupied"
-                    | "needs_cleaning"
-                )
-              }
-              className="h-11 rounded-2xl border border-zinc-200 bg-white px-3 outline-none focus:ring-2 focus:ring-black/10"
-            >
-              <option value="todas">Todas las mesas</option>
-              <option value="occupied">Solo ocupadas</option>
-              <option value="needs_cleaning">Pendientes de limpieza</option>
-              <option value="available">Solo libres</option>
-            </select>
-
-            <div className="flex h-11 items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-600">
-              Mostrando {mesasFiltradas.length} mesa(s)
-            </div>
-
-            <div className="flex h-11 items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-3 text-sm text-zinc-600">
-              Prioridad automática activa
-            </div>
-          </div>
-        </section>
-
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {mesasFiltradas.map((mesa) => {
-            const priorityStyles = getPriorityStyles(mesa);
-
-            return (
-              <div
-                key={mesa.id}
-                className={`rounded-3xl border p-5 shadow-sm transition-all duration-200 hover:shadow-md ${priorityStyles.card}`}
-              >
-                <div className="mb-4 flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h2 className="text-2xl font-black tracking-tight text-zinc-950">
-                      Mesa {mesa.numero}
-                    </h2>
-                    <p className="mt-1 truncate text-xs text-zinc-500">
-                      Session: {mesa.activeSessionId ?? "sin sesión"}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col items-end gap-2">
-                    <span
-                      className={`rounded-full px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide ${priorityStyles.badge}`}
-                    >
-                      {mesa.prioridadLabel || mesa.estado.toUpperCase()}
-                    </span>
-
-                    <span
-                      className={`rounded-full px-3 py-1 text-xs font-semibold ${statusBadge(
-                        mesa.estado
-                      )}`}
-                    >
-                      {mesa.estado}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="mb-4 grid grid-cols-2 gap-3">
-                  <div className="rounded-2xl border border-zinc-200 bg-white/90 p-3">
-                    <p className="text-xs text-zinc-500">Total actual</p>
-                    <p className="mt-1 font-bold text-zinc-950">
-                      {formatPrice(mesa.totalActual)}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-zinc-200 bg-white/90 p-3">
-                    <p className="text-xs text-zinc-500">Pedidos activos</p>
-                    <p className="mt-1 font-bold text-zinc-950">
-                      {mesa.pedidosActivos.length}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-zinc-200 bg-white/90 p-3">
-                    <p className="text-xs text-zinc-500">Pedidos listos</p>
-                    <p className="mt-1 font-bold text-zinc-950">
-                      {mesa.pedidosListos.length}
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-zinc-200 bg-white/90 p-3">
-                    <p className="text-xs text-zinc-500">Cuenta</p>
-                    <p className="mt-1 font-bold text-zinc-950">
-                      {mesa.cuentaActual ? mesa.cuentaActual.estado : "sin pedir"}
-                    </p>
-                  </div>
-                </div>
-
-                {mesa.cuentaActual && (
-                  <div className="mb-4">
-                    <button
-                      onClick={() => avanzarCuenta(mesa.cuentaActual)}
-                      className="h-11 w-full rounded-2xl bg-emerald-600 font-semibold text-white transition hover:opacity-90"
-                    >
-                      {mesa.cuentaActual.estado === "pendiente"
-                        ? "Marcar cuenta en camino"
-                        : mesa.cuentaActual.estado === "en_camino"
-                          ? "Marcar cuenta pagada"
-                          : "Cuenta cerrada"}
-                    </button>
-                  </div>
-                )}
-
-                <div className="mb-4">
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <h3 className="font-semibold text-zinc-950">
-                      Pedidos activos
-                    </h3>
-                    <span className="text-xs text-zinc-500">
-                      {mesa.pedidosActivos.length}
-                    </span>
-                  </div>
-
-                  {mesa.pedidosActivos.length === 0 ? (
-                    <div className="rounded-2xl border border-zinc-200 bg-white/90 p-4 text-sm text-zinc-500">
-                      No hay pedidos activos
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {mesa.pedidosActivos.slice(0, 2).map((pedido) => (
-                        <div
-                          key={pedido.id}
-                          className="rounded-2xl border border-zinc-200 bg-white/90 p-3"
-                        >
-                          <div className="mb-2 flex items-center justify-between gap-2">
-                            <span className="font-semibold text-zinc-950">
-                              Pedido #{pedido.id.slice(0, 6)}
-                            </span>
-
-                            <div className="flex items-center gap-2">
-                              {pedidoTieneObservaciones(pedido) && (
-                                <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wide text-amber-900">
-                                  CON OBS
-                                </span>
-                              )}
-
-                              <span className="text-sm font-medium text-zinc-700">
-                                {formatPrice(pedido.total)}
-                              </span>
-                            </div>
-                          </div>
-
-                          {renderPedidoItems(pedido)}
-
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {pedido.items?.some(
-                              (item) => item.category === "food"
-                            ) && (
-                              <span
-                                className={`rounded-full px-2 py-1 text-xs font-bold uppercase tracking-wide ${statusBadge(
-                                  getKitchenStatus(pedido)
-                                )}`}
-                              >
-                                Cocina: {getKitchenStatus(pedido)}
-                              </span>
-                            )}
-
-                            {pedido.items?.some(
-                              (item) => item.category === "drinks"
-                            ) && (
-                              <span
-                                className={`rounded-full px-2 py-1 text-xs font-bold uppercase tracking-wide ${statusBadge(
-                                  getBarStatus(pedido)
-                                )}`}
-                              >
-                                Barra: {getBarStatus(pedido)}
-                              </span>
-                            )}
-
-                            {isPedidoListo(pedido) && (
-                              <span className="rounded-full bg-emerald-500 px-2 py-1 text-xs font-bold uppercase tracking-wide text-white">
-                                Listo
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-
-                      {mesa.pedidosActivos.length > 2 && (
-                        <p className="text-xs text-zinc-500">
-                          + {mesa.pedidosActivos.length - 2} pedido(s) más
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setMesaDetalle(mesa)}
-                    className="h-11 rounded-2xl border border-zinc-200 bg-white font-semibold text-zinc-900 transition hover:bg-zinc-50"
-                  >
-                    Ver detalle
-                  </button>
-
-                  {mesa.estado === "needs_cleaning" ? (
-                    <button
-                      onClick={() => marcarMesaLista(Number(mesa.numero))}
-                      className="h-11 rounded-2xl bg-zinc-950 font-semibold text-white transition hover:opacity-90"
-                    >
-                      Marcar lista
-                    </button>
-                  ) : mesa.estado === "occupied" ? (
-                    <button
-                      onClick={() => marcarMesaParaLimpieza(Number(mesa.numero))}
-                      className="h-11 rounded-2xl bg-zinc-950 font-semibold text-white transition hover:opacity-90"
-                    >
-                      A limpieza
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => marcarMesaLista(Number(mesa.numero))}
-                      className="h-11 rounded-2xl bg-zinc-950 font-semibold text-white transition hover:opacity-90"
-                    >
-                      Disponible
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </section>
-
-        {mesasFiltradas.length === 0 && (
-          <div className="mt-6 rounded-3xl border border-zinc-200 bg-white p-8 text-center text-zinc-500 shadow-sm">
-            No se encontraron mesas con ese filtro
-          </div>
-        )}
-        <div className="mt-8">
-      <MesaManagementPanel
-        restaurantId={restaurantId}
-        qrBasePath="/qr"
+return (
+  <div className="min-h-screen bg-gradient-to-br from-zinc-100 via-zinc-50 to-white">
+    <div className="flex min-h-screen">
+      <AdminSidebar
+        activeSection={adminSection}
+        onSectionChange={setAdminSection}
+        onAnalytics={() => navigate("/staff/admin/analytics")}
+        onInvoices={() =>
+          invoicesEnabled
+            ? navigate("/staff/cashier/invoices")
+            : toast.warning("Facturación disponible desde el plan Pro.")
+        }
+        onAuditLogs={() =>
+          auditLogsEnabled
+            ? navigate("/staff/admin/audit-logs")
+            : toast.warning("Auditoría disponible desde el plan Pro.")
+        }
+        onLogout={handleLogout}
+        loggingOut={loggingOut}
+        userEmail={user?.email}
+        auditLogsEnabled={auditLogsEnabled}
+        invoicesEnabled={invoicesEnabled}
       />
 
-</div>
-<RestaurantBrandingPanel restaurantId={restaurantId} />
-        <section className="mb-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-zinc-950 text-white">
-              <UserPlus size={20} />
-            </div>
-
-            <div>
-              <h2 className="text-xl font-black text-zinc-950">
-                Crear empleado
-              </h2>
-              <p className="mt-1 text-sm text-zinc-500">
-                Creá usuarios para cocina, barra, runners o administradores.
-              </p>
-            </div>
-          </div>
-
-          <form
-            onSubmit={handleCreateStaff}
-            className="grid gap-3 lg:grid-cols-[1.4fr_1fr_1fr_auto]"
+      <main className="min-w-0 flex-1">
+        <div className="mx-auto w-full max-w-[1800px] px-4 py-4 md:px-6 lg:px-8">
+          {adminSection === "dashboard" && (
+           <AdminSectionShell
+            title="Panel administrativo"
+            description="Controlá mesas, estado operativo y flujo del restaurante en tiempo real."
           >
-            <input
-              type="email"
-              placeholder="Email del empleado"
-              value={staffEmail}
-              onChange={(e) => setStaffEmail(e.target.value)}
-              required
-              className="h-11 rounded-2xl border border-zinc-200 bg-white px-3 outline-none focus:ring-2 focus:ring-black/10"
-            />
-
-            <input
-              type="password"
-              placeholder="Contraseña temporal"
-              value={staffPassword}
-              onChange={(e) => setStaffPassword(e.target.value)}
-              required
-              minLength={6}
-              className="h-11 rounded-2xl border border-zinc-200 bg-white px-3 outline-none focus:ring-2 focus:ring-black/10"
-            />
-
-            <select
-              value={staffRole}
-              onChange={(e) => setStaffRole(e.target.value as StaffRole)}
-              className="h-11 rounded-2xl border border-zinc-200 bg-white px-3 outline-none focus:ring-2 focus:ring-black/10"
-            >
-              <option value="runner">Runner</option>
-              <option value="kitchen">Cocina</option>
-              <option value="bar">Barra</option>
-              <option value="admin">Admin</option>
-            </select>
-
-            <button
-              type="submit"
-              disabled={creatingStaff}
-              className="h-11 rounded-2xl bg-zinc-950 px-5 font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {creatingStaff ? "Creando..." : "Crear"}
-            </button>
-          </form>
-
-          {staffMessage && (
-            <p className="mt-3 text-sm font-medium text-zinc-700">
-              {staffMessage}
-            </p>
+            <div className="space-y-6">
+              <MesaManagementPanel restaurantId={restaurantId} qrBasePath="/qr" />
+            </div>
+          </AdminSectionShell>
           )}
-        </section>
 
-        <StaffManagementPanel restaurantId={restaurantId} />
-        <MenuManagementPanel restaurantId={restaurantId} />
-        <StockPanel
-          restaurantId={restaurantId}
-          plan={restaurant?.plan}
-        />
-      </div>
+          {adminSection === "branding" && (
+            <AdminSectionShell
+              title="Branding del restaurante"
+              description="Personalizá colores, logo, portada y presencia visual."
+            >
+              <RestaurantBrandingPanel restaurantId={restaurantId} />
+            </AdminSectionShell>
+          )}
+
+          {adminSection === "staff" && (
+            <AdminSectionShell
+              title="Gestión de empleados"
+              description="Administrá empleados, roles y accesos."
+            >
+              <StaffManagementPanel restaurantId={restaurantId} />
+            </AdminSectionShell>
+          )}
+
+          {adminSection === "menu" && (
+            <AdminSectionShell
+              title="Menú del restaurante"
+              description="Editá platos, categorías, imágenes y precios."
+            >
+              <MenuManagementPanel restaurantId={restaurantId} />
+            </AdminSectionShell>
+          )}
+
+          {adminSection === "stock" && (
+            <AdminSectionShell
+              title="Control de stock"
+              description="Gestioná inventario e ingredientes."
+            >
+              <StockPanel restaurantId={restaurantId} plan={restaurant?.plan} />
+            </AdminSectionShell>
+          )}
+        </div>
+      </main>
+    </div>
 
       {mesaDetalleLive && (
         <div className="fixed inset-0 z-50 flex bg-black/40">
