@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
+  Bell,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   CreditCard,
-  ShieldCheck,
   Sparkles,
   Truck,
   UserCog,
@@ -28,8 +29,6 @@ type AuditLogRecord = {
   userEmail?: string | null;
   userRole?: string | null;
   mesa?: number | null;
-  pedidoId?: string | null;
-  cuentaId?: string | null;
   createdAt?: FirestoreTimestampLike | null;
 };
 
@@ -46,25 +45,19 @@ const getCreatedAtMs = (value?: FirestoreTimestampLike | null) => {
 
 const formatRelativeTime = (value?: FirestoreTimestampLike | null) => {
   const createdAtMs = getCreatedAtMs(value);
-
   if (!createdAtMs) return "recién";
 
   const diffSeconds = Math.max(0, Math.floor((Date.now() - createdAtMs) / 1000));
-
   if (diffSeconds < 10) return "recién";
   if (diffSeconds < 60) return `hace ${diffSeconds}s`;
 
   const diffMinutes = Math.floor(diffSeconds / 60);
-
   if (diffMinutes < 60) return `hace ${diffMinutes}m`;
 
   const diffHours = Math.floor(diffMinutes / 60);
-
   if (diffHours < 24) return `hace ${diffHours}h`;
 
-  const diffDays = Math.floor(diffHours / 24);
-
-  return `hace ${diffDays}d`;
+  return `hace ${Math.floor(diffHours / 24)}d`;
 };
 
 const getActionVisual = (action?: string) => {
@@ -72,17 +65,17 @@ const getActionVisual = (action?: string) => {
     return {
       icon: CheckCircle2,
       label: "Pedido listo",
-      tone: "border-emerald-200 bg-emerald-50 text-emerald-700",
-      iconTone: "bg-emerald-500 text-white",
+      dot: "bg-emerald-500",
+      iconTone: "bg-emerald-100 text-emerald-700",
     };
   }
 
   if (action === "pedido_entregado") {
     return {
       icon: Truck,
-      label: "Pedido entregado",
-      tone: "border-blue-200 bg-blue-50 text-blue-700",
-      iconTone: "bg-blue-500 text-white",
+      label: "Entregado",
+      dot: "bg-blue-500",
+      iconTone: "bg-blue-100 text-blue-700",
     };
   }
 
@@ -94,8 +87,8 @@ const getActionVisual = (action?: string) => {
     return {
       icon: CreditCard,
       label: "Caja",
-      tone: "border-violet-200 bg-violet-50 text-violet-700",
-      iconTone: "bg-violet-500 text-white",
+      dot: "bg-violet-500",
+      iconTone: "bg-violet-100 text-violet-700",
     };
   }
 
@@ -103,8 +96,8 @@ const getActionVisual = (action?: string) => {
     return {
       icon: Sparkles,
       label: "Mesa",
-      tone: "border-amber-200 bg-amber-50 text-amber-800",
-      iconTone: "bg-amber-500 text-white",
+      dot: "bg-amber-500",
+      iconTone: "bg-amber-100 text-amber-700",
     };
   }
 
@@ -112,16 +105,16 @@ const getActionVisual = (action?: string) => {
     return {
       icon: UserCog,
       label: "Equipo",
-      tone: "border-zinc-200 bg-zinc-50 text-zinc-700",
-      iconTone: "bg-zinc-950 text-white",
+      dot: "bg-zinc-500",
+      iconTone: "bg-zinc-100 text-zinc-700",
     };
   }
 
   return {
     icon: Activity,
     label: "Actividad",
-    tone: "border-zinc-200 bg-zinc-50 text-zinc-700",
-    iconTone: "bg-zinc-950 text-white",
+    dot: "bg-zinc-500",
+    iconTone: "bg-zinc-100 text-zinc-700",
   };
 };
 
@@ -136,25 +129,30 @@ const getRoleLabel = (role?: string | null) => {
 
 export function AdminLiveActivityFeed({ restaurantId }: Props) {
   const [logs, setLogs] = useState<AuditLogRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [lastReadLogId, setLastReadLogId] = useState<string | null>(() => {
+    return window.localStorage.getItem(`want:lastReadAudit:${restaurantId}`);
+  });
   const [now, setNow] = useState(Date.now());
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setNow(Date.now());
-    }, 15000);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
+  useEffect(() => {
+    setLastReadLogId(
+      window.localStorage.getItem(`want:lastReadAudit:${restaurantId}`)
+    );
+  }, [restaurantId]);
+
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 15000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
     if (!restaurantId) {
       setLogs([]);
-      setLoading(false);
       return;
     }
-
-    setLoading(true);
 
     const q = query(
       collection(db, "restaurants", restaurantId, "auditLogs"),
@@ -162,26 +160,30 @@ export function AdminLiveActivityFeed({ restaurantId }: Props) {
       limit(8)
     );
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const data = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        })) as AuditLogRecord[];
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      })) as AuditLogRecord[];
 
-        setLogs(data);
-        setLoading(false);
-      },
-      (error) => {
-        console.error("Error cargando actividad reciente:", error);
-        setLogs([]);
-        setLoading(false);
-      }
-    );
+      setLogs(data);
+    });
 
     return () => unsubscribe();
   }, [restaurantId]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!containerRef.current) return;
+
+      if (!containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const visibleLogs = useMemo(() => {
     void now;
@@ -191,109 +193,141 @@ export function AdminLiveActivityFeed({ restaurantId }: Props) {
       .slice(0, 6);
   }, [logs, now]);
 
+  const latestLogId = visibleLogs[0]?.id || null;
+  const hasUnread = Boolean(latestLogId && latestLogId !== lastReadLogId);
+
+  const markAsRead = () => {
+    if (!latestLogId) return;
+
+    window.localStorage.setItem(
+      `want:lastReadAudit:${restaurantId}`,
+      latestLogId
+    );
+
+    setLastReadLogId(latestLogId);
+  };
+
+  const toggleOpen = () => {
+    const nextOpen = !open;
+    setOpen(nextOpen);
+
+    if (nextOpen) {
+      markAsRead();
+    }
+  };
+
   return (
-    <section className="rounded-[2rem] border border-white/70 bg-white/85 p-5 shadow-sm backdrop-blur">
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-black uppercase tracking-[0.18em] text-emerald-700">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.14)]" />
-            Live feed
+    <div ref={containerRef} className="relative">
+      <button
+        onClick={toggleOpen}
+        className={`flex items-center gap-2 rounded-2xl border px-4 py-2 shadow-sm transition hover:-translate-y-0.5 ${
+          hasUnread
+            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            : "border-zinc-200 bg-white text-zinc-700"
+        }`}
+      >
+        <span className="relative">
+          <Bell size={16} />
+          {hasUnread && (
+            <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-50" />
+          )}
+        </span>
+
+        <span className="hidden text-sm font-black lg:inline">
+          Actividad
+        </span>
+
+        {hasUnread && (
+          <span className="hidden rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white xl:inline">
+            Nuevo
+          </span>
+        )}
+
+        <ChevronDown
+          size={15}
+          className={`transition ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+10px)] z-50 w-[360px] overflow-hidden rounded-[1.75rem] border border-zinc-200 bg-white shadow-2xl">
+          <div className="border-b border-zinc-100 bg-zinc-50/80 px-4 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black text-zinc-950">
+                  Actividad reciente
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  Últimos eventos importantes.
+                </p>
+              </div>
+
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-700">
+                Live
+              </span>
+            </div>
           </div>
 
-          <h2 className="text-xl font-black tracking-tight text-zinc-950">
-            Actividad reciente
-          </h2>
+          {visibleLogs.length === 0 ? (
+            <div className="p-6 text-center">
+              <Clock3 className="mx-auto text-zinc-400" size={22} />
+              <p className="mt-2 text-sm font-bold text-zinc-600">
+                Sin actividad reciente
+              </p>
+            </div>
+          ) : (
+            <div className="max-h-[430px] overflow-y-auto p-3">
+              {visibleLogs.map((log) => {
+                const visual = getActionVisual(log.action);
+                const Icon = visual.icon;
 
-          <p className="mt-1 text-sm text-zinc-500">
-            Eventos importantes del restaurante en tiempo real.
-          </p>
-        </div>
-
-        <div className="hidden rounded-2xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs font-black text-zinc-600 sm:flex sm:items-center sm:gap-2">
-          <ShieldCheck size={14} />
-          Audit backed
-        </div>
-      </div>
-
-      {loading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((item) => (
-            <div
-              key={item}
-              className="h-16 animate-pulse rounded-2xl border border-zinc-100 bg-zinc-100"
-            />
-          ))}
-        </div>
-      ) : visibleLogs.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-6 text-center">
-          <Clock3 className="mx-auto text-zinc-400" size={22} />
-          <p className="mt-2 text-sm font-bold text-zinc-600">
-            Sin actividad reciente
-          </p>
-          <p className="mt-1 text-xs text-zinc-500">
-            Los eventos críticos van a aparecer automáticamente acá.
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {visibleLogs.map((log) => {
-            const visual = getActionVisual(log.action);
-            const Icon = visual.icon;
-
-            return (
-              <div
-                key={log.id}
-                className="group rounded-2xl border border-zinc-200 bg-white p-3 transition hover:-translate-y-0.5 hover:shadow-md"
-              >
-                <div className="flex items-start gap-3">
+                return (
                   <div
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${visual.iconTone}`}
+                    key={log.id}
+                    className="rounded-2xl p-3 transition hover:bg-zinc-50"
                   >
-                    <Icon size={17} />
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span
-                        className={`rounded-full border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${visual.tone}`}
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${visual.iconTone}`}
                       >
-                        {visual.label}
-                      </span>
+                        <Icon size={17} />
+                      </div>
 
-                      {typeof log.mesa === "number" && log.mesa > 0 && (
-                        <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-black text-zinc-700">
-                          Mesa {log.mesa}
-                        </span>
-                      )}
-
-                      <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-[11px] font-black text-zinc-500">
-                        {getRoleLabel(log.userRole)}
-                      </span>
-                    </div>
-
-                    <p className="mt-2 line-clamp-2 text-sm font-semibold leading-snug text-zinc-900">
-                      {log.description || log.action || "Actividad registrada"}
-                    </p>
-
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-                      <span>{formatRelativeTime(log.createdAt)}</span>
-
-                      {log.userEmail && (
-                        <>
-                          <span>•</span>
-                          <span className="truncate font-medium">
-                            {log.userEmail}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-black uppercase tracking-wide text-zinc-500">
+                            {visual.label}
                           </span>
-                        </>
-                      )}
+
+                          {typeof log.mesa === "number" && log.mesa > 0 && (
+                            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-black text-zinc-600">
+                              Mesa {log.mesa}
+                            </span>
+                          )}
+
+                          <span
+                            className={`h-2 w-2 rounded-full ${visual.dot}`}
+                          />
+                        </div>
+
+                        <p className="mt-1 line-clamp-2 text-sm font-semibold leading-snug text-zinc-900">
+                          {log.description || log.action || "Actividad registrada"}
+                        </p>
+
+                        <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
+                          <span>{formatRelativeTime(log.createdAt)}</span>
+                          <span>•</span>
+                          <span>{getRoleLabel(log.userRole)}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
-    </section>
+    </div>
   );
 }
