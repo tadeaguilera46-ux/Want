@@ -3,4 +3,5 @@ export type AdminSection =
   | "branding"
   | "staff"
   | "menu"
-  | "stock";
+  | "stock"
+  | "billing";

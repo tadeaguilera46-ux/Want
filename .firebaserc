@@ -1,6 +1,7 @@
 {
   "projects": {
-    "production": "want-612b5"
+    "production": "want-612b5",
+    "default": "want-612b5"
   },
   "targets": {},
   "etags": {}

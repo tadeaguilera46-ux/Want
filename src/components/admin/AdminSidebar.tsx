@@ -4,6 +4,7 @@ import {
   Brush,
   Boxes,
   ChefHat,
+  CreditCard,
   LayoutDashboard,
   LogOut,
   ReceiptText,
@@ -60,6 +61,12 @@ const navItems: {
     label: "Stock",
     description: "Inventario",
     icon: Boxes,
+  },
+  {
+    id: "billing",
+    label: "Suscripción",
+    description: "Plan y pagos",
+    icon: CreditCard,
   },
 ];
 

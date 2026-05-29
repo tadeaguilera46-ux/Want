@@ -41,6 +41,7 @@ import { StaffManagementPanel } from "../components/StaffManagementPanel";
 import { MesaManagementPanel } from "../components/MesaManagementPanel.tsx";
 import { MenuManagementPanel } from "../components/MenuManagementPanel";
 import { StockPanel } from "../components/StockPanel";
+import { AdminBilling } from "../components/AdminBilling";
 import { canUseAnalytics, canUseAuditLogs, canUseInvoices, canUseStock } from "../lib/plan";
 import { ReceiptText, Activity } from "lucide-react";
 import type {
@@ -859,6 +860,7 @@ return (
               { id: "staff", label: "Empleados" },
               { id: "menu", label: "Menú" },
               { id: "stock", label: "Stock" },
+              { id: "billing", label: "Plan" },
             ].map((item) => (
               <button
                 key={item.id}
@@ -1291,6 +1293,15 @@ return (
               description="Gestioná inventario e ingredientes."
             >
               <StockPanel restaurantId={restaurantId} plan={restaurant?.plan} />
+            </AdminSectionShell>
+          )}
+
+          {adminSection === "billing" && (
+            <AdminSectionShell
+              title="Suscripción y plan"
+              description="Gestioná tu plan, pagos y suscripción a WANT."
+            >
+              <AdminBilling restaurantId={restaurantId} />
             </AdminSectionShell>
           )}
         </div>

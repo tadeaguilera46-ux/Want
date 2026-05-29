@@ -12,12 +12,20 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { getDb } from "./firebase";
 import { normalizePlan, type RestaurantPlan } from "./plan";
 
+type FirestoreTimestamp = {
+  toDate: () => Date;
+};
+
 type RestaurantContextRestaurant = {
   id: string;
   name?: string;
   plan: RestaurantPlan;
   subscriptionStatus?: string;
   active?: boolean;
+  nextBillingDate?: FirestoreTimestamp | null;
+  trialEndsAt?: FirestoreTimestamp | null;
+  monthlyPrice?: number;
+  mpSubscriptionId?: string | null;
 };
 
 type RestaurantContextValue = {
@@ -100,6 +108,9 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
 
         const data = snapshot.data();
 
+        const isTimestamp = (val: unknown): val is FirestoreTimestamp =>
+          typeof (val as { toDate?: unknown } | null)?.toDate === "function";
+
         setRestaurant({
           id: snapshot.id,
           name: typeof data.name === "string" ? data.name : undefined,
@@ -111,6 +122,20 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
               ? data.subscriptionStatus
               : undefined,
           active: typeof data.active === "boolean" ? data.active : undefined,
+          nextBillingDate: isTimestamp(data.nextBillingDate)
+            ? data.nextBillingDate
+            : null,
+          trialEndsAt: isTimestamp(data.trialEndsAt)
+            ? data.trialEndsAt
+            : null,
+          monthlyPrice:
+            typeof data.monthlyPrice === "number"
+              ? data.monthlyPrice
+              : undefined,
+          mpSubscriptionId:
+            typeof data.mpSubscriptionId === "string"
+              ? data.mpSubscriptionId
+              : null,
         });
 
         setRestaurantLoading(false);
