@@ -12,12 +12,6 @@ const MP_PLANS: Record<string, string> = {
   premium: "76d2a6a94b2843bf981e4cfd995a800b",
 };
 
-const PLAN_AMOUNTS: Record<string, number> = {
-  starter: 70000,
-  pro: 90000,
-  premium: 115000,
-};
-
 // ─── 1. Crear suscripción ────────────────────────────────────────────────────
 
 export const createSubscription = onCall(
@@ -54,58 +48,28 @@ export const createSubscription = onCall(
       throw new HttpsError("permission-denied", "No tenés permisos");
     }
 
-    const token = MP_ACCESS_TOKEN.value();
+    // Guardar estado pendiente para que el webhook pueda identificar el restaurante por email
+    const payerEmailResolved =
+      payerEmail || request.auth.token.email || "";
 
-    const body = {
-      preapproval_plan_id: MP_PLANS[plan],
-      payer_email: payerEmail,
-      card_token_id: "",
-      back_url: `https://want-livid.vercel.app/admin?billing=success`,
-      reason: `WANT ${plan.charAt(0).toUpperCase() + plan.slice(1)}`,
-      auto_recurring: {
-        frequency: 1,
-        frequency_type: "months",
-        transaction_amount: PLAN_AMOUNTS[plan],
-        currency_id: "ARS",
-      },
-      status: "pending",
-    };
-
-    const response = await fetch("https://api.mercadopago.com/preapproval", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-
-    const data = await response.json() as {
-      id: string;
-      init_point: string;
-      status: string;
-    };
-
-    if (!data.id) {
-      throw new HttpsError("internal", "Error al crear suscripción en MP");
-    }
-
-    // Guardar subscriptionId pendiente en Firestore
     await admin
       .firestore()
       .collection("restaurants")
       .doc(restaurantId)
       .update({
-        "billing.subscriptionId": data.id,
-        "billing.plan": plan,
+        "billing.pendingPlan": plan,
+        "billing.payerEmail": payerEmailResolved,
         "billing.status": "pending",
         "billing.provider": "mercadopago",
         "billing.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
       });
 
+    // URL de checkout directo al plan — el usuario ingresa su tarjeta ahí
+    const initPoint = `https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=${MP_PLANS[plan]}`;
+
     return {
-      subscriptionId: data.id,
-      initPoint: data.init_point,
+      subscriptionId: null,
+      initPoint,
     };
   }
 );
@@ -152,6 +116,7 @@ export const mpWebhook = onRequest(
         status: string;
         preapproval_plan_id: string;
         payer_email: string;
+        payer_id: number;
         next_payment_date: string;
       };
 
@@ -160,15 +125,26 @@ export const mpWebhook = onRequest(
         return;
       }  
       
-      // Buscar manualmente si collectionGroup no aplica
-      const restaurantsSnap = await admin
+      // Buscar por email del pagador (guardado al iniciar el flujo)
+      let restaurantsSnap = await admin
         .firestore()
         .collection("restaurants")
-        .where("billing.subscriptionId", "==", subscription.id)
+        .where("billing.payerEmail", "==", subscription.payer_email)
         .limit(1)
         .get();
 
+      // Fallback: buscar por subscriptionId (para suscripciones ya existentes)
       if (restaurantsSnap.empty) {
+        restaurantsSnap = await admin
+          .firestore()
+          .collection("restaurants")
+          .where("billing.subscriptionId", "==", subscription.id)
+          .limit(1)
+          .get();
+      }
+
+      if (restaurantsSnap.empty) {
+        console.log("No se encontró restaurante para payer_email:", subscription.payer_email);
         res.status(200).send("OK");
         return;
       }
