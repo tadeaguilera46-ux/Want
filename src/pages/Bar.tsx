@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import { createAuditLog } from "../lib/audit-logs";
+import { useOnlineStatus } from "../hooks/useOnlineStatus";
+import { useWakeLock } from "../hooks/useWakeLock";
 import {
   collection,
   onSnapshot,
@@ -61,7 +63,8 @@ const Bar = () => {
   const navigate = useNavigate();
   const { restaurantId } = useRestaurant();
   const { logout, user } = useAuth();
-
+  const isOnline = useOnlineStatus();
+  const { isWakeLockActive, isWakeLockSupported } = useWakeLock(true);
   const [orders, setOrders] = useState<Pedido[]>([]);
   const [loadingById, setLoadingById] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
@@ -211,6 +214,11 @@ const Bar = () => {
 
   const updateStatus = async (id: string, newStatus: EstadoBarra) => {
     if (loadingById[id] || !restaurantId) return;
+
+    if (!isOnline) {
+      toast.error("Sin conexión. No se pueden actualizar pedidos ahora.");
+      return;
+    }
 
     try {
       setLoadingById((prev) => ({ ...prev, [id]: true }));
@@ -408,8 +416,42 @@ const Bar = () => {
                 )}
               </div>
             </div>
+            <div
+              className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-2 text-sm font-black shadow-sm ${
+                isWakeLockActive
+                  ? "border-blue-200 bg-blue-50 text-blue-700"
+                  : "border-zinc-200 bg-white text-zinc-500"
+              }`}
+            >
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${
+                  isWakeLockActive ? "bg-blue-500" : "bg-zinc-300"
+                }`}
+              />
 
+              {isWakeLockSupported
+                ? isWakeLockActive
+                  ? "Pantalla activa"
+                  : "Pantalla puede dormirse"
+                : "Wake Lock no soportado"}
+            </div>
             <div className="flex flex-col gap-3 xl:items-end">
+              <div
+                className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-2 text-sm font-black shadow-sm ${
+                  isOnline
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-red-200 bg-red-50 text-red-700"
+                }`}
+              >
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    isOnline
+                      ? "bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.14)]"
+                      : "bg-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.14)]"
+                  }`}
+                />
+                {isOnline ? "Online" : "Sin conexión"}
+              </div>
               <button
                 onClick={handleLogout}
                 disabled={loggingOut}
@@ -460,8 +502,13 @@ const Bar = () => {
           </div>
         </div>
       </div>
-
+        
       <main className="mx-auto max-w-[1800px] px-4 py-4 md:px-6 md:py-6 lg:px-8">
+        {!isOnline && (
+          <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+            Sin conexión. Estás viendo datos guardados localmente. Las acciones quedan deshabilitadas hasta reconectar.
+          </div>
+        )}
         {!soundEnabled && (
           <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
             Tocá la pantalla una vez para habilitar el sonido.
@@ -598,7 +645,7 @@ const Bar = () => {
                     <motion.button
                       whileTap={{ scale: 0.99 }}
                       onClick={() => updateStatus(order.id, next)}
-                      disabled={isLoading}
+                      disabled={isLoading || !isOnline}
                       className={`mt-5 flex h-12 w-full items-center justify-center rounded-2xl px-4 text-sm font-extrabold text-white transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
                         next === "preparando"
                           ? "bg-slate-950 hover:opacity-90"
@@ -606,7 +653,7 @@ const Bar = () => {
                       }`}
                     >
                       {isLoading
-                        ? "Actualizando..."
+                        ? "Actualizando..." 
                         : next === "preparando"
                           ? "Empezar preparación"
                           : "Marcar como listo"}

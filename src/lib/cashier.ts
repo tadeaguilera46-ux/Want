@@ -48,18 +48,29 @@ export const createCashierAuditLog = async ({
   metadata?: Record<string, unknown>;
 }) => {
   await addDoc(collection(db, "restaurants", restaurantId, "auditLogs"), {
-    restaurantId,
-    action,
-    actorUid,
-    actorEmail: actorEmail || null,
-    mesa: typeof mesa === "number" ? mesa : null,
-    cuentaId: cuentaId || null,
-    pedidoId: pedidoId || null,
-    reason: reason?.trim() || null,
-    metadata: metadata || {},
-    createdAt: serverTimestamp(),
-  });
-};
+      restaurantId,
+      action,
+
+      actorUid,
+      actorEmail: actorEmail || null,
+
+      userUid: actorUid,
+      userEmail: actorEmail || null,
+      userRole: "cashier",
+
+      mesa: typeof mesa === "number" ? mesa : null,
+      cuentaId: cuentaId || null,
+      pedidoId: pedidoId || null,
+
+      reason: reason?.trim() || null,
+      description: reason?.trim() || action,
+
+      metadata: metadata || {},
+
+      createdAt: serverTimestamp(),
+    }
+  )};
+
 
 export const createOrRefreshCashierBill = async ({
   data,

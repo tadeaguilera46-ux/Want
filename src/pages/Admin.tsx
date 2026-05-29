@@ -20,6 +20,7 @@ import {
 import { createAuditLog } from "../lib/audit-logs";
 import { getDb } from "../lib/firebase";
 import { toast } from "sonner";
+import { useOnlineStatus } from "../hooks/useOnlineStatus";
 import { AdminSidebar } from "../components/admin/AdminSidebar";
 import { AdminSectionShell } from "../components/admin/AdminSectionShell";
 import { AdminLiveActivityFeed } from "../components/admin/AdminLiveActivityFeed";
@@ -309,6 +310,7 @@ const Admin = () => {
   const stockEnabled = canUseStock(restaurant?.plan); 
   const { logout, user } = useAuth();
   const [liveNow, setLiveNow] = useState(Date.now());
+  const isOnline = useOnlineStatus();
 
   const [mesas, setMesas] = useState<MesaDoc[]>([]);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
@@ -783,11 +785,26 @@ return (
               </div>
               <AdminLiveActivityFeed restaurantId={restaurantId} />
               <div className="flex items-center gap-3">
-                <div className="hidden items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 lg:flex">
-                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.14)]" />
+                <div className={`hidden items-center gap-2 rounded-2xl border px-4 py-2 lg:flex ${
+                    isOnline
+                      ? "border-emerald-200 bg-emerald-50"
+                      : "border-red-200 bg-red-50"
+                  }`}
+                >
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full ${
+                      isOnline
+                        ? "bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.14)]"
+                        : "bg-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.14)]"
+                    }`}
+                  />
 
-                  <span className="text-sm font-black text-emerald-700">
-                    Operativo
+                  <span
+                    className={`text-sm font-black ${
+                      isOnline ? "text-emerald-700" : "text-red-700"
+                    }`}
+                  >
+                    {isOnline ? "Online" : "Sin conexión"}
                   </span>
                 </div>
 
@@ -1069,12 +1086,6 @@ return (
                               >
                                 {mesa.prioridadLabel || mesa.estado}
                               </span>
-
-                              {mesa.cuentaActual && (
-                                <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-violet-700">
-                                  Cuenta {mesa.cuentaActual.estado}
-                                </span>
-                              )}
                             </div>
                           </div>
 

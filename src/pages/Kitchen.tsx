@@ -13,6 +13,8 @@ import {
 import { ChefHat, Clock3, Flame, CheckCircle2, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { createAuditLog } from "../lib/audit-logs";
+import { useOnlineStatus } from "../hooks/useOnlineStatus";
+import { useWakeLock } from "../hooks/useWakeLock";
 import type {
   PedidoRecord,
   EstadoCocinaBarra,
@@ -45,7 +47,8 @@ const Kitchen = () => {
   const navigate = useNavigate();
   const { restaurantId } = useRestaurant();
   const { logout, user } = useAuth();
-
+  const isOnline = useOnlineStatus();
+  const { isWakeLockActive, isWakeLockSupported } = useWakeLock(true);
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loadingById, setLoadingById] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
@@ -195,6 +198,11 @@ const Kitchen = () => {
 
   const cambiarEstado = async (id: string, estado: EstadoCocina) => {
     if (loadingById[id] || !restaurantId) return;
+
+    if (!isOnline) {
+      toast.error("Sin conexión. No se pueden actualizar pedidos ahora.");
+      return;
+    }
 
     try {
       setLoadingById((prev) => ({ ...prev, [id]: true }));
@@ -400,9 +408,43 @@ const Kitchen = () => {
                 )}
               </div>
             </div>
+            <div
+              className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-2 text-sm font-black shadow-sm ${
+                isWakeLockActive
+                  ? "border-blue-200 bg-blue-50 text-blue-700"
+                  : "border-zinc-200 bg-white text-zinc-500"
+              }`}
+            >
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${
+                  isWakeLockActive ? "bg-blue-500" : "bg-zinc-300"
+                }`}
+              />
 
+              {isWakeLockSupported
+                ? isWakeLockActive
+                  ? "Pantalla activa"
+                  : "Pantalla puede dormirse"
+                : "Wake Lock no soportado"}
+            </div>
             <div className="flex flex-col gap-3 xl:items-end">
-              <button
+              <div
+                className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-2 text-sm font-black shadow-sm ${
+                  isOnline
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-red-200 bg-red-50 text-red-700"
+                }`}
+              >
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    isOnline
+                      ? "bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.14)]"
+                      : "bg-red-500 shadow-[0_0_0_4px_rgba(239,68,68,0.14)]"
+                  }`}
+                />
+                {isOnline ? "Online" : "Sin conexión"}
+              </div>
+                <button
                 onClick={handleLogout}
                 disabled={loggingOut}
                 className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -454,6 +496,11 @@ const Kitchen = () => {
       </div>
 
       <main className="mx-auto max-w-[1800px] px-4 py-4 md:px-6 md:py-6 lg:px-8">
+        {!isOnline && (
+          <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+            Sin conexión. Estás viendo datos guardados localmente. Las acciones quedan deshabilitadas hasta reconectar.
+          </div>
+        )}
         {!soundEnabled && (
           <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
             Tocá la pantalla una vez para habilitar las notificaciones sonoras.
@@ -579,18 +626,20 @@ const Kitchen = () => {
                   {next && (
                     <button
                       onClick={() => cambiarEstado(p.id, next)}
-                      disabled={isLoading}
+                      disabled={isLoading || !isOnline}
                       className={`mt-5 flex h-12 w-full items-center justify-center rounded-2xl px-4 text-base font-extrabold text-white transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
                         next === "preparando"
                           ? "bg-slate-950 hover:opacity-90"
                           : "bg-emerald-600 hover:opacity-90"
                       }`}
                     >
-                      {isLoading
-                        ? "Actualizando..."
-                        : next === "preparando"
-                          ? "Empezar preparación"
-                          : "Marcar como listo"}
+                      {!isOnline
+                        ? "Sin conexión"
+                        : isLoading
+                          ? "Actualizando..."
+                          : next === "preparando"
+                            ? "Empezar preparación"
+                            : "Marcar como listo"}
                     </button>
                   )}
                 </div>

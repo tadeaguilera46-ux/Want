@@ -7,7 +7,6 @@ import {
   where,
 } from "firebase/firestore";
 import { toast } from "sonner";
-import { createAuditLog } from "../lib/audit-logs";
 import {
   AlertTriangle,
   FileText,
@@ -18,6 +17,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useOnlineStatus } from "../hooks/useOnlineStatus";
 import { getDb } from "../lib/firebase";
 import { useAuth } from "../lib/auth-context";
 import { useRestaurant } from "../lib/restaurant-context";
@@ -191,6 +191,7 @@ const Cashier = () => {
   const [searchParams] = useSearchParams();
   const { restaurantId: contextRestaurantId } = useRestaurant();
   const { user } = useAuth();
+  const isOnline = useOnlineStatus();
 
   const restaurantId =
     contextRestaurantId || searchParams.get("restaurantId") || "";
@@ -505,6 +506,10 @@ const Cashier = () => {
   };
 
   const createManualBill = async () => {
+    if (!isOnline) {
+      toast.error("Sin conexión.");
+      return;
+    }
     if (!user || !restaurantId) return;
 
     const mesa = Number(manualMesa);
@@ -578,6 +583,10 @@ const Cashier = () => {
   };
 
   const addItemToSelectedBill = async () => {
+    if (!isOnline) {
+      toast.error("Sin conexión.");
+      return;
+    }
     if (!user || !restaurantId || !selectedCuenta) return;
 
     const menuItem = menuItems.find((item) => item.id === addSelectedMenuId);
@@ -642,6 +651,10 @@ const Cashier = () => {
   };
 
   const saveAdjustments = async () => {
+    if (!isOnline) {
+      toast.error("Sin conexión.");
+      return;
+    }
     if (!user || !restaurantId || !selectedCuenta) return;
 
     try {
@@ -660,17 +673,6 @@ const Cashier = () => {
         actorEmail: user.email,
       });
 
-      await createAuditLog({
-        restaurantId,
-        action: "ajuste_cuenta",
-        userUid: user.uid,
-        userEmail: user.email || "",
-        userRole: "cashier",
-        mesa: Number(selectedCuenta.mesa),
-        cuentaId: selectedCuenta.id,
-        description: `Caja actualizó ajustes de mesa ${selectedCuenta.mesa}`,
-      });
-
     } catch (err) {
       console.error("Error guardando ajustes:", err);
       setError(
@@ -682,6 +684,10 @@ const Cashier = () => {
   };
 
   const handleMarkPaid = async () => {
+    if (!isOnline) {
+      toast.error("Sin conexión.");
+      return;
+    }
     if (!user || !restaurantId || !selectedCuenta) return;
 
     try {
@@ -718,16 +724,6 @@ const Cashier = () => {
         ],
 
       });
-      await createAuditLog({
-        restaurantId,
-        action: "cuenta_cobrada",
-        userUid: user.uid,
-        userEmail: user.email || "",
-        userRole: "cashier",
-        mesa: Number(selectedCuenta.mesa),
-        cuentaId: selectedCuenta.id,
-        description: `Caja registró pago de ${formatPriceARS(amount)} en mesa ${selectedCuenta.mesa}`,
-      });
 
     } catch (err) {
       console.error("Error registrando pago:", err);
@@ -740,6 +736,10 @@ const Cashier = () => {
   };
 
   const handlePrint = async () => {
+    if (!isOnline) {
+      toast.error("Sin conexión.");
+      return;
+    }
     if (!user || !restaurantId || !selectedCuenta) return;
 
     try {
@@ -751,17 +751,6 @@ const Cashier = () => {
         actorEmail: user.email,
       });
 
-      await createAuditLog({
-        restaurantId,
-        action: "precuenta_impresa",
-        userUid: user.uid,
-        userEmail: user.email || "",
-        userRole: "cashier",
-        mesa: Number(selectedCuenta.mesa),
-        cuentaId: selectedCuenta.id,
-        description: `Caja imprimió pre-cuenta de mesa ${selectedCuenta.mesa}`,
-      });
-
       window.print();
     } catch (err) {
       console.error("Error registrando impresión:", err);
@@ -770,6 +759,10 @@ const Cashier = () => {
   };
 
   const handleRequestInvoice = async () => {
+    if (!isOnline) {
+      toast.error("Sin conexión.");
+      return;
+    }
     if (!user || !restaurantId || !selectedCuenta) return;
 
     if (!invoiceCustomerName.trim()) return alert("Ingresá el nombre del cliente.");
@@ -803,17 +796,7 @@ const Cashier = () => {
           provider: "manual",
         },
       });
-      await createAuditLog({
-        restaurantId,
-        action: "factura_solicitada",
-        userUid: user.uid,
-        userEmail: user.email || "",
-        userRole: "cashier",
-        mesa: Number(selectedCuenta.mesa),
-        cuentaId: selectedCuenta.id,
-        description: `Caja solicitó factura ${invoiceType} para mesa ${selectedCuenta.mesa}`,
-      });
-
+    
     } catch (err) {
       console.error("Error solicitando factura:", err);
       setError(
@@ -853,6 +836,20 @@ const Cashier = () => {
             <p className="mt-2 text-sm text-zinc-500">
               Cuentas, cobros, descuentos, carga manual e impresión.
             </p>
+            <div
+              className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold border ${
+                isOnline
+                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  : "bg-red-50 text-red-700 border-red-200"
+              }`}
+            >
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  isOnline ? "bg-emerald-500" : "bg-red-500"
+                }`}
+              />
+              {isOnline ? "Online" : "Offline"}
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -892,7 +889,12 @@ const Cashier = () => {
             </Link>
           </div>
         </div>
-
+        {!isOnline && (
+          <div className="mb-5 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+            Sin conexión. Estás viendo datos guardados localmente. Los cobros,
+            facturas y modificaciones están deshabilitados hasta reconectar.
+          </div>
+        )}
         {error && (
           <div className="mb-5 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
             {error}
@@ -1059,7 +1061,7 @@ const Cashier = () => {
 
                 <button
                   onClick={createManualBill}
-                  disabled={processing}
+                  disabled={processing || !isOnline}
                   className="h-12 w-full rounded-2xl bg-zinc-950 font-black text-white disabled:opacity-50"
                 >
                   Crear cuenta
@@ -1105,8 +1107,9 @@ const Cashier = () => {
                   </div>
 
                   <button
-                    onClick={handlePrint}
-                    className="flex h-12 items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                     onClick={handlePrint}
+                     disabled={!isOnline}
+                    className="flex h-12 items-center disabled:opacity-50 gap-2 rounded-2xl border border-zinc-200 bg-white px-4 font-semibold text-zinc-700 transition hover:bg-zinc-50"
                   >
                     <Printer size={18} />
                     Imprimir pre-cuenta
@@ -1190,7 +1193,7 @@ const Cashier = () => {
 
                     <button
                       onClick={addItemToSelectedBill}
-                      disabled={processing}
+                      disabled={processing || !isOnline}
                       className="h-12 rounded-2xl bg-zinc-950 px-5 font-black text-white disabled:opacity-50"
                     >
                       Agregar
@@ -1250,8 +1253,8 @@ const Cashier = () => {
                       />
 
                       <button
-                        onClick={saveAdjustments}
-                        disabled={processing}
+                          onClick={saveAdjustments}
+                          disabled={processing || !isOnline}
                         className="h-12 w-full rounded-2xl bg-zinc-950 font-black text-white disabled:opacity-50"
                       >
                         Guardar ajustes
@@ -1339,6 +1342,7 @@ const Cashier = () => {
                       onClick={handleMarkPaid}
                       disabled={
                         processing ||
+                        !isOnline ||
                         selectedCuenta.estado === "pagada" ||
                         isPaymentAmountInvalid
                       }
@@ -1482,8 +1486,8 @@ const Cashier = () => {
                   </div>
 
                   <button
-                    onClick={handleRequestInvoice}
-                    disabled={processing}
+                      onClick={handleRequestInvoice}
+                      disabled={processing || !isOnline}
                     className="mt-3 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 font-black text-zinc-800 disabled:opacity-50"
                   >
                     Guardar solicitud de factura

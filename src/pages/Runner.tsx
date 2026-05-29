@@ -16,6 +16,8 @@ import { useAuth } from "../lib/auth-context";
 import { toast } from "sonner";
 import { getDb } from "../lib/firebase";
 import { createAuditLog } from "../lib/audit-logs";
+import { useOnlineStatus } from "../hooks/useOnlineStatus";
+import { useWakeLock } from "../hooks/useWakeLock";
 import {
   collection,
   onSnapshot,
@@ -61,6 +63,8 @@ const Runner = () => {
   const { restaurantId } = useRestaurant();
   const navigate = useNavigate();
   const { logout, user } = useAuth();
+  const isOnline = useOnlineStatus();
+  const { isWakeLockActive, isWakeLockSupported } = useWakeLock(true);
 
   const [tab, setTab] = useState<"orders" | "bills">("orders");
   const [orders, setOrders] = useState<PedidoRecord[]>([]);
@@ -425,6 +429,10 @@ const Runner = () => {
 
   const markDelivered = async (task: ReadyTask) => {
     if (loadingOrdersById[task.id] || !restaurantId) return;
+    if (!isOnline) {
+      toast.error("Sin conexión. No se pueden entregar pedidos.");
+      return;
+    }
 
     try {
       setLoadingOrdersById((prev) => ({ ...prev, [task.id]: true }));
@@ -469,6 +477,10 @@ const Runner = () => {
 
   const updateBill = async (id: string, estado: EstadoCuenta) => {
     if (loadingBillsById[id] || !restaurantId) return;
+    if (!isOnline) {
+      toast.error("Sin conexión. No se pueden actualizar cuentas.");
+      return;
+    }
 
     try {
       setLoadingBillsById((prev) => ({ ...prev, [id]: true }));
@@ -517,6 +529,10 @@ const Runner = () => {
 
   const handleMesaLimpia = async (bill: CuentaRecord) => {
     if (loadingBillsById[bill.id] || !restaurantId) return;
+    if (!isOnline) {
+      toast.error("Sin conexión. No se puede actualizar la mesa.");
+      return;
+    }
 
     const ok = window.confirm(
       `¿Confirmás que la mesa ${bill.mesa} ya está limpia y lista para nuevos clientes?`
@@ -719,7 +735,7 @@ const Runner = () => {
 
         <button
           onClick={() => markDelivered(task)}
-          disabled={isLoading}
+          disabled={isLoading || !isOnline}
           className={`mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-sm font-extrabold text-white transition-all duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 ${
             isFood ? "bg-emerald-600" : "bg-blue-600"
           }`}
@@ -839,7 +855,7 @@ const Runner = () => {
           {bill.estado === "pendiente" && (
             <button
               onClick={() => updateBill(bill.id, "en_camino")}
-              disabled={isLoading}
+              disabled={isLoading || !isOnline}
               className="flex h-12 items-center justify-center rounded-2xl bg-slate-900 px-4 text-sm font-extrabold text-white transition-all duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading ? "Actualizando..." : "Llevar cuenta"}
@@ -849,7 +865,7 @@ const Runner = () => {
           {bill.estado === "en_camino" && (
             <button
               onClick={() => updateBill(bill.id, "pagada")}
-              disabled={isLoading}
+              disabled={isLoading || !isOnline}
               className="flex h-12 items-center justify-center rounded-2xl bg-emerald-600 px-4 text-sm font-extrabold text-white transition-all duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading ? "Actualizando..." : "Marcar pagada"}
@@ -859,7 +875,7 @@ const Runner = () => {
           {bill.estado === "pagada" && (
             <button
               onClick={() => handleMesaLimpia(bill)}
-              disabled={isLoading}
+              disabled={isLoading || !isOnline}
               className="flex h-12 items-center justify-center rounded-2xl bg-slate-900 px-4 text-sm font-extrabold text-white transition-all duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2"
             >
               {isLoading ? "Actualizando..." : "Mesa limpia"}
@@ -908,12 +924,42 @@ const Runner = () => {
                   </p>
                 )}
               </div>
+              <div
+                className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-2 text-sm font-black shadow-sm ${
+                  isWakeLockActive
+                    ? "border-blue-200 bg-blue-50 text-blue-700"
+                    : "border-zinc-200 bg-white text-zinc-500"
+                }`}
+              >
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${
+                    isWakeLockActive ? "bg-blue-500" : "bg-zinc-300"
+                  }`}
+                />
 
+                {isWakeLockSupported
+                  ? isWakeLockActive
+                    ? "Pantalla activa"
+                    : "Pantalla puede dormirse"
+                  : "Wake Lock no soportado"}
+              </div>
               <div className="ml-auto flex flex-col items-end gap-2">
-                <div className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
+               <div
+                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold border ${
+                    isOnline
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-red-50 text-red-700 border-red-200"
+                  }`}
+                >
                   <Clock size={12} />
-                  Live
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+
+                  {isOnline ? "Online" : "Offline"}
+
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      isOnline ? "bg-emerald-500" : "bg-red-500"
+                    }`}
+                  />
                 </div>
 
                 <button
@@ -978,6 +1024,11 @@ const Runner = () => {
         </header>
 
         <main className="px-4 py-4 pb-24 sm:px-5 sm:py-5">
+          {!isOnline && (
+            <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+              Sin conexión. Estás viendo datos guardados localmente. Las acciones están deshabilitadas hasta reconectar.
+            </div>
+          )}
           {!soundEnabled && (
             <button
               type="button"
