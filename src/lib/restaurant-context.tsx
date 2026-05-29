@@ -16,16 +16,19 @@ type FirestoreTimestamp = {
   toDate: () => Date;
 };
 
+type RestaurantBilling = {
+  status?: string;
+  subscriptionId?: string | null;
+  currentPeriodEnd?: FirestoreTimestamp | null;
+};
+
 type RestaurantContextRestaurant = {
   id: string;
   name?: string;
   plan: RestaurantPlan;
-  subscriptionStatus?: string;
   active?: boolean;
-  nextBillingDate?: FirestoreTimestamp | null;
+  billing?: RestaurantBilling;
   trialEndsAt?: FirestoreTimestamp | null;
-  monthlyPrice?: number;
-  mpSubscriptionId?: string | null;
 };
 
 type RestaurantContextValue = {
@@ -111,31 +114,36 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
         const isTimestamp = (val: unknown): val is FirestoreTimestamp =>
           typeof (val as { toDate?: unknown } | null)?.toDate === "function";
 
+        const rawBilling =
+          data.billing && typeof data.billing === "object"
+            ? (data.billing as Record<string, unknown>)
+            : null;
+
         setRestaurant({
           id: snapshot.id,
           name: typeof data.name === "string" ? data.name : undefined,
           plan: normalizePlan(
             typeof data.plan === "string" ? data.plan : null
           ),
-          subscriptionStatus:
-            typeof data.subscriptionStatus === "string"
-              ? data.subscriptionStatus
-              : undefined,
           active: typeof data.active === "boolean" ? data.active : undefined,
-          nextBillingDate: isTimestamp(data.nextBillingDate)
-            ? data.nextBillingDate
-            : null,
+          billing: rawBilling
+            ? {
+                status:
+                  typeof rawBilling.status === "string"
+                    ? rawBilling.status
+                    : undefined,
+                subscriptionId:
+                  typeof rawBilling.subscriptionId === "string"
+                    ? rawBilling.subscriptionId
+                    : null,
+                currentPeriodEnd: isTimestamp(rawBilling.currentPeriodEnd)
+                  ? rawBilling.currentPeriodEnd
+                  : null,
+              }
+            : undefined,
           trialEndsAt: isTimestamp(data.trialEndsAt)
             ? data.trialEndsAt
             : null,
-          monthlyPrice:
-            typeof data.monthlyPrice === "number"
-              ? data.monthlyPrice
-              : undefined,
-          mpSubscriptionId:
-            typeof data.mpSubscriptionId === "string"
-              ? data.mpSubscriptionId
-              : null,
         });
 
         setRestaurantLoading(false);

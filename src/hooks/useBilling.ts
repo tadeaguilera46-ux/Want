@@ -1,25 +1,18 @@
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { getAuth } from "firebase/auth";
 import { getApp } from "firebase/app";
 import { toast } from "sonner";
 import { getDb } from "../lib/firebase";
 import type { RestaurantPlan } from "../lib/plan";
 
-// Mercado Pago plan IDs — must match created plans in MP dashboard
-export const MP_PLAN_IDS: Record<RestaurantPlan, string> = {
-  starter: "fe438d142dab44648be3a09064c905ac",
-  pro: "4aa52e5168ef49ac8bad3657378430aa",
-  premium: "76d2a6a94b2843bf981e4cfd995a800b",
-};
-
 export type PaymentRecord = {
   id: string;
-  type?: "monthly" | "setup" | string;
-  amount?: number;
+  type?: string;
   plan?: RestaurantPlan;
-  notes?: string;
-  paidAt?: { toDate?: () => Date };
+  billingStatus?: string;
+  subscriptionId?: string;
   createdAt?: { toDate?: () => Date };
 };
 
@@ -41,7 +34,7 @@ export function useBilling(restaurantId: string | null) {
     setPaymentsLoading(true);
 
     const q = query(
-      collection(db, "restaurants", restaurantId, "payments"),
+      collection(db, "restaurants", restaurantId, "billingEvents"),
       orderBy("createdAt", "desc")
     );
 
@@ -66,21 +59,23 @@ export function useBilling(restaurantId: string | null) {
 
     try {
       setSubscribing(true);
-      // Assumes createSubscription is deployed as an onCall function.
-      // If it's an onRequest function, replace with fetch() to the function URL.
+      const auth = getAuth();
+      const payerEmail = auth.currentUser?.email ?? "";
+
       const fns = getFunctions(getApp(), "us-central1");
       const createSubscription = httpsCallable<
-        { restaurantId: string; planId: string },
-        { init_point: string }
+        { restaurantId: string; plan: RestaurantPlan; payerEmail: string },
+        { subscriptionId: string; initPoint: string }
       >(fns, "createSubscription");
 
       const { data } = await createSubscription({
         restaurantId,
-        planId: MP_PLAN_IDS[plan],
+        plan,
+        payerEmail,
       });
 
-      if (data.init_point) {
-        window.location.href = data.init_point;
+      if (data.initPoint) {
+        window.location.href = data.initPoint;
       }
     } catch (error) {
       console.error("Error iniciando suscripción:", error);

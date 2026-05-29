@@ -21,7 +21,7 @@ const PLAN_AMOUNTS: Record<string, number> = {
 // ─── 1. Crear suscripción ────────────────────────────────────────────────────
 
 export const createSubscription = onCall(
-  { secrets: [MP_ACCESS_TOKEN] },
+  { secrets: [MP_ACCESS_TOKEN], cors: true },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "No autenticado");
@@ -236,7 +236,7 @@ export const mpWebhook = onRequest(
 // ─── 3. Cancelar suscripción ─────────────────────────────────────────────────
 
 export const cancelSubscription = onCall(
-  { secrets: [MP_ACCESS_TOKEN] },
+  { secrets: [MP_ACCESS_TOKEN], cors: true },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "No autenticado");

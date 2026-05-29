@@ -125,11 +125,11 @@ export function AdminBilling({ restaurantId }: { restaurantId: string }) {
   const [showAllPayments, setShowAllPayments] = useState(false);
 
   const currentPlan = restaurant?.plan ?? "starter";
-  const subscriptionStatus = restaurant?.subscriptionStatus ?? "trial";
-  const nextBillingDate = restaurant?.nextBillingDate;
+  const subscriptionStatus = restaurant?.billing?.status ?? "trial";
+  const nextBillingDate = restaurant?.billing?.currentPeriodEnd;
   const trialEndsAt = restaurant?.trialEndsAt;
-  const monthlyPrice = restaurant?.monthlyPrice;
-  const mpSubscriptionId = restaurant?.mpSubscriptionId;
+  const monthlyPrice = PLANS.find((p) => p.key === currentPlan)?.price;
+  const mpSubscriptionId = restaurant?.billing?.subscriptionId;
 
   const isBlocked = subscriptionStatus === "blocked";
   const isPastDue = subscriptionStatus === "past_due";
@@ -415,17 +415,28 @@ export function AdminBilling({ restaurantId }: { restaurantId: string }) {
   );
 }
 
+const EVENT_LABELS: Record<string, string> = {
+  mp_authorized: "Pago aprobado",
+  mp_paused: "Suscripción pausada",
+  mp_cancelled: "Suscripción cancelada",
+  mp_pending: "Pago pendiente",
+};
+
+const STATUS_BADGE: Record<string, string> = {
+  active: "border-emerald-200 bg-emerald-100 text-emerald-800",
+  past_due: "border-amber-200 bg-amber-100 text-amber-800",
+  canceled: "border-red-200 bg-red-100 text-red-800",
+  pending: "border-zinc-200 bg-zinc-100 text-zinc-600",
+};
+
 function PaymentRow({ payment }: { payment: PaymentRecord }) {
   const typeLabel =
-    payment.type === "monthly"
-      ? "Mensualidad"
-      : payment.type === "setup"
-        ? "Setup inicial"
-        : "Pago";
+    EVENT_LABELS[payment.type ?? ""] ?? payment.type ?? "Evento";
 
   const planLabel = payment.plan ? PLAN_LABELS[payment.plan] : null;
-  const dateStr =
-    formatTimestamp(payment.paidAt ?? payment.createdAt, "short") ?? "—";
+  const dateStr = formatTimestamp(payment.createdAt, "short") ?? "—";
+  const badgeClass =
+    STATUS_BADGE[payment.billingStatus ?? ""] ?? STATUS_BADGE["pending"];
 
   return (
     <div className="flex items-center justify-between gap-4 rounded-2xl bg-zinc-50 px-4 py-3">
@@ -440,10 +451,12 @@ function PaymentRow({ payment }: { payment: PaymentRecord }) {
         </p>
         <p className="text-xs text-zinc-500">{dateStr}</p>
       </div>
-      {payment.amount !== undefined && (
-        <p className="shrink-0 text-sm font-black text-zinc-950">
-          {formatPriceARS(payment.amount)}
-        </p>
+      {payment.billingStatus && (
+        <span
+          className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-black ${badgeClass}`}
+        >
+          {STATUS_LABELS[payment.billingStatus] ?? payment.billingStatus}
+        </span>
       )}
     </div>
   );
