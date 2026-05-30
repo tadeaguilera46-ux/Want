@@ -266,9 +266,9 @@ const Menu = () => {
   };
 
   const ASSIST_OPTIONS = [
-    { key: "sal" as const, emoji: "🧂", label: "Pedir sal" },
-    { key: "hielo" as const, emoji: "🧊", label: "Pedir hielo" },
-    { key: "runner" as const, emoji: "🙋", label: "Llamar al mozo" },
+    { key: "sal" as const, label: "Pedir sal" },
+    { key: "hielo" as const, label: "Pedir hielo" },
+    { key: "runner" as const, label: "Llamar al mozo" },
   ];
 
   const sendAssistance = async (type: "sal" | "hielo" | "runner") => {
@@ -397,15 +397,14 @@ const Menu = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                <motion.button
-                  whileTap={{ scale: 0.9 }}
+                <button
                   onClick={() => { setAssistOpen(true); setAssistSent(null); }}
-                  className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-extrabold text-white shadow-want transition-all hover:scale-[1.03] active:scale-[0.98]"
-                  style={{ backgroundColor: primaryColor, opacity: 0.85 }}
+                  className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-extrabold shadow-sm transition-all hover:opacity-80 active:scale-[0.97]"
+                  style={{ color: primaryColor, borderColor: primaryColor, backgroundColor: `${primaryColor}12` }}
                 >
-                  <Bell size={15} />
+                  <Bell size={14} />
                   Asistencia
-                </motion.button>
+                </button>
 
                 <button
                   onClick={() =>
@@ -588,66 +587,63 @@ const Menu = () => {
       {/* Assistance modal */}
       <AnimatePresence>
         {assistOpen && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center">
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center">
             <motion.div
-              initial={{ opacity: 0, y: 32 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 32 }}
-              transition={{ type: "spring", stiffness: 420, damping: 32 }}
-              className="w-full max-w-lg rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl"
+              exit={{ opacity: 0, y: 16 }}
+              transition={{ duration: 0.18 }}
+              className="w-full max-w-lg rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl"
             >
               {assistSent ? (
                 <motion.div
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  className="flex flex-col items-center py-6 text-center"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.15 }}
+                  className="flex flex-col items-center py-8 text-center"
                 >
-                  <div
-                    className="flex h-16 w-16 items-center justify-center rounded-full"
-                    style={{ backgroundColor: `${primaryColor}18` }}
-                  >
-                    <Check size={30} style={{ color: primaryColor }} />
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full border border-zinc-200 bg-zinc-50">
+                    <Check size={20} className="text-zinc-700" />
                   </div>
-                  <p className="mt-4 text-xl font-black text-zinc-950">
-                    ¡Solicitud enviada!
+                  <p className="mt-3 text-base font-black text-zinc-950">
+                    Solicitud enviada
                   </p>
                   <p className="mt-1 text-sm text-zinc-500">
-                    El mozo fue notificado. Ya viene.
+                    En un momento viene el mozo.
                   </p>
                 </motion.div>
               ) : (
                 <>
-                  <div className="mb-5 flex items-start justify-between gap-3">
+                  <div className="mb-4 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-zinc-400">
                         Mesa {table}
                       </p>
-                      <h2 className="mt-1 text-2xl font-black tracking-tight text-zinc-950">
-                        ¿En qué te ayudamos?
+                      <h2 className="mt-0.5 text-xl font-black tracking-tight text-zinc-950">
+                        ¿Necesitás algo?
                       </h2>
                     </div>
                     <button
                       onClick={() => setAssistOpen(false)}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-700"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-600"
                     >
-                      <X size={18} />
+                      <X size={16} />
                     </button>
                   </div>
 
                   <div className="space-y-2">
                     {ASSIST_OPTIONS.map((opt) => (
-                      <motion.button
+                      <button
                         key={opt.key}
-                        whileTap={{ scale: 0.97 }}
                         disabled={sendingAssist}
                         onClick={() => void sendAssistance(opt.key)}
-                        className="flex w-full items-center gap-4 rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-4 text-left transition hover:bg-zinc-100 disabled:opacity-60"
+                        className="flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-left transition hover:bg-zinc-50 active:bg-zinc-100 disabled:opacity-50"
                       >
-                        <span className="text-3xl">{opt.emoji}</span>
-                        <span className="text-base font-black text-zinc-950">
+                        <span className="text-sm font-semibold text-zinc-800">
                           {opt.label}
                         </span>
-                      </motion.button>
+                        <ChevronRight size={15} className="shrink-0 text-zinc-400" />
+                      </button>
                     ))}
                   </div>
                 </>
