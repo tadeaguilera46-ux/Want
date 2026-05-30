@@ -11,6 +11,7 @@ import {
 import { toast } from "sonner";
 import {
   AlertTriangle,
+  ArrowLeft,
   CheckCircle2,
   Clock,
   ExternalLink,
@@ -20,7 +21,7 @@ import {
   RotateCcw,
   XCircle,
 } from "lucide-react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { getDb } from "../lib/firebase";
 import { useRestaurant } from "../lib/restaurant-context";
 
@@ -116,6 +117,7 @@ const TABS: { key: TabKey; label: string; color: string; activeClass: string }[]
 ];
 
 const CashierInvoices = () => {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { restaurantId: contextRestaurantId } = useRestaurant();
 
@@ -301,6 +303,13 @@ const CashierInvoices = () => {
       <div className="mx-auto max-w-7xl px-4 py-6">
         {/* Header */}
         <header className="mb-6">
+          <button
+            onClick={() => navigate(-1)}
+            className="mb-4 flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm font-black text-zinc-700 shadow-sm transition hover:bg-zinc-50"
+          >
+            <ArrowLeft size={15} />
+            Volver al admin
+          </button>
           <p className="text-xs font-black uppercase tracking-[0.25em] text-zinc-500">
             WANT Fiscal
           </p>
