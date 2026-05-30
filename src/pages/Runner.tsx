@@ -54,6 +54,14 @@ type ReadyTask = {
   items: PedidoItem[];
 };
 
+type AssistanceRequest = {
+  id: string;
+  mesa: number | string;
+  type: "sal" | "hielo" | "runner";
+  status: "pending" | "resolved";
+  createdAt?: { seconds?: number; toMillis?: () => number };
+};
+
 const normalizeObservation = (value?: string) => value?.trim() || "";
 
 const isFoodItem = (item: PedidoItem) => item.category !== "drinks";
@@ -66,7 +74,10 @@ const Runner = () => {
   const isOnline = useOnlineStatus();
   const { isWakeLockActive, isWakeLockSupported } = useWakeLock(true);
 
-  const [tab, setTab] = useState<"orders" | "bills">("orders");
+  const [tab, setTab] = useState<"orders" | "bills" | "calls">("orders");
+  const [assistanceRequests, setAssistanceRequests] = useState<AssistanceRequest[]>([]);
+  const notifiedAssistIdsRef = useRef<Set<string>>(new Set());
+  const firstAssistLoadRef = useRef(true);
   const [orders, setOrders] = useState<PedidoRecord[]>([]);
   const [bills, setBills] = useState<CuentaRecord[]>([]);
   const [loadingOrdersById, setLoadingOrdersById] = useState<
@@ -426,6 +437,89 @@ const Runner = () => {
 
   return () => unsubscribe();
 }, [restaurantId, soundEnabled]);
+
+  useEffect(() => {
+    if (!restaurantId) return;
+
+    const q = query(
+      collection(db, "restaurants", restaurantId, "assistanceRequests"),
+      orderBy("createdAt", "desc"),
+      limit(30)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map((d) => ({ id: d.id, ...d.data() })) as AssistanceRequest[];
+      const pending = data.filter((r) => r.status === "pending");
+
+      if (firstAssistLoadRef.current) {
+        pending.forEach((r) => notifiedAssistIdsRef.current.add(r.id));
+        firstAssistLoadRef.current = false;
+      } else {
+        const newOnes = pending.filter((r) => !notifiedAssistIdsRef.current.has(r.id));
+        if (newOnes.length > 0) {
+          void playSound();
+          newOnes.forEach((r) => notifiedAssistIdsRef.current.add(r.id));
+        }
+      }
+
+      setAssistanceRequests(pending);
+    });
+
+    return () => unsubscribe();
+  }, [restaurantId, soundEnabled]);
+
+  const markResolved = async (id: string) => {
+    if (!restaurantId) return;
+    await updateDoc(doc(db, "restaurants", restaurantId, "assistanceRequests", id), {
+      status: "resolved",
+      resolvedAt: serverTimestamp(),
+    });
+  };
+
+  const ASSIST_LABELS: Record<string, { emoji: string; label: string }> = {
+    sal:    { emoji: "🧂", label: "Pide sal" },
+    hielo:  { emoji: "🧊", label: "Pide hielo" },
+    runner: { emoji: "🙋", label: "Llama al mozo" },
+  };
+
+  const renderAssistCard = (req: AssistanceRequest) => {
+    const info = ASSIST_LABELS[req.type] ?? { emoji: "❓", label: req.type };
+    const isNew = now - (req.createdAt?.toMillis?.() ?? (req.createdAt?.seconds ?? 0) * 1000) < NEW_BADGE_MS;
+
+    return (
+      <motion.div
+        key={req.id}
+        layout
+        className={`rounded-3xl border border-slate-200 bg-white p-4 shadow-sm ${isNew ? "ring-2 ring-orange-300" : ""}`}
+      >
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">{info.emoji}</span>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-black tracking-tight text-slate-900">
+                  Mesa {req.mesa}
+                </h2>
+                {isNew && (
+                  <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide text-white">
+                    Nuevo
+                  </span>
+                )}
+              </div>
+              <p className="mt-0.5 text-sm font-bold text-slate-600">{info.label}</p>
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={() => void markResolved(req.id)}
+          className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 text-sm font-extrabold text-white transition active:scale-[0.99]"
+        >
+          Marcar atendido
+        </button>
+      </motion.div>
+    );
+  };
 
   const markDelivered = async (task: ReadyTask) => {
     if (loadingOrdersById[task.id] || !restaurantId) return;
@@ -973,7 +1067,7 @@ const Runner = () => {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="mt-4 grid grid-cols-3 gap-2">
               <button
                 onClick={() => setTab("orders")}
                 className={`relative flex h-12 items-center justify-center rounded-2xl px-3 text-sm font-extrabold transition-all ${
@@ -983,13 +1077,7 @@ const Runner = () => {
                 }`}
               >
                 Entregas
-                <span
-                  className={`ml-2 rounded-full px-2 py-0.5 text-xs ${
-                    tab === "orders"
-                      ? "bg-white/15 text-white"
-                      : "bg-slate-100 text-slate-700"
-                  }`}
-                >
+                <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${tab === "orders" ? "bg-white/15 text-white" : "bg-slate-100 text-slate-700"}`}>
                   {readyTasks.length}
                 </span>
               </button>
@@ -1003,19 +1091,31 @@ const Runner = () => {
                 }`}
               >
                 Cuentas
-                <span
-                  className={`ml-2 rounded-full px-2 py-0.5 text-xs ${
-                    tab === "bills"
-                      ? "bg-white/15 text-white"
-                      : "bg-slate-100 text-slate-700"
-                  }`}
-                >
+                <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${tab === "bills" ? "bg-white/15 text-white" : "bg-slate-100 text-slate-700"}`}>
                   {visibleBills.length}
                 </span>
-
                 {pendingBills > 0 && (
                   <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-extrabold text-white shadow-sm">
                     {pendingBills}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => setTab("calls")}
+                className={`relative flex h-12 items-center justify-center rounded-2xl px-3 text-sm font-extrabold transition-all ${
+                  tab === "calls"
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "border border-slate-200 bg-white text-slate-700"
+                }`}
+              >
+                Llamadas
+                <span className={`ml-2 rounded-full px-2 py-0.5 text-xs ${tab === "calls" ? "bg-white/15 text-white" : "bg-slate-100 text-slate-700"}`}>
+                  {assistanceRequests.length}
+                </span>
+                {assistanceRequests.length > 0 && tab !== "calls" && (
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-orange-500 px-1.5 text-[11px] font-extrabold text-white shadow-sm">
+                    {assistanceRequests.length}
                   </span>
                 )}
               </button>
@@ -1079,6 +1179,25 @@ const Runner = () => {
               ) : (
                 <div className="space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
                   {visibleBills.map(renderBillCard)}
+                </div>
+              )}
+            </>
+          )}
+
+          {tab === "calls" && (
+            <>
+              {assistanceRequests.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center shadow-sm">
+                  <p className="text-base font-semibold text-slate-700">
+                    No hay llamadas pendientes
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Cuando una mesa pida asistencia, va a aparecer acá.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3 md:grid md:grid-cols-2 md:gap-4 md:space-y-0">
+                  {assistanceRequests.map(renderAssistCard)}
                 </div>
               )}
             </>

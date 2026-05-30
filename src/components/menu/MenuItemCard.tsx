@@ -48,6 +48,8 @@ function MenuItemCard({
       layout
       initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -4, boxShadow: "0 20px 40px -16px rgba(0,0,0,0.28)" }}
+      whileTap={{ scale: 0.985 }}
       transition={{ duration: 0.22 }}
       className="overflow-hidden rounded-[30px] border border-black/5 bg-white shadow-[0_12px_30px_-16px_rgba(0,0,0,0.22)]"
     >
