@@ -64,7 +64,7 @@ service firebase.storage {
     ============================================
     */
 
-    match /restaurants/{restaurantId}/menu/{itemId}/{fileName} {
+    match /restaurants/{restaurantId}/menu/{allPaths=**} {
       allow read: if true;
 
       allow write:

@@ -7,9 +7,9 @@ admin.initializeApp();
 const MP_ACCESS_TOKEN = defineSecret("MP_ACCESS_TOKEN");
 
 const MP_PLANS: Record<string, string> = {
-  starter: "a1eac39e058246df8bf69c454a470453",
-  pro: "d789488e92eb40a7afb2baeec7bfdc07",
-  premium: "b6352b49a6cd49948bcff5049ad87d4c",
+  starter: "ec0431741ea24561a858ae740135a58c",
+  pro: "3d8e990cc99a4c20baeac76f027b4c0d",
+  premium: "21d0a8de8a194d269d0f7e38272145d3",
 };
 
 // ─── 1. Crear suscripción ────────────────────────────────────────────────────
