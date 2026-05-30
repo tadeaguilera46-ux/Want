@@ -12,9 +12,12 @@ import { toast } from "sonner";
 import {
   AlertTriangle,
   CheckCircle2,
+  Clock,
+  ExternalLink,
   FileText,
   Mail,
   Receipt,
+  RotateCcw,
   XCircle,
 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
@@ -24,8 +27,8 @@ import { useRestaurant } from "../lib/restaurant-context";
 const db = getDb();
 
 type InvoiceStatus = "requested" | "issued" | "failed" | "not_requested";
-
 type InvoiceType = "A" | "B" | "C" | "ticket";
+type TabKey = "requested" | "issued" | "failed";
 
 type CuentaInvoice = {
   status?: InvoiceStatus;
@@ -45,6 +48,8 @@ type CuentaInvoice = {
   cae?: string;
   invoiceUrl?: string;
   failureReason?: string;
+  issuedAt?: { seconds?: number; toMillis?: () => number };
+  failedAt?: { seconds?: number; toMillis?: () => number };
 };
 
 type Cuenta = {
@@ -54,10 +59,7 @@ type Cuenta = {
   total: number;
   estado: string;
   invoice?: CuentaInvoice;
-  createdAt?: {
-    seconds?: number;
-    toMillis?: () => number;
-  };
+  createdAt?: { seconds?: number; toMillis?: () => number };
 };
 
 const formatPriceARS = (value: number) =>
@@ -74,12 +76,44 @@ const getTimestampMs = (value?: Cuenta["createdAt"]) => {
   return 0;
 };
 
-const statusLabel: Record<InvoiceStatus, string> = {
-  requested: "Solicitada",
-  issued: "Emitida",
-  failed: "Fallida",
-  not_requested: "No solicitada",
+const formatTs = (value?: CuentaInvoice["issuedAt"]) => {
+  if (!value) return null;
+  const ms =
+    typeof value.toMillis === "function"
+      ? value.toMillis()
+      : typeof value.seconds === "number"
+        ? value.seconds * 1000
+        : null;
+  if (!ms) return null;
+  return new Intl.DateTimeFormat("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(ms));
 };
+
+const TABS: { key: TabKey; label: string; color: string; activeClass: string }[] = [
+  {
+    key: "requested",
+    label: "Pendientes",
+    color: "text-amber-700",
+    activeClass: "bg-amber-600 text-white border-amber-600",
+  },
+  {
+    key: "issued",
+    label: "Emitidas",
+    color: "text-emerald-700",
+    activeClass: "bg-emerald-600 text-white border-emerald-600",
+  },
+  {
+    key: "failed",
+    label: "Fallidas",
+    color: "text-red-700",
+    activeClass: "bg-red-600 text-white border-red-600",
+  },
+];
 
 const CashierInvoices = () => {
   const [searchParams] = useSearchParams();
@@ -92,6 +126,7 @@ const CashierInvoices = () => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>("requested");
 
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [cae, setCae] = useState("");
@@ -113,7 +148,6 @@ const CashierInvoices = () => {
           id: docSnap.id,
           ...docSnap.data(),
         })) as Cuenta[];
-
         setCuentas(data);
         setLoading(false);
       },
@@ -126,45 +160,63 @@ const CashierInvoices = () => {
     return () => unsubscribe();
   }, [restaurantId]);
 
-  const invoiceRequests = useMemo(() => {
-    return cuentas
-      .filter((cuenta) => cuenta.invoice?.status === "requested")
-      .sort((a, b) => getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt));
-  }, [cuentas]);
+  const invoiceRequests = useMemo(
+    () =>
+      cuentas
+        .filter((c) => c.invoice?.status === "requested")
+        .sort((a, b) => getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt)),
+    [cuentas]
+  );
 
-  const issuedInvoices = useMemo(() => {
-    return cuentas.filter((cuenta) => cuenta.invoice?.status === "issued");
-  }, [cuentas]);
+  const issuedInvoices = useMemo(
+    () =>
+      cuentas
+        .filter((c) => c.invoice?.status === "issued")
+        .sort((a, b) => getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt)),
+    [cuentas]
+  );
 
-  const failedInvoices = useMemo(() => {
-    return cuentas.filter((cuenta) => cuenta.invoice?.status === "failed");
-  }, [cuentas]);
+  const failedInvoices = useMemo(
+    () =>
+      cuentas
+        .filter((c) => c.invoice?.status === "failed")
+        .sort((a, b) => getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt)),
+    [cuentas]
+  );
 
-  const selectedCuenta = useMemo(() => {
-    if (!selectedId) return null;
-    return cuentas.find((cuenta) => cuenta.id === selectedId) || null;
-  }, [cuentas, selectedId]);
+  const activeList =
+    activeTab === "requested"
+      ? invoiceRequests
+      : activeTab === "issued"
+        ? issuedInvoices
+        : failedInvoices;
+
+  const selectedCuenta = useMemo(
+    () => (selectedId ? cuentas.find((c) => c.id === selectedId) || null : null),
+    [cuentas, selectedId]
+  );
 
   useEffect(() => {
     if (!selectedCuenta) return;
-
     setInvoiceNumber(selectedCuenta.invoice?.invoiceNumber || "");
     setCae(selectedCuenta.invoice?.cae || "");
     setInvoiceUrl(selectedCuenta.invoice?.invoiceUrl || "");
     setFailureReason(selectedCuenta.invoice?.failureReason || "");
   }, [selectedCuenta?.id]);
 
+  const handleTabChange = (tab: TabKey) => {
+    setActiveTab(tab);
+    setSelectedId(null);
+  };
+
   const markIssued = async () => {
     if (!restaurantId || !selectedCuenta) return;
-
     if (!invoiceNumber.trim()) {
       toast.error("Ingresá el número de factura o comprobante.");
       return;
     }
-
     try {
       setSaving(true);
-
       await updateDoc(
         doc(db, "restaurants", restaurantId, "cuentas", selectedCuenta.id),
         {
@@ -177,8 +229,10 @@ const CashierInvoices = () => {
           updatedAt: serverTimestamp(),
         }
       );
+      toast.success("Factura marcada como emitida.");
+      setSelectedId(null);
     } catch (error) {
-      console.error("Error marcando factura emitida:", error);
+      console.error(error);
       toast.error("No se pudo marcar como emitida.");
     } finally {
       setSaving(false);
@@ -187,15 +241,12 @@ const CashierInvoices = () => {
 
   const markFailed = async () => {
     if (!restaurantId || !selectedCuenta) return;
-
     if (!failureReason.trim()) {
       toast.error("Ingresá el motivo del fallo.");
       return;
     }
-
     try {
       setSaving(true);
-
       await updateDoc(
         doc(db, "restaurants", restaurantId, "cuentas", selectedCuenta.id),
         {
@@ -205,11 +256,32 @@ const CashierInvoices = () => {
           updatedAt: serverTimestamp(),
         }
       );
+      toast.success("Factura marcada como fallida.");
+      setSelectedId(null);
     } catch (error) {
-      console.error("Error marcando factura fallida:", error);
+      console.error(error);
       toast.error("No se pudo marcar como fallida.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const reopenRequest = async (cuenta: Cuenta) => {
+    if (!restaurantId) return;
+    try {
+      await updateDoc(
+        doc(db, "restaurants", restaurantId, "cuentas", cuenta.id),
+        {
+          "invoice.status": "requested",
+          updatedAt: serverTimestamp(),
+        }
+      );
+      toast.success("Solicitud reabierta como pendiente.");
+      setSelectedId(null);
+      setActiveTab("requested");
+    } catch (error) {
+      console.error(error);
+      toast.error("No se pudo reabrir la solicitud.");
     }
   };
 
@@ -217,12 +289,8 @@ const CashierInvoices = () => {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
         <div className="rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm">
-          <h1 className="text-lg font-black text-zinc-950">
-            Falta restaurante activo
-          </h1>
-          <p className="mt-2 text-sm text-zinc-600">
-            Entrá con una URL que tenga restaurantId.
-          </p>
+          <h1 className="text-lg font-black text-zinc-950">Falta restaurante activo</h1>
+          <p className="mt-2 text-sm text-zinc-600">Entrá con una URL que tenga restaurantId.</p>
         </div>
       </div>
     );
@@ -231,118 +299,192 @@ const CashierInvoices = () => {
   return (
     <div className="min-h-screen bg-zinc-100">
       <div className="mx-auto max-w-7xl px-4 py-6">
-        <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.25em] text-zinc-500">
-              WANT Fiscal
-            </p>
-            <h1 className="mt-1 text-4xl font-black tracking-tight text-zinc-950">
-              Solicitudes de factura
-            </h1>
-            <p className="mt-2 text-sm text-zinc-500">
-              Fase 1: bandeja manual para emitir facturas en sistema fiscal
-              externo y registrar el resultado.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-3xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">
-                Pendientes
-              </p>
-              <p className="mt-1 text-3xl font-black text-zinc-950">
-                {invoiceRequests.length}
-              </p>
-            </div>
-
-            <div className="rounded-3xl border border-emerald-200 bg-emerald-50 px-5 py-4 shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
-                Emitidas
-              </p>
-              <p className="mt-1 text-3xl font-black text-emerald-700">
-                {issuedInvoices.length}
-              </p>
-            </div>
-
-            <div className="rounded-3xl border border-red-200 bg-red-50 px-5 py-4 shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-wide text-red-700">
-                Fallidas
-              </p>
-              <p className="mt-1 text-3xl font-black text-red-700">
-                {failedInvoices.length}
-              </p>
-            </div>
-          </div>
+        {/* Header */}
+        <header className="mb-6">
+          <p className="text-xs font-black uppercase tracking-[0.25em] text-zinc-500">
+            WANT Fiscal
+          </p>
+          <h1 className="mt-1 text-4xl font-black tracking-tight text-zinc-950">
+            Solicitudes de factura
+          </h1>
+          <p className="mt-2 text-sm text-zinc-500">
+            Bandeja manual para emitir facturas en sistema fiscal externo y registrar el resultado.
+          </p>
         </header>
 
+        {/* Summary cards */}
+        <div className="mb-6 grid grid-cols-3 gap-3">
+          <button
+            onClick={() => handleTabChange("requested")}
+            className={`rounded-3xl border px-5 py-4 shadow-sm text-left transition ${
+              activeTab === "requested"
+                ? "border-amber-300 bg-amber-50 ring-2 ring-amber-200"
+                : "border-zinc-200 bg-white hover:border-zinc-300"
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <Clock size={15} className="text-amber-600" />
+              <p className="text-xs font-bold uppercase tracking-wide text-amber-700">Pendientes</p>
+            </div>
+            <p className="text-3xl font-black text-zinc-950">{invoiceRequests.length}</p>
+          </button>
+
+          <button
+            onClick={() => handleTabChange("issued")}
+            className={`rounded-3xl border px-5 py-4 shadow-sm text-left transition ${
+              activeTab === "issued"
+                ? "border-emerald-300 bg-emerald-50 ring-2 ring-emerald-200"
+                : "border-zinc-200 bg-white hover:border-zinc-300"
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <CheckCircle2 size={15} className="text-emerald-600" />
+              <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Emitidas</p>
+            </div>
+            <p className="text-3xl font-black text-zinc-950">{issuedInvoices.length}</p>
+          </button>
+
+          <button
+            onClick={() => handleTabChange("failed")}
+            className={`rounded-3xl border px-5 py-4 shadow-sm text-left transition ${
+              activeTab === "failed"
+                ? "border-red-300 bg-red-50 ring-2 ring-red-200"
+                : "border-zinc-200 bg-white hover:border-zinc-300"
+            }`}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <XCircle size={15} className="text-red-500" />
+              <p className="text-xs font-bold uppercase tracking-wide text-red-700">Fallidas</p>
+            </div>
+            <p className="text-3xl font-black text-zinc-950">{failedInvoices.length}</p>
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="mb-4 flex gap-2">
+          {TABS.map((tab) => {
+            const count =
+              tab.key === "requested"
+                ? invoiceRequests.length
+                : tab.key === "issued"
+                  ? issuedInvoices.length
+                  : failedInvoices.length;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => handleTabChange(tab.key)}
+                className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-black transition ${
+                  activeTab === tab.key
+                    ? tab.activeClass
+                    : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
+                }`}
+              >
+                {tab.label}
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-black ${
+                    activeTab === tab.key ? "bg-white/25" : "bg-zinc-100 text-zinc-500"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         <div className="grid gap-6 lg:grid-cols-[430px_1fr]">
+          {/* Left: list */}
           <section className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
             <div className="mb-4 flex items-center gap-2">
-              <FileText size={20} />
-              <h2 className="text-lg font-black text-zinc-950">
-                Pendientes
+              <FileText size={18} className="text-zinc-500" />
+              <h2 className="text-base font-black text-zinc-950">
+                {activeTab === "requested"
+                  ? "Solicitudes pendientes"
+                  : activeTab === "issued"
+                    ? "Facturas emitidas"
+                    : "Facturas fallidas"}
               </h2>
             </div>
 
             {loading ? (
-              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">
-                Cargando solicitudes...
-              </div>
-            ) : invoiceRequests.length === 0 ? (
+              <p className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">
+                Cargando...
+              </p>
+            ) : activeList.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-6 text-center">
                 <AlertTriangle className="mx-auto mb-3 text-zinc-400" />
                 <p className="font-semibold text-zinc-700">
-                  No hay solicitudes pendientes
+                  {activeTab === "requested"
+                    ? "No hay solicitudes pendientes"
+                    : activeTab === "issued"
+                      ? "No hay facturas emitidas"
+                      : "No hay facturas fallidas"}
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {invoiceRequests.map((cuenta) => {
+              <div className="space-y-2">
+                {activeList.map((cuenta) => {
                   const selected = selectedCuenta?.id === cuenta.id;
+                  const ts =
+                    activeTab === "issued"
+                      ? formatTs(cuenta.invoice?.issuedAt)
+                      : activeTab === "failed"
+                        ? formatTs(cuenta.invoice?.failedAt)
+                        : null;
 
                   return (
                     <button
                       key={cuenta.id}
                       onClick={() => setSelectedId(cuenta.id)}
-                      className={`w-full rounded-3xl border p-4 text-left transition ${
+                      className={`w-full rounded-2xl border p-4 text-left transition ${
                         selected
                           ? "border-zinc-950 bg-zinc-950 text-white"
-                          : "border-zinc-200 bg-white hover:border-zinc-300"
+                          : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 hover:bg-white"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div>
+                        <div className="min-w-0">
                           <p
-                            className={`text-xs font-bold uppercase tracking-wide ${
-                              selected ? "text-white/70" : "text-zinc-500"
+                            className={`text-[11px] font-black uppercase tracking-wide ${
+                              selected ? "text-white/60" : "text-zinc-500"
                             }`}
                           >
                             Mesa {cuenta.mesa}
+                            {cuenta.invoice?.type && ` · Tipo ${cuenta.invoice.type}`}
                           </p>
-                          <h3 className="mt-1 text-lg font-black">
+                          <p className="mt-1 truncate font-black">
                             {cuenta.invoice?.customerName || "Cliente"}
-                          </h3>
-                          <p
-                            className={`mt-1 text-xs ${
-                              selected ? "text-white/70" : "text-zinc-500"
-                            }`}
-                          >
-                            {cuenta.invoice?.documentType}{" "}
-                            {cuenta.invoice?.documentNumber}
                           </p>
+                          <p
+                            className={`mt-0.5 text-xs ${selected ? "text-white/60" : "text-zinc-500"}`}
+                          >
+                            {cuenta.invoice?.documentType} {cuenta.invoice?.documentNumber}
+                          </p>
+                          {activeTab === "issued" && cuenta.invoice?.invoiceNumber && (
+                            <p
+                              className={`mt-0.5 text-xs font-bold ${selected ? "text-white/80" : "text-emerald-700"}`}
+                            >
+                              Nro. {cuenta.invoice.invoiceNumber}
+                            </p>
+                          )}
+                          {activeTab === "failed" && cuenta.invoice?.failureReason && (
+                            <p
+                              className={`mt-0.5 text-xs ${selected ? "text-red-300" : "text-red-600"}`}
+                            >
+                              {cuenta.invoice.failureReason}
+                            </p>
+                          )}
+                          {ts && (
+                            <p
+                              className={`mt-0.5 text-[11px] ${selected ? "text-white/50" : "text-zinc-400"}`}
+                            >
+                              {ts}
+                            </p>
+                          )}
                         </div>
 
-                        <div className="text-right">
-                          <p
-                            className={`text-xs font-bold uppercase tracking-wide ${
-                              selected ? "text-white/70" : "text-zinc-500"
-                            }`}
-                          >
-                            Total
-                          </p>
-                          <p className="text-lg font-black">
-                            {formatPriceARS(cuenta.total)}
-                          </p>
+                        <div className="shrink-0 text-right">
+                          <p className="text-lg font-black">{formatPriceARS(cuenta.total)}</p>
                         </div>
                       </div>
                     </button>
@@ -352,61 +494,63 @@ const CashierInvoices = () => {
             )}
           </section>
 
+          {/* Right: detail */}
           <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
             {!selectedCuenta ? (
-              <div className="flex h-full min-h-[520px] flex-col items-center justify-center text-center">
+              <div className="flex h-full min-h-[480px] flex-col items-center justify-center text-center">
                 <Receipt size={52} className="mb-4 text-zinc-300" />
                 <h2 className="text-2xl font-black text-zinc-950">
-                  Seleccioná una solicitud
+                  Seleccioná una factura
                 </h2>
                 <p className="mt-2 max-w-sm text-sm text-zinc-500">
-                  Elegí una solicitud pendiente para ver los datos fiscales y
-                  marcarla como emitida o fallida.
+                  {activeTab === "requested"
+                    ? "Elegí una solicitud pendiente para ver los datos fiscales y marcarla como emitida o fallida."
+                    : "Elegí un registro para ver todos los datos fiscales asociados."}
                 </p>
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="space-y-5">
+                {/* Title */}
                 <div>
                   <p className="text-xs font-black uppercase tracking-[0.2em] text-zinc-500">
-                    Solicitud
+                    {activeTab === "requested"
+                      ? "Solicitud pendiente"
+                      : activeTab === "issued"
+                        ? "Factura emitida"
+                        : "Factura fallida"}
                   </p>
                   <h2 className="mt-1 text-5xl font-black tracking-tight text-zinc-950">
                     Mesa {selectedCuenta.mesa}
                   </h2>
-                  <p className="mt-3 text-sm text-zinc-500">
-                    Estado:{" "}
-                    <span className="font-bold text-zinc-950">
-                      {
-                        statusLabel[
-                          selectedCuenta.invoice?.status || "not_requested"
-                        ]
-                      }
+                  <p className="mt-2 text-sm text-zinc-500">
+                    Total:{" "}
+                    <span className="font-black text-zinc-950">
+                      {formatPriceARS(selectedCuenta.total)}
                     </span>
+                    {selectedCuenta.invoice?.type && (
+                      <span className="ml-3 rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-xs font-black text-zinc-700">
+                        Tipo {selectedCuenta.invoice.type}
+                      </span>
+                    )}
                   </p>
                 </div>
 
+                {/* Fiscal data */}
                 <div className="grid gap-3 md:grid-cols-2">
-                  <InfoCard label="Tipo" value={selectedCuenta.invoice?.type} />
-                  <InfoCard
-                    label="Total"
-                    value={formatPriceARS(selectedCuenta.total)}
-                  />
                   <InfoCard
                     label="Nombre / Razón social"
                     value={selectedCuenta.invoice?.customerName}
                   />
                   <InfoCard
                     label="Documento"
-                    value={`${selectedCuenta.invoice?.documentType || ""} ${
-                      selectedCuenta.invoice?.documentNumber || ""
-                    }`}
+                    value={`${selectedCuenta.invoice?.documentType || ""} ${selectedCuenta.invoice?.documentNumber || ""}`}
                   />
                   <InfoCard
                     label="Condición IVA"
                     value={selectedCuenta.invoice?.ivaCondition}
                   />
                   <InfoCard
-                    label="Régimen"
+                    label="Régimen fiscal"
                     value={selectedCuenta.invoice?.fiscalRegime}
                   />
                   <InfoCard
@@ -414,80 +558,156 @@ const CashierInvoices = () => {
                     value={selectedCuenta.invoice?.fiscalAddress}
                   />
                   <InfoCard
-                    label="Código postal"
-                    value={selectedCuenta.invoice?.postalCode}
+                    label="CP / Provincia / Localidad"
+                    value={[
+                      selectedCuenta.invoice?.postalCode,
+                      selectedCuenta.invoice?.province,
+                      selectedCuenta.invoice?.city,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || undefined}
                   />
-                  <InfoCard
-                    label="Provincia"
-                    value={selectedCuenta.invoice?.province}
-                  />
-                  <InfoCard label="Localidad" value={selectedCuenta.invoice?.city} />
                   <InfoCard
                     label="Email"
                     value={selectedCuenta.invoice?.email}
-                    icon={<Mail size={14} />}
+                    icon={<Mail size={13} />}
+                  />
+                  <InfoCard
+                    label="Proveedor fiscal"
+                    value={selectedCuenta.invoice?.provider}
                   />
                 </div>
 
-                <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
-                  <h3 className="mb-3 text-lg font-black text-zinc-950">
-                    Registrar emisión manual
-                  </h3>
-
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <input
-                      value={invoiceNumber}
-                      onChange={(e) => setInvoiceNumber(e.target.value)}
-                      placeholder="Número de factura / comprobante"
-                      className="h-12 rounded-2xl border border-zinc-200 px-4 outline-none focus:ring-2 focus:ring-black/10"
-                    />
-
-                    <input
-                      value={cae}
-                      onChange={(e) => setCae(e.target.value)}
-                      placeholder="CAE opcional"
-                      className="h-12 rounded-2xl border border-zinc-200 px-4 outline-none focus:ring-2 focus:ring-black/10"
-                    />
-
-                    <input
-                      value={invoiceUrl}
-                      onChange={(e) => setInvoiceUrl(e.target.value)}
-                      placeholder="URL PDF opcional"
-                      className="h-12 rounded-2xl border border-zinc-200 px-4 outline-none focus:ring-2 focus:ring-black/10 md:col-span-2"
-                    />
+                {/* Issued details */}
+                {activeTab === "issued" && (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                    <div className="mb-3 flex items-center gap-2">
+                      <CheckCircle2 size={16} className="text-emerald-600" />
+                      <h3 className="font-black text-emerald-900">Datos de emisión</h3>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <InfoCard
+                        label="Número de factura"
+                        value={selectedCuenta.invoice?.invoiceNumber}
+                      />
+                      <InfoCard
+                        label="CAE"
+                        value={selectedCuenta.invoice?.cae}
+                      />
+                      <InfoCard
+                        label="Emitida el"
+                        value={formatTs(selectedCuenta.invoice?.issuedAt)}
+                      />
+                      {selectedCuenta.invoice?.invoiceUrl ? (
+                        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                          <p className="text-xs font-black uppercase tracking-wide text-zinc-500">
+                            PDF / URL
+                          </p>
+                          <a
+                            href={selectedCuenta.invoice.invoiceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-2 flex items-center gap-1.5 text-sm font-bold text-emerald-700 underline underline-offset-2"
+                          >
+                            <ExternalLink size={13} />
+                            Ver factura
+                          </a>
+                        </div>
+                      ) : (
+                        <InfoCard label="PDF / URL" value={null} />
+                      )}
+                    </div>
+                    <button
+                      onClick={() => reopenRequest(selectedCuenta)}
+                      className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-2xl border border-emerald-300 bg-white text-sm font-black text-emerald-800 transition hover:bg-emerald-100"
+                    >
+                      <RotateCcw size={14} />
+                      Reabrir como pendiente
+                    </button>
                   </div>
+                )}
 
-                  <button
-                    onClick={markIssued}
-                    disabled={saving}
-                    className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 font-black text-white disabled:opacity-50"
-                  >
-                    <CheckCircle2 size={18} />
-                    Marcar como emitida
-                  </button>
-                </div>
+                {/* Failed details */}
+                {activeTab === "failed" && (
+                  <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+                    <div className="mb-3 flex items-center gap-2">
+                      <XCircle size={16} className="text-red-500" />
+                      <h3 className="font-black text-red-900">Motivo del fallo</h3>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <InfoCard
+                        label="Motivo"
+                        value={selectedCuenta.invoice?.failureReason}
+                      />
+                      <InfoCard
+                        label="Fallida el"
+                        value={formatTs(selectedCuenta.invoice?.failedAt)}
+                      />
+                    </div>
+                    <button
+                      onClick={() => reopenRequest(selectedCuenta)}
+                      className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-2xl border border-red-300 bg-white text-sm font-black text-red-800 transition hover:bg-red-100"
+                    >
+                      <RotateCcw size={14} />
+                      Reabrir como pendiente
+                    </button>
+                  </div>
+                )}
 
-                <div className="rounded-3xl border border-red-200 bg-red-50 p-4">
-                  <h3 className="mb-3 text-lg font-black text-red-800">
-                    Marcar como fallida
-                  </h3>
+                {/* Pending actions */}
+                {activeTab === "requested" && (
+                  <>
+                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                      <h3 className="mb-3 font-black text-zinc-950">Registrar emisión manual</h3>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <input
+                          value={invoiceNumber}
+                          onChange={(e) => setInvoiceNumber(e.target.value)}
+                          placeholder="Número de factura / comprobante"
+                          className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-black/10"
+                        />
+                        <input
+                          value={cae}
+                          onChange={(e) => setCae(e.target.value)}
+                          placeholder="CAE (opcional)"
+                          className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-black/10"
+                        />
+                        <input
+                          value={invoiceUrl}
+                          onChange={(e) => setInvoiceUrl(e.target.value)}
+                          placeholder="URL PDF (opcional)"
+                          className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-black/10 md:col-span-2"
+                        />
+                      </div>
+                      <button
+                        onClick={markIssued}
+                        disabled={saving}
+                        className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 font-black text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        <CheckCircle2 size={17} />
+                        Marcar como emitida
+                      </button>
+                    </div>
 
-                  <input
-                    value={failureReason}
-                    onChange={(e) => setFailureReason(e.target.value)}
-                    placeholder="Motivo del fallo"
-                    className="h-12 w-full rounded-2xl border border-red-200 px-4 outline-none focus:ring-2 focus:ring-red-200"
-                  />
-
-                  <button
-                    onClick={markFailed}
-                    disabled={saving}
-                    className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-red-600 font-black text-white disabled:opacity-50"
-                  >
-                    <XCircle size={18} />
-                    Marcar como fallida
-                  </button>
-                </div>
+                    <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+                      <h3 className="mb-3 font-black text-red-900">Marcar como fallida</h3>
+                      <input
+                        value={failureReason}
+                        onChange={(e) => setFailureReason(e.target.value)}
+                        placeholder="Motivo del fallo"
+                        className="h-12 w-full rounded-2xl border border-red-200 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-red-200"
+                      />
+                      <button
+                        onClick={markFailed}
+                        disabled={saving}
+                        className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-red-600 font-black text-white transition hover:bg-red-700 disabled:opacity-50"
+                      >
+                        <XCircle size={17} />
+                        Marcar como fallida
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </section>
@@ -505,18 +725,16 @@ const InfoCard = ({
   label: string;
   value?: string | number | null;
   icon?: React.ReactNode;
-}) => {
-  return (
-    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-      <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-zinc-500">
-        {icon}
-        <span>{label}</span>
-      </div>
-      <p className="mt-2 break-words text-sm font-bold text-zinc-950">
-        {value || "—"}
-      </p>
+}) => (
+  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3.5">
+    <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wide text-zinc-500">
+      {icon}
+      <span>{label}</span>
     </div>
-  );
-};
+    <p className="mt-1.5 break-words text-sm font-bold text-zinc-950">
+      {value || "—"}
+    </p>
+  </div>
+);
 
 export default CashierInvoices;
