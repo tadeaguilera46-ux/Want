@@ -547,6 +547,18 @@ const CashierInvoices = () => {
                 {/* Fiscal data */}
                 <div className="grid gap-3 md:grid-cols-2">
                   <InfoCard
+                    label="Fecha del comprobante"
+                    value={new Intl.DateTimeFormat("es-AR", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                    }).format(
+                      getTimestampMs(selectedCuenta.createdAt)
+                        ? new Date(getTimestampMs(selectedCuenta.createdAt))
+                        : new Date()
+                    )}
+                  />
+                  <InfoCard
                     label="Nombre / Razón social"
                     value={selectedCuenta.invoice?.customerName}
                   />
