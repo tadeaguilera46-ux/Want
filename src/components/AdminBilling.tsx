@@ -4,10 +4,14 @@ import {
   Ban,
   Calendar,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Clock,
   CreditCard,
   Loader2,
+  ReceiptText,
+  XCircle,
   X,
 } from "lucide-react";
 import { useRestaurant } from "../lib/restaurant-context";
@@ -349,46 +353,12 @@ export function AdminBilling({ restaurantId }: { restaurantId: string }) {
       </div>
 
       {/* Payment history */}
-      <div className="rounded-[2rem] border border-zinc-200 bg-white p-5 shadow-sm">
-        <div className="mb-4 flex items-center gap-2">
-          <CreditCard size={18} className="text-zinc-500" />
-          <h3 className="text-base font-black text-zinc-950">
-            Historial de pagos
-          </h3>
-        </div>
-
-        {paymentsLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 size={20} className="animate-spin text-zinc-400" />
-          </div>
-        ) : payments.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-zinc-200 p-4 text-sm text-zinc-500">
-            No hay pagos registrados aún.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {visiblePayments.map((payment) => (
-              <PaymentRow key={payment.id} payment={payment} />
-            ))}
-            {payments.length > 4 && (
-              <button
-                onClick={() => setShowAllPayments((v) => !v)}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-zinc-50 py-2.5 text-sm font-bold text-zinc-600 transition hover:bg-zinc-100"
-              >
-                {showAllPayments ? (
-                  <>
-                    <ChevronUp size={16} /> Mostrar menos
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown size={16} /> Ver todos ({payments.length})
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        )}
-      </div>
+      <BillingHistory
+        payments={payments}
+        paymentsLoading={paymentsLoading}
+        showAllPayments={showAllPayments}
+        setShowAllPayments={setShowAllPayments}
+      />
 
       {/* Cancel subscription — only shown when an active MP subscription exists */}
       {mpSubscriptionId && (
@@ -415,6 +385,16 @@ export function AdminBilling({ restaurantId }: { restaurantId: string }) {
   );
 }
 
+// ─── Billing History ─────────────────────────────────────────────────────────
+
+type BillingFilter = "all" | "emitidas" | "pendientes" | "fallidas";
+
+function classifyPayment(p: PaymentRecord): "emitidas" | "pendientes" | "fallidas" {
+  if (p.billingStatus === "active") return "emitidas";
+  if (p.billingStatus === "pending") return "pendientes";
+  return "fallidas";
+}
+
 const EVENT_LABELS: Record<string, string> = {
   mp_authorized: "Pago aprobado",
   mp_paused: "Suscripción pausada",
@@ -422,42 +402,241 @@ const EVENT_LABELS: Record<string, string> = {
   mp_pending: "Pago pendiente",
 };
 
-const STATUS_BADGE: Record<string, string> = {
+const FILTER_TABS: { key: BillingFilter; label: string }[] = [
+  { key: "all", label: "Todas" },
+  { key: "emitidas", label: "Emitidas" },
+  { key: "pendientes", label: "Pendientes" },
+  { key: "fallidas", label: "Fallidas" },
+];
+
+function BillingHistory({
+  payments,
+  paymentsLoading,
+  showAllPayments,
+  setShowAllPayments,
+}: {
+  payments: PaymentRecord[];
+  paymentsLoading: boolean;
+  showAllPayments: boolean;
+  setShowAllPayments: (v: boolean) => void;
+}) {
+  const [filter, setFilter] = useState<BillingFilter>("all");
+
+  const emitidas = payments.filter((p) => classifyPayment(p) === "emitidas");
+  const pendientes = payments.filter((p) => classifyPayment(p) === "pendientes");
+  const fallidas = payments.filter((p) => classifyPayment(p) === "fallidas");
+
+  const filtered =
+    filter === "all"
+      ? payments
+      : filter === "emitidas"
+        ? emitidas
+        : filter === "pendientes"
+          ? pendientes
+          : fallidas;
+
+  const visible = showAllPayments ? filtered : filtered.slice(0, 5);
+
+  return (
+    <div className="rounded-[2rem] border border-zinc-200 bg-white p-5 shadow-sm">
+      {/* Header */}
+      <div className="mb-5 flex items-center gap-2">
+        <ReceiptText size={18} className="text-zinc-500" />
+        <h3 className="text-base font-black text-zinc-950">
+          Historial de facturación
+        </h3>
+      </div>
+
+      {paymentsLoading ? (
+        <div className="flex items-center justify-center py-10">
+          <Loader2 size={20} className="animate-spin text-zinc-400" />
+        </div>
+      ) : payments.length === 0 ? (
+        <p className="rounded-2xl border border-dashed border-zinc-200 p-5 text-sm text-zinc-500">
+          No hay movimientos registrados aún.
+        </p>
+      ) : (
+        <>
+          {/* Summary strip */}
+          <div className="mb-5 grid grid-cols-3 gap-3">
+            <div className="flex flex-col items-center gap-1 rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-3">
+              <CheckCircle2 size={18} className="text-emerald-600" />
+              <p className="text-xl font-black text-emerald-800">{emitidas.length}</p>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-600">
+                Emitidas
+              </p>
+            </div>
+            <div className="flex flex-col items-center gap-1 rounded-2xl border border-amber-100 bg-amber-50 px-3 py-3">
+              <Clock size={18} className="text-amber-600" />
+              <p className="text-xl font-black text-amber-800">{pendientes.length}</p>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-amber-600">
+                Pendientes
+              </p>
+            </div>
+            <div className="flex flex-col items-center gap-1 rounded-2xl border border-red-100 bg-red-50 px-3 py-3">
+              <XCircle size={18} className="text-red-500" />
+              <p className="text-xl font-black text-red-700">{fallidas.length}</p>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-red-500">
+                Fallidas
+              </p>
+            </div>
+          </div>
+
+          {/* Filter tabs */}
+          <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
+            {FILTER_TABS.map((tab) => {
+              const count =
+                tab.key === "all"
+                  ? payments.length
+                  : tab.key === "emitidas"
+                    ? emitidas.length
+                    : tab.key === "pendientes"
+                      ? pendientes.length
+                      : fallidas.length;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => {
+                    setFilter(tab.key);
+                    setShowAllPayments(false);
+                  }}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-black transition ${
+                    filter === tab.key
+                      ? "border-zinc-950 bg-zinc-950 text-white"
+                      : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
+                  }`}
+                >
+                  {tab.label}
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-black ${
+                      filter === tab.key
+                        ? "bg-white/20 text-white"
+                        : "bg-zinc-200 text-zinc-600"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Rows */}
+          {filtered.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-zinc-200 p-4 text-center text-sm text-zinc-500">
+              No hay registros en esta categoría.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {visible.map((payment) => (
+                <PaymentRow key={payment.id} payment={payment} />
+              ))}
+
+              {filtered.length > 5 && (
+                <button
+                  onClick={() => setShowAllPayments(!showAllPayments)}
+                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-zinc-50 py-2.5 text-sm font-bold text-zinc-600 transition hover:bg-zinc-100"
+                >
+                  {showAllPayments ? (
+                    <>
+                      <ChevronUp size={16} /> Mostrar menos
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown size={16} /> Ver todos ({filtered.length})
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Payment Row ──────────────────────────────────────────────────────────────
+
+const ROW_ICON: Record<string, React.ReactNode> = {
+  emitidas: <CheckCircle2 size={16} className="text-emerald-600" />,
+  pendientes: <Clock size={16} className="text-amber-500" />,
+  fallidas: <XCircle size={16} className="text-red-500" />,
+};
+
+const ROW_BG: Record<string, string> = {
+  emitidas: "bg-emerald-50 border-emerald-100",
+  pendientes: "bg-amber-50 border-amber-100",
+  fallidas: "bg-red-50 border-red-100",
+};
+
+const STATUS_BADGE_CLASS: Record<string, string> = {
   active: "border-emerald-200 bg-emerald-100 text-emerald-800",
   past_due: "border-amber-200 bg-amber-100 text-amber-800",
   canceled: "border-red-200 bg-red-100 text-red-800",
   pending: "border-zinc-200 bg-zinc-100 text-zinc-600",
 };
 
-function PaymentRow({ payment }: { payment: PaymentRecord }) {
-  const typeLabel =
-    EVENT_LABELS[payment.type ?? ""] ?? payment.type ?? "Evento";
+const STATUS_BADGE_LABELS: Record<string, string> = {
+  active: "Emitida",
+  past_due: "Vencida",
+  canceled: "Cancelada",
+  pending: "Pendiente",
+};
 
+function PaymentRow({ payment }: { payment: PaymentRecord }) {
+  const category = classifyPayment(payment);
+  const typeLabel = EVENT_LABELS[payment.type ?? ""] ?? payment.type ?? "Evento";
   const planLabel = payment.plan ? PLAN_LABELS[payment.plan] : null;
+  const planPrice = payment.plan
+    ? PLANS.find((p) => p.key === payment.plan)?.price
+    : undefined;
   const dateStr = formatTimestamp(payment.createdAt, "short") ?? "—";
+  const shortId = payment.subscriptionId
+    ? `${payment.subscriptionId.slice(0, 8)}…`
+    : null;
   const badgeClass =
-    STATUS_BADGE[payment.billingStatus ?? ""] ?? STATUS_BADGE["pending"];
+    STATUS_BADGE_CLASS[payment.billingStatus ?? ""] ?? STATUS_BADGE_CLASS["pending"];
+  const badgeLabel =
+    STATUS_BADGE_LABELS[payment.billingStatus ?? ""] ?? payment.billingStatus ?? "—";
 
   return (
-    <div className="flex items-center justify-between gap-4 rounded-2xl bg-zinc-50 px-4 py-3">
-      <div className="min-w-0">
-        <p className="text-sm font-black text-zinc-950">
-          {typeLabel}
+    <div
+      className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${ROW_BG[category]}`}
+    >
+      <div className="shrink-0">{ROW_ICON[category]}</div>
+
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-black text-zinc-950">{typeLabel}</p>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-zinc-500">
           {planLabel && (
-            <span className="ml-2 text-xs font-bold text-zinc-400">
-              · Plan {planLabel}
+            <span className="flex items-center gap-1">
+              <CreditCard size={11} />
+              Plan {planLabel}
+              {planPrice !== undefined && (
+                <span className="text-zinc-400">
+                  · {formatPriceARS(planPrice)}/mes
+                </span>
+              )}
             </span>
           )}
-        </p>
-        <p className="text-xs text-zinc-500">{dateStr}</p>
+          <span className="flex items-center gap-1">
+            <Calendar size={11} />
+            {dateStr}
+          </span>
+          {shortId && (
+            <span className="font-mono text-zinc-400" title={payment.subscriptionId}>
+              ID: {shortId}
+            </span>
+          )}
+        </div>
       </div>
-      {payment.billingStatus && (
-        <span
-          className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-black ${badgeClass}`}
-        >
-          {STATUS_LABELS[payment.billingStatus] ?? payment.billingStatus}
-        </span>
-      )}
+
+      <span
+        className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-black ${badgeClass}`}
+      >
+        {badgeLabel}
+      </span>
     </div>
   );
 }
