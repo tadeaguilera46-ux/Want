@@ -11,6 +11,7 @@ import {
   AlertTriangle,
   BarChart3,
   FileText,
+  LogOut,
   Plus,
   Printer,
   Receipt,
@@ -192,7 +193,7 @@ const cashierMethodToMetodoPago = (
 const Cashier = () => {
   const [searchParams] = useSearchParams();
   const { restaurantId: contextRestaurantId } = useRestaurant();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const isOnline = useOnlineStatus();
 
   const restaurantId =
@@ -252,6 +253,7 @@ const Cashier = () => {
     openedAt: number;
   } | null>(null);
   const [showCierreModal, setShowCierreModal] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const sessionKey = restaurantId
     ? `cashier_session_${restaurantId}_${new Date().toISOString().slice(0, 10)}`
@@ -871,6 +873,15 @@ const Cashier = () => {
     }
   };
 
+  const handleLogout = async () => {
+    try {
+      setLoggingOut(true);
+      await logout();
+    } catch {
+      setLoggingOut(false);
+    }
+  };
+
   const confirmOpeningCash = (forcedAmount?: number) => {
     if (!sessionKey) return;
     const amount =
@@ -967,13 +978,24 @@ const Cashier = () => {
               </Link>
             </div>
 
-            <button
-              onClick={() => setShowCierreModal(true)}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-zinc-300 bg-white px-5 font-black text-zinc-800 shadow-sm transition hover:bg-zinc-50 sm:w-auto"
-            >
-              <BarChart3 size={17} />
-              Cierre de caja
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowCierreModal(true)}
+                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl border border-zinc-300 bg-white px-5 font-black text-zinc-800 shadow-sm transition hover:bg-zinc-50 sm:flex-none"
+              >
+                <BarChart3 size={17} />
+                Cierre de caja
+              </button>
+
+              <button
+                onClick={handleLogout}
+                disabled={loggingOut}
+                className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 font-bold text-zinc-500 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+              >
+                <LogOut size={16} />
+                {loggingOut ? "Saliendo..." : "Cerrar sesión"}
+              </button>
+            </div>
           </div>
         </div>
         {!isOnline && (
