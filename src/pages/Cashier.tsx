@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  addDoc,
   collection,
   onSnapshot,
   orderBy,
   query,
+  serverTimestamp,
   where,
 } from "firebase/firestore";
 import { toast } from "sonner";
@@ -268,6 +270,7 @@ const Cashier = () => {
     amount: string;
     reason: string;
   } | null>(null);
+  const [closingCaja, setClosingCaja] = useState(false);
 
   const sessionKey = restaurantId
     ? `cashier_session_${restaurantId}_${new Date().toISOString().slice(0, 10)}`
@@ -915,6 +918,37 @@ const Cashier = () => {
     localStorage.setItem(sessionKey, JSON.stringify(session));
     setCashSession(session);
     setShowOpeningDialog(false);
+  };
+
+  const handleCierreCaja = async () => {
+    if (!restaurantId || !cashSession) return;
+    try {
+      setClosingCaja(true);
+      await addDoc(
+        collection(db, "restaurants", restaurantId, "auditLogs"),
+        {
+          action: "cierre_caja",
+          userUid: user?.uid ?? null,
+          userEmail: user?.email ?? null,
+          userRole: "cashier",
+          description: `Cierre de caja · Monto inicial: ${formatPriceARS(cashSession.openingCash)} · Efectivo cobrado: ${formatPriceARS(totalEfectivo)} · Ajustes: +${formatPriceARS(totalAjustesAdd)} / −${formatPriceARS(totalAjustesDeduct)} · Efectivo final en caja: ${formatPriceARS(totalCajaActual)}`,
+          montoInicial: cashSession.openingCash,
+          efectivoCobrado: totalEfectivo,
+          ajustesAdd: totalAjustesAdd,
+          ajustesDeduct: totalAjustesDeduct,
+          efectivoFinal: totalCajaActual,
+          totalRecaudado,
+          createdAt: serverTimestamp(),
+        }
+      );
+      toast.success("Caja cerrada y registrada en auditoría.");
+      setShowCierreModal(false);
+    } catch (err) {
+      console.error(err);
+      toast.error("No se pudo registrar el cierre de caja.");
+    } finally {
+      setClosingCaja(false);
+    }
   };
 
   const saveAdjustment = () => {
@@ -1939,6 +1973,16 @@ const Cashier = () => {
                   ))}
                 </div>
               )}
+            </div>
+            {/* Close register */}
+            <div className="border-t border-zinc-200 pt-4">
+              <button
+                onClick={handleCierreCaja}
+                disabled={closingCaja}
+                className="h-13 w-full rounded-2xl bg-zinc-950 font-black text-white transition hover:bg-zinc-800 disabled:opacity-50 py-3"
+              >
+                {closingCaja ? "Registrando cierre..." : "Cerrar caja y registrar auditoría"}
+              </button>
             </div>
           </div>
         </div>

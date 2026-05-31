@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import {
   collection,
-  deleteDoc,
   doc,
   limit,
   onSnapshot,
@@ -61,6 +60,8 @@ const actionLabel = (action?: string) => {
       return "Branding actualizado";
     case "empleado_actualizado":
       return "Empleado actualizado";
+    case "cierre_caja":
+      return "Cierre de caja";
     default:
       return "Actividad";
   }
