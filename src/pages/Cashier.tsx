@@ -131,6 +131,14 @@ type DraftManualItem = {
   quantity: number;
 };
 
+type CashAdjustment = {
+  id: string;
+  type: "add" | "deduct";
+  amount: number;
+  reason: string;
+  createdAt: number;
+};
+
 const formatPriceARS = (value: number) =>
   new Intl.NumberFormat("es-AR", {
     style: "currency",
@@ -251,9 +259,15 @@ const Cashier = () => {
   const [cashSession, setCashSession] = useState<{
     openingCash: number;
     openedAt: number;
+    adjustments?: CashAdjustment[];
   } | null>(null);
   const [showCierreModal, setShowCierreModal] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [adjustForm, setAdjustForm] = useState<{
+    type: "add" | "deduct";
+    amount: string;
+    reason: string;
+  } | null>(null);
 
   const sessionKey = restaurantId
     ? `cashier_session_${restaurantId}_${new Date().toISOString().slice(0, 10)}`
@@ -532,7 +546,14 @@ const Cashier = () => {
   );
 
   const totalEfectivo = paymentBreakdown.cash?.total ?? 0;
-  const totalCajaActual = (cashSession?.openingCash ?? 0) + totalEfectivo;
+  const totalAjustesAdd = cashSession?.adjustments
+    ?.filter((a) => a.type === "add")
+    .reduce((s, a) => s + a.amount, 0) ?? 0;
+  const totalAjustesDeduct = cashSession?.adjustments
+    ?.filter((a) => a.type === "deduct")
+    .reduce((s, a) => s + a.amount, 0) ?? 0;
+  const totalCajaActual =
+    (cashSession?.openingCash ?? 0) + totalEfectivo + totalAjustesAdd - totalAjustesDeduct;
 
   const selectedPaymentLabel =
     selectedCuenta?.metodo && paymentLabels[selectedCuenta.metodo]
