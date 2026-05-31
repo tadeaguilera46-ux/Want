@@ -917,6 +917,28 @@ const Cashier = () => {
     setShowOpeningDialog(false);
   };
 
+  const saveAdjustment = () => {
+    if (!sessionKey || !cashSession || !adjustForm) return;
+    const amount = Math.max(0, Number(adjustForm.amount) || 0);
+    if (amount <= 0 || !adjustForm.reason.trim()) return;
+
+    const newAdj: CashAdjustment = {
+      id: crypto.randomUUID(),
+      type: adjustForm.type,
+      amount,
+      reason: adjustForm.reason.trim(),
+      createdAt: Date.now(),
+    };
+
+    const updated = {
+      ...cashSession,
+      adjustments: [...(cashSession.adjustments ?? []), newAdj],
+    };
+    localStorage.setItem(sessionKey, JSON.stringify(updated));
+    setCashSession(updated);
+    setAdjustForm(null);
+  };
+
   if (!restaurantId) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
@@ -1801,6 +1823,123 @@ const Cashier = () => {
                 </div>
               </div>
             )}
+            {/* Manual adjustments */}
+            <div>
+              <h3 className="mb-3 text-base font-black text-zinc-950">
+                Ajustes de caja
+              </h3>
+
+              {!adjustForm ? (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() =>
+                      setAdjustForm({ type: "add", amount: "", reason: "" })
+                    }
+                    className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-2xl border border-emerald-200 bg-emerald-50 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+                  >
+                    + Agregar monto
+                  </button>
+                  <button
+                    onClick={() =>
+                      setAdjustForm({ type: "deduct", amount: "", reason: "" })
+                    }
+                    className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-2xl border border-red-200 bg-red-50 text-sm font-black text-red-700 transition hover:bg-red-100"
+                  >
+                    − Descontar monto
+                  </button>
+                </div>
+              ) : (
+                <div
+                  className={`rounded-2xl border p-4 ${
+                    adjustForm.type === "add"
+                      ? "border-emerald-200 bg-emerald-50"
+                      : "border-red-200 bg-red-50"
+                  }`}
+                >
+                  <p className="mb-3 text-sm font-black text-zinc-950">
+                    {adjustForm.type === "add" ? "Agregar monto" : "Descontar monto"}
+                  </p>
+                  <div className="space-y-2">
+                    <input
+                      type="number"
+                      min={0}
+                      placeholder="Monto"
+                      value={adjustForm.amount}
+                      onChange={(e) =>
+                        setAdjustForm((f) => f && { ...f, amount: e.target.value })
+                      }
+                      className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold outline-none focus:ring-2 focus:ring-black/10"
+                      autoFocus
+                    />
+                    <input
+                      type="text"
+                      placeholder="Motivo (obligatorio)"
+                      value={adjustForm.reason}
+                      onChange={(e) =>
+                        setAdjustForm((f) => f && { ...f, reason: e.target.value })
+                      }
+                      className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold outline-none focus:ring-2 focus:ring-black/10"
+                      onKeyDown={(e) => e.key === "Enter" && saveAdjustment()}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={saveAdjustment}
+                        disabled={
+                          !adjustForm.amount ||
+                          Number(adjustForm.amount) <= 0 ||
+                          !adjustForm.reason.trim()
+                        }
+                        className={`h-10 flex-1 rounded-xl font-black text-sm text-white transition disabled:opacity-40 ${
+                          adjustForm.type === "add"
+                            ? "bg-emerald-600 hover:bg-emerald-700"
+                            : "bg-red-600 hover:bg-red-700"
+                        }`}
+                      >
+                        Confirmar
+                      </button>
+                      <button
+                        onClick={() => setAdjustForm(null)}
+                        className="h-10 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-bold text-zinc-600 transition hover:bg-zinc-50"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {(cashSession?.adjustments ?? []).length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {cashSession!.adjustments!.map((adj) => (
+                    <div
+                      key={adj.id}
+                      className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${
+                        adj.type === "add"
+                          ? "border-emerald-200 bg-emerald-50"
+                          : "border-red-200 bg-red-50"
+                      }`}
+                    >
+                      <div>
+                        <span
+                          className={`text-sm font-black ${
+                            adj.type === "add" ? "text-emerald-800" : "text-red-800"
+                          }`}
+                        >
+                          {adj.type === "add" ? "+" : "−"}{" "}
+                          {formatPriceARS(adj.amount)}
+                        </span>
+                        <p className="mt-0.5 text-xs text-zinc-500">{adj.reason}</p>
+                      </div>
+                      <span className="text-xs text-zinc-400">
+                        {new Intl.DateTimeFormat("es-AR", {
+                          timeStyle: "short",
+                        }).format(new Date(adj.createdAt))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
