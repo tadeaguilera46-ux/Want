@@ -242,6 +242,12 @@ export const getOrCreateMesaSession = async (
         mesaSnapshot.data()
       );
 
+      if (mesa.active === false) {
+        throw new Error(
+          "Esta mesa no está disponible. Consultá al staff."
+        );
+      }
+
       if (mesa.activeSessionId) {
         const existingSessionRef = sessionDocRef(
           normalizedRestaurantId,
@@ -369,8 +375,15 @@ export const markMesaNeedsCleaning = async (
     const sessionIdToKeep =
       mesa.activeSessionId ?? activeSessionIds[0] ?? mesa.lastSessionId ?? null;
 
+    // Include mesa.activeSessionId (read inside the transaction) to close any
+    // session created after the pre-transaction query (TOCTOU fix).
+    const allSessionIdsToClose = new Set(activeSessionIds);
+    if (mesa.activeSessionId) {
+      allSessionIdsToClose.add(mesa.activeSessionId);
+    }
+
     const sessionReads = await Promise.all(
-      activeSessionIds.map(async (sessionId) => {
+      Array.from(allSessionIdsToClose).map(async (sessionId) => {
         const sessionRef = sessionDocRef(normalizedRestaurantId, sessionId);
         const sessionSnapshot = await transaction.get(sessionRef);
 
@@ -435,6 +448,7 @@ export const markMesaAvailable = async (
 
     let lastSessionId: string | null = null;
     let createdAt: Timestamp | undefined;
+    let currentActiveSessionId: string | null = null;
 
     if (mesaSnapshot.exists()) {
       const mesa = requireValidMesa(
@@ -446,11 +460,19 @@ export const markMesaAvailable = async (
       lastSessionId =
         mesa.activeSessionId ?? activeSessionIds[0] ?? mesa.lastSessionId ?? null;
 
+      currentActiveSessionId = mesa.activeSessionId ?? null;
       createdAt = mesa.createdAt;
     }
 
+    // Include the session the mesa currently points to (read inside transaction)
+    // so a session created after the pre-transaction query is also closed (TOCTOU fix).
+    const allSessionIdsToClose = new Set(activeSessionIds);
+    if (currentActiveSessionId) {
+      allSessionIdsToClose.add(currentActiveSessionId);
+    }
+
     const activeSessionReads = await Promise.all(
-      activeSessionIds.map(async (sessionId) => {
+      Array.from(allSessionIdsToClose).map(async (sessionId) => {
         const sessionRef = sessionDocRef(normalizedRestaurantId, sessionId);
         const sessionSnapshot = await transaction.get(sessionRef);
 
@@ -468,7 +490,7 @@ export const markMesaAvailable = async (
         }
       | null = null;
 
-    if (lastSessionId && !activeSessionIds.includes(lastSessionId)) {
+    if (lastSessionId && !allSessionIdsToClose.has(lastSessionId)) {
       const sessionRef = sessionDocRef(normalizedRestaurantId, lastSessionId);
       const sessionSnapshot = await transaction.get(sessionRef);
 
@@ -570,8 +592,15 @@ export const closeMesaSessionManually = async (
     const sessionIdToKeep =
       mesa.activeSessionId ?? activeSessionIds[0] ?? mesa.lastSessionId ?? null;
 
+    // Include mesa.activeSessionId (read inside the transaction) so a session
+    // created after the pre-transaction query is also closed (TOCTOU fix).
+    const allSessionIdsToClose = new Set(activeSessionIds);
+    if (mesa.activeSessionId) {
+      allSessionIdsToClose.add(mesa.activeSessionId);
+    }
+
     const sessionReads = await Promise.all(
-      activeSessionIds.map(async (sessionId) => {
+      Array.from(allSessionIdsToClose).map(async (sessionId) => {
         const sessionRef = sessionDocRef(normalizedRestaurantId, sessionId);
         const sessionSnapshot = await transaction.get(sessionRef);
 

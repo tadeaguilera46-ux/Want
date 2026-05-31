@@ -78,6 +78,7 @@ const Cart = () => {
     isValidatingSession || isSubmittingOrder || isSubmittingOrderAndBill;
 
   const redirectToClosedBill = () => {
+    clearCart();
     navigate(`/bill-confirmed?restaurantId=${restaurantId}&table=${table}`, {
       replace: true,
       state: { restaurantId, table },

@@ -3,12 +3,17 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, AlertTriangle } from "lucide-react";
 import { getOrCreateMesaSession } from "../lib/mesas";
 import { parseTableNumber, resolveRuntimeContext } from "../lib/runtime-context";
-import { saveTableSessionId } from "../lib/table-session";
+import {
+  getStoredTableSessionId,
+  saveTableSessionId,
+} from "../lib/table-session";
+import { useCart } from "@/lib/CartContext";
 
 const QrEntry = () => {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
+  const { clearCart } = useCart();
 
   const { table, restaurantId } = resolveRuntimeContext({
     searchParams,
@@ -26,18 +31,28 @@ const QrEntry = () => {
       try {
         setError(null);
 
+        const existingSessionId = getStoredTableSessionId({
+          restaurantId,
+          table: tableNumber,
+        });
+
         const sessionId = await getOrCreateMesaSession(
           restaurantId,
           tableNumber
         );
+
+        if (cancelled) return;
+
+        // New session means the old cart belongs to a different table visit.
+        if (sessionId !== existingSessionId) {
+          clearCart();
+        }
 
         saveTableSessionId({
           restaurantId,
           table: tableNumber,
           sessionId,
         });
-
-        if (cancelled) return;
 
         navigate(`/menu?restaurantId=${restaurantId}&table=${table}`, {
           replace: true,

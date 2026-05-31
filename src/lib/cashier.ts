@@ -213,14 +213,6 @@ export const registerCashierPayment = async ({
     metodo,
     payments,
     paidAmount: totalPaid,
-    paidAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-
-  await updateDoc(cuentaRef, {
-    metodo,
-    payments,
-    paidAmount: totalPaid,
     estado: "pagada",
     paidAt: serverTimestamp(),
     updatedAt: serverTimestamp(),

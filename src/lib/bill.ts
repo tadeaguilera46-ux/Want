@@ -238,10 +238,14 @@ export const pedirCuenta = async (data: CuentaInput) => {
         );
       }
 
-      const nuevoEstado: EstadoCuenta =
-        cuentaData.estado === "pagada" || cuentaData.estado === "cerrada"
-          ? "pendiente"
-          : cuentaData.estado;
+      if (
+        cuentaData.estado === "pagada" ||
+        cuentaData.estado === "cerrada"
+      ) {
+        throw new Error(
+          "La cuenta ya fue procesada. Si hay algún problema, consultá con el personal del local."
+        );
+      }
 
       transaction.set(
         ref,
@@ -252,7 +256,7 @@ export const pedirCuenta = async (data: CuentaInput) => {
           total: totalReal,
           splitBill: data.splitBill,
           sessionId: activeSessionId,
-          estado: nuevoEstado,
+          estado: cuentaData.estado,
           createdAt: cuentaData.createdAt ?? now,
           updatedAt: now,
         },

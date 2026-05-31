@@ -3,6 +3,7 @@ import { Navigate, useSearchParams } from "react-router-dom";
 import { doc, onSnapshot } from "firebase/firestore";
 
 import { getDb } from "@/lib/firebase";
+import { useRestaurant } from "@/lib/restaurant-context";
 
 const db = getDb();
 
@@ -24,14 +25,23 @@ type RestaurantData = {
 
 const SubscriptionGuard = ({ children }: Props) => {
   const [searchParams] = useSearchParams();
+  const { restaurantId: contextRestaurantId } = useRestaurant();
 
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
 
-  const restaurantId = searchParams.get("restaurantId") || "mi-restaurante";
+  // URL param takes priority; fall back to context (which itself falls back to localStorage).
+  // Only truly absent when neither URL nor any prior navigation provided an ID.
+  const restaurantId =
+    searchParams.get("restaurantId") || contextRestaurantId || "";
 
   useEffect(() => {
-    if (!restaurantId) return;
+    if (!restaurantId) {
+      // No restaurantId anywhere — StaffRoute handles the missing-restaurant UI.
+      setAllowed(true);
+      setLoading(false);
+      return;
+    }
 
     setLoading(true);
 

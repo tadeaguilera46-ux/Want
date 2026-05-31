@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Navigate,
   useLocation,
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { LogOut } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import { useAuth } from "../lib/auth-context";
@@ -53,6 +53,13 @@ const StaffRoute = ({ children, allowedRoles }: StaffRouteProps) => {
   const [staffRole, setStaffRole] = useState<StaffRole | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  // Keep a ref so the snapshot callback always reads the latest value without
+  // being listed as a dep (allowedRoles is an inline array literal in App.tsx
+  // that would create a new reference on every parent re-render, triggering
+  // unnecessary unsubscribe/re-subscribe cycles).
+  const allowedRolesRef = useRef(allowedRoles);
+  allowedRolesRef.current = allowedRoles;
+
   const restaurantId = useMemo(() => {
     return (
       normalizeString(searchParams.get("restaurantId")) ||
@@ -70,32 +77,26 @@ const StaffRoute = ({ children, allowedRoles }: StaffRouteProps) => {
   }, [restaurantId, contextRestaurantId, setRestaurantId]);
 
   useEffect(() => {
-    let cancelled = false;
+    if (authLoading) return;
 
-    const run = async () => {
-      if (authLoading) return;
+    if (!user || !restaurantId) {
+      setIsAllowed(false);
+      setStaffRole(null);
+      setCheckingStaff(false);
+      return;
+    }
 
-      if (!user || !restaurantId) {
-        if (!cancelled) {
+    setCheckingStaff(true);
+
+    const ref = doc(db, "restaurants", restaurantId, "staff", user.uid);
+
+    const unsubscribe = onSnapshot(
+      ref,
+      (snapshot) => {
+        if (!snapshot.exists()) {
           setIsAllowed(false);
           setStaffRole(null);
           setCheckingStaff(false);
-        }
-        return;
-      }
-
-      try {
-        setCheckingStaff(true);
-
-        const ref = doc(db, "restaurants", restaurantId, "staff", user.uid);
-        const snapshot = await getDoc(ref);
-
-        if (!snapshot.exists()) {
-          if (!cancelled) {
-            setIsAllowed(false);
-            setStaffRole(null);
-            setCheckingStaff(false);
-          }
           return;
         }
 
@@ -104,41 +105,30 @@ const StaffRoute = ({ children, allowedRoles }: StaffRouteProps) => {
         const active = data.active === true;
 
         if (!active || !role) {
-          if (!cancelled) {
-            setIsAllowed(false);
-            setStaffRole(null);
-            setCheckingStaff(false);
-          }
-          return;
-        }
-
-        const roleAllowed =
-          !allowedRoles || allowedRoles.length === 0
-            ? true
-            : allowedRoles.includes(role);
-
-        if (!cancelled) {
-          setIsAllowed(roleAllowed);
-          setStaffRole(role);
-          setCheckingStaff(false);
-        }
-      } catch (error) {
-        console.error("Error validando staff:", error);
-
-        if (!cancelled) {
           setIsAllowed(false);
           setStaffRole(null);
           setCheckingStaff(false);
+          return;
         }
+
+        const roles = allowedRolesRef.current;
+        const roleAllowed =
+          !roles || roles.length === 0 ? true : roles.includes(role);
+
+        setIsAllowed(roleAllowed);
+        setStaffRole(role);
+        setCheckingStaff(false);
+      },
+      (error) => {
+        console.error("Error validando staff:", error);
+        setIsAllowed(false);
+        setStaffRole(null);
+        setCheckingStaff(false);
       }
-    };
+    );
 
-    void run();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [authLoading, user, restaurantId, allowedRoles]);
+    return unsubscribe;
+  }, [authLoading, user, restaurantId]);
 
   const handleLogout = async () => {
     try {

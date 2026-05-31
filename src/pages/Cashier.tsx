@@ -28,6 +28,7 @@ import { useAuth } from "../lib/auth-context";
 import { useRestaurant } from "../lib/restaurant-context";
 import { crearPedido } from "../lib/orders";
 import {
+  createCashierAuditLog,
   createOrRefreshCashierBill,
   markCashierBillPrinted,
   registerCashierPayment,
@@ -542,7 +543,14 @@ const Cashier = () => {
   }, [paidCuentasToday]);
 
   const totalRecaudado = useMemo(
-    () => paidCuentasToday.reduce((sum, c) => sum + Number(c.total || 0), 0),
+    () =>
+      paidCuentasToday.reduce((sum, c) => {
+        const paid =
+          c.paidAmount != null && c.paidAmount > 0
+            ? c.paidAmount
+            : Number(c.total || 0);
+        return sum + paid;
+      }, 0),
     [paidCuentasToday]
   );
 
@@ -616,46 +624,34 @@ const Cashier = () => {
       setProcessing(true);
       setError(null);
 
-      const items = manualItems.map(({ menuItem, quantity }) => {
-        const category = getMenuItemType(menuItem);
-
-        return {
-          id: menuItem.id,
-          nombre: menuItem.name,
-          name: menuItem.name,
-          cantidad: quantity,
-          quantity,
-          precio: menuItem.price,
-          price: menuItem.price,
-          subtotal: menuItem.price * quantity,
-          category,
-          displayCategory: menuItem.category || "",
-          observacion: "Pedido cargado manualmente por caja",
-          ingredients: menuItem.ingredients || [],
-        };
-      }) as unknown as PedidoItem[];
-
-     await crearPedido({
-        restaurantId,
-        mesa,
-        sessionId: `manual-${Date.now()}`,
-        items,
-        total: manualTotal,
-      });
-
-      const cuentaId = await createOrRefreshCashierBill({
-        data: {
+      // Manual bills have no QR session. Create the cuenta document directly
+      // instead of going through pedirCuenta (which requires an occupied mesa).
+      const cuentaRef = await addDoc(
+        collection(db, "restaurants", restaurantId, "cuentas"),
+        {
           restaurantId,
           mesa,
-          metodo: null,
           total: manualTotal,
+          sessionId: null,
+          estado: "pendiente",
+          metodo: null,
           splitBill: false,
-        },
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }
+      );
+
+      await createCashierAuditLog({
+        restaurantId,
+        action: "cashier_bill_created",
         actorUid: user.uid,
         actorEmail: user.email,
+        mesa,
+        cuentaId: cuentaRef.id,
+        metadata: { total: manualTotal, source: "manual" },
       });
 
-      setSelectedCuentaId(cuentaId);
+      setSelectedCuentaId(cuentaRef.id);
       setManualMesa("");
       setManualItems([]);
     } catch (err) {
@@ -676,6 +672,19 @@ const Cashier = () => {
       return;
     }
     if (!user || !restaurantId || !selectedCuenta) return;
+
+    if (!selectedCuenta.sessionId) {
+      toast.error("Las cuentas manuales no admiten agregar productos por esta vía.");
+      return;
+    }
+
+    if (
+      selectedCuenta.estado === "pagada" ||
+      selectedCuenta.estado === "cerrada"
+    ) {
+      toast.error("No se pueden agregar productos a una cuenta pagada o cerrada.");
+      return;
+    }
 
     const menuItem = menuItems.find((item) => item.id === addSelectedMenuId);
     const quantity = Number(addQuantity);
@@ -1352,6 +1361,7 @@ const Cashier = () => {
                   )}
                 </div>
 
+                {selectedCuenta.sessionId && (
                 <div className="rounded-3xl border border-zinc-200 bg-white p-4">
                   <h3 className="mb-3 text-lg font-black text-zinc-950">
                     Agregar producto a esta cuenta
@@ -1388,6 +1398,7 @@ const Cashier = () => {
                     </button>
                   </div>
                 </div>
+                )}
 
                 <div className="grid gap-4 lg:grid-cols-2">
                   <div className="rounded-3xl border border-zinc-200 bg-white p-4">
@@ -1849,7 +1860,11 @@ const Cashier = () => {
                           </span>
                         </div>
                         <span className="text-sm font-black text-zinc-950">
-                          {formatPriceARS(cuenta.total)}
+                          {formatPriceARS(
+                            cuenta.paidAmount != null && cuenta.paidAmount > 0
+                              ? cuenta.paidAmount
+                              : Number(cuenta.total || 0)
+                          )}
                         </span>
                       </div>
                     );

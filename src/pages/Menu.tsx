@@ -105,6 +105,12 @@ const Menu = () => {
   const coverUrl = config.coverUrl || "";
   const welcomeMessage = config.welcomeMessage || "";
 
+  const [coverError, setCoverError] = useState(false);
+  const [logoError, setLogoError] = useState(false);
+
+  useEffect(() => { setCoverError(false); }, [coverUrl]);
+  useEffect(() => { setLogoError(false); }, [logoUrl]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -423,13 +429,14 @@ const Menu = () => {
             </div>
 
             <div className="mt-3 overflow-hidden rounded-[24px] border border-black/5 bg-white shadow-[0_8px_24px_-14px_rgba(0,0,0,0.18)]">
-              {coverUrl ? (
+              {coverUrl && !coverError ? (
                 <div className="h-[150px] w-full overflow-hidden bg-zinc-100 sm:h-[184px]">
                   <img
                     src={coverUrl}
                     alt={restaurantName}
                     loading="lazy"
                     decoding="async"
+                    onError={() => setCoverError(true)}
                     className="h-full w-full object-cover"
                   />
                 </div>
@@ -441,13 +448,14 @@ const Menu = () => {
               )}
 
               <div className="flex items-center gap-3 px-4 py-2.5">
-                {logoUrl && (
+                {logoUrl && !logoError && (
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
                     <img
                       src={logoUrl}
                       alt={restaurantName}
                       loading="lazy"
                       decoding="async"
+                      onError={() => setLogoError(true)}
                       className="h-full w-full object-contain"
                     />
                   </div>
