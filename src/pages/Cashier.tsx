@@ -254,7 +254,7 @@ const Cashier = () => {
   const [invoiceProvince, setInvoiceProvince] = useState("");
   const [invoiceCity, setInvoiceCity] = useState("");
 
-  const [showOpeningDialog, setShowOpeningDialog] = useState(false);
+  const [showOpeningDialog, setShowOpeningDialog] = useState(true);
   const [openingCashInput, setOpeningCashInput] = useState("");
   const [cashSession, setCashSession] = useState<{
     openingCash: number;
@@ -366,10 +366,8 @@ const Cashier = () => {
       try {
         setCashSession(JSON.parse(stored));
       } catch {
-        setShowOpeningDialog(true);
+        // ignore malformed data
       }
-    } else {
-      setShowOpeningDialog(true);
     }
   }, [sessionKey]);
 
@@ -909,7 +907,11 @@ const Cashier = () => {
       forcedAmount !== undefined
         ? forcedAmount
         : Math.max(0, Number(openingCashInput) || 0);
-    const session = { openingCash: amount, openedAt: Date.now() };
+    const session = {
+      openingCash: amount,
+      openedAt: Date.now(),
+      adjustments: cashSession?.adjustments,
+    };
     localStorage.setItem(sessionKey, JSON.stringify(session));
     setCashSession(session);
     setShowOpeningDialog(false);
