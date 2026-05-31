@@ -9,12 +9,14 @@ import {
 import { toast } from "sonner";
 import {
   AlertTriangle,
+  BarChart3,
   FileText,
   Plus,
   Printer,
   Receipt,
   Trash2,
   Wallet,
+  X,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
@@ -243,6 +245,18 @@ const Cashier = () => {
   const [invoiceProvince, setInvoiceProvince] = useState("");
   const [invoiceCity, setInvoiceCity] = useState("");
 
+  const [showOpeningDialog, setShowOpeningDialog] = useState(false);
+  const [openingCashInput, setOpeningCashInput] = useState("");
+  const [cashSession, setCashSession] = useState<{
+    openingCash: number;
+    openedAt: number;
+  } | null>(null);
+  const [showCierreModal, setShowCierreModal] = useState(false);
+
+  const sessionKey = restaurantId
+    ? `cashier_session_${restaurantId}_${new Date().toISOString().slice(0, 10)}`
+    : null;
+
   useEffect(() => {
     if (!restaurantId) return;
 
@@ -328,6 +342,20 @@ const Cashier = () => {
 
     return () => unsubscribe();
   }, [restaurantId]);
+
+  useEffect(() => {
+    if (!sessionKey) return;
+    const stored = localStorage.getItem(sessionKey);
+    if (stored) {
+      try {
+        setCashSession(JSON.parse(stored));
+      } catch {
+        setShowOpeningDialog(true);
+      }
+    } else {
+      setShowOpeningDialog(true);
+    }
+  }, [sessionKey]);
 
   const activeSessionIds = useMemo(() => {
     return new Set(
@@ -467,6 +495,42 @@ const Cashier = () => {
       return sum + item.menuItem.price * item.quantity;
     }, 0);
   }, [manualItems]);
+
+  const paidCuentasToday = useMemo(() => {
+    return cuentas.filter((c) => {
+      if (c.estado !== "pagada") return false;
+      if (!cashSession) return true;
+      const ts = getTimestampMs(c.createdAt);
+      return ts === 0 || ts >= cashSession.openedAt;
+    });
+  }, [cuentas, cashSession]);
+
+  const paymentBreakdown = useMemo(() => {
+    const breakdown: Partial<Record<CashierPaymentMethod, { count: number; total: number }>> = {};
+    const add = (method: CashierPaymentMethod, amount: number) => {
+      if (!breakdown[method]) breakdown[method] = { count: 0, total: 0 };
+      breakdown[method]!.count += 1;
+      breakdown[method]!.total += amount;
+    };
+    for (const cuenta of paidCuentasToday) {
+      if (cuenta.payments && cuenta.payments.length > 0) {
+        for (const p of cuenta.payments) add(p.method, p.amount);
+      } else if (cuenta.metodo) {
+        add(cuenta.metodo as CashierPaymentMethod, Number(cuenta.total || 0));
+      } else {
+        add("other", Number(cuenta.total || 0));
+      }
+    }
+    return breakdown;
+  }, [paidCuentasToday]);
+
+  const totalRecaudado = useMemo(
+    () => paidCuentasToday.reduce((sum, c) => sum + Number(c.total || 0), 0),
+    [paidCuentasToday]
+  );
+
+  const totalEfectivo = paymentBreakdown.cash?.total ?? 0;
+  const totalCajaActual = (cashSession?.openingCash ?? 0) + totalEfectivo;
 
   const selectedPaymentLabel =
     selectedCuenta?.metodo && paymentLabels[selectedCuenta.metodo]
@@ -807,6 +871,18 @@ const Cashier = () => {
     }
   };
 
+  const confirmOpeningCash = (forcedAmount?: number) => {
+    if (!sessionKey) return;
+    const amount =
+      forcedAmount !== undefined
+        ? forcedAmount
+        : Math.max(0, Number(openingCashInput) || 0);
+    const session = { openingCash: amount, openedAt: Date.now() };
+    localStorage.setItem(sessionKey, JSON.stringify(session));
+    setCashSession(session);
+    setShowOpeningDialog(false);
+  };
+
   if (!restaurantId) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
@@ -823,6 +899,7 @@ const Cashier = () => {
   }
 
   return (
+    <>
     <div className="min-h-screen bg-zinc-100">
       <div className="mx-auto max-w-7xl px-4 py-6">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -852,41 +929,51 @@ const Cashier = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <div className="rounded-3xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">
-                Pendientes
-              </p>
-              <p className="mt-1 text-3xl font-black text-zinc-950">
-                {pendingBills.length}
-              </p>
-            </div>
-
-            <div className="rounded-3xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
-              <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">
-                Sesiones activas
-              </p>
-              <p className="mt-1 text-3xl font-black text-zinc-950">
-                {activeBills.length}
-              </p>
-            </div>
-
-            <Link
-              to={invoiceRequestsPath}
-              className="col-span-2 flex rounded-3xl border border-zinc-950 bg-zinc-950 px-5 py-4 text-white shadow-sm transition hover:bg-zinc-800 sm:col-span-1"
-            >
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-white/70">
-                  Facturas
+          <div className="flex flex-col items-stretch gap-3 sm:items-end">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="rounded-3xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
+                <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">
+                  Pendientes
                 </p>
-                <p className="mt-1 text-3xl font-black">
-                  {invoiceRequestsCount}
-                </p>
-                <p className="mt-1 text-xs font-bold text-white/70">
-                  Ver solicitudes
+                <p className="mt-1 text-3xl font-black text-zinc-950">
+                  {pendingBills.length}
                 </p>
               </div>
-            </Link>
+
+              <div className="rounded-3xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
+                <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">
+                  Sesiones activas
+                </p>
+                <p className="mt-1 text-3xl font-black text-zinc-950">
+                  {activeBills.length}
+                </p>
+              </div>
+
+              <Link
+                to={invoiceRequestsPath}
+                className="col-span-2 flex rounded-3xl border border-zinc-950 bg-zinc-950 px-5 py-4 text-white shadow-sm transition hover:bg-zinc-800 sm:col-span-1"
+              >
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-white/70">
+                    Facturas
+                  </p>
+                  <p className="mt-1 text-3xl font-black">
+                    {invoiceRequestsCount}
+                  </p>
+                  <p className="mt-1 text-xs font-bold text-white/70">
+                    Ver solicitudes
+                  </p>
+                </div>
+              </Link>
+            </div>
+
+            <button
+              onClick={() => setShowCierreModal(true)}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-zinc-300 bg-white px-5 font-black text-zinc-800 shadow-sm transition hover:bg-zinc-50 sm:w-auto"
+            >
+              <BarChart3 size={17} />
+              Cierre de caja
+            </button>
           </div>
         </div>
         {!isOnline && (
@@ -1505,6 +1592,175 @@ const Cashier = () => {
         </div>
       </div>
     </div>
+
+    {/* Opening cash dialog */}
+    {showOpeningDialog && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+          <h2 className="text-2xl font-black text-zinc-950">Apertura de caja</h2>
+          <p className="mt-2 text-sm text-zinc-500">
+            Ingresá el monto inicial en efectivo que tenés en la caja.
+          </p>
+          <input
+            value={openingCashInput}
+            onChange={(e) => setOpeningCashInput(e.target.value)}
+            type="number"
+            min={0}
+            placeholder="$0"
+            className="mt-4 h-14 w-full rounded-2xl border border-zinc-200 px-4 text-xl font-black outline-none focus:ring-2 focus:ring-black/10"
+            autoFocus
+            onKeyDown={(e) => e.key === "Enter" && confirmOpeningCash()}
+          />
+          <button
+            onClick={() => confirmOpeningCash()}
+            className="mt-3 h-12 w-full rounded-2xl bg-zinc-950 font-black text-white transition hover:bg-zinc-800"
+          >
+            Abrir caja
+          </button>
+          <button
+            onClick={() => confirmOpeningCash(0)}
+            className="mt-2 w-full rounded-xl py-2 text-sm font-bold text-zinc-400 transition hover:text-zinc-600"
+          >
+            Continuar sin ingresar monto
+          </button>
+        </div>
+      </div>
+    )}
+
+    {/* Cierre de caja modal */}
+    {showCierreModal && (
+      <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center">
+        <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
+          <div className="sticky top-0 flex items-center justify-between border-b border-zinc-200 bg-white px-6 py-4">
+            <div>
+              <h2 className="text-xl font-black text-zinc-950">Cierre de caja</h2>
+              {cashSession && (
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  Apertura:{" "}
+                  {new Intl.DateTimeFormat("es-AR", {
+                    dateStyle: "short",
+                    timeStyle: "short",
+                  }).format(new Date(cashSession.openedAt))}
+                  {" · "}Monto inicial: <strong>{formatPriceARS(cashSession.openingCash)}</strong>
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => setShowCierreModal(false)}
+              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-zinc-200 text-zinc-700 transition hover:bg-zinc-50"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="space-y-6 p-6">
+            {/* Summary strip */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">
+                  Monto inicial
+                </p>
+                <p className="mt-1 text-2xl font-black text-zinc-950">
+                  {formatPriceARS(cashSession?.openingCash ?? 0)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
+                  Efectivo en caja
+                </p>
+                <p className="mt-1 text-2xl font-black text-emerald-900">
+                  {formatPriceARS(totalCajaActual)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+                  Total recaudado
+                </p>
+                <p className="mt-1 text-2xl font-black text-blue-900">
+                  {formatPriceARS(totalRecaudado)}
+                </p>
+              </div>
+            </div>
+
+            {/* Breakdown by payment method */}
+            <div>
+              <h3 className="mb-3 text-base font-black text-zinc-950">
+                Por forma de pago
+              </h3>
+              {Object.keys(paymentBreakdown).length === 0 ? (
+                <p className="text-sm text-zinc-500">
+                  No hay cuentas cobradas en este turno.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {(
+                    Object.entries(paymentBreakdown) as [
+                      CashierPaymentMethod,
+                      { count: number; total: number },
+                    ][]
+                  )
+                    .sort((a, b) => b[1].total - a[1].total)
+                    .map(([method, data]) => (
+                      <div
+                        key={method}
+                        className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-black text-zinc-950">
+                            {paymentLabels[method] || method}
+                          </span>
+                          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-bold text-zinc-600">
+                            {data.count} cuenta{data.count !== 1 ? "s" : ""}
+                          </span>
+                        </div>
+                        <span className="text-base font-black text-zinc-950">
+                          {formatPriceARS(data.total)}
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+
+            {/* List of paid cuentas */}
+            {paidCuentasToday.length > 0 && (
+              <div>
+                <h3 className="mb-3 text-base font-black text-zinc-950">
+                  Cuentas cobradas ({paidCuentasToday.length})
+                </h3>
+                <div className="space-y-2">
+                  {paidCuentasToday.map((cuenta) => {
+                    const method =
+                      cuenta.payments?.[0]?.method ??
+                      (cuenta.metodo as CashierPaymentMethod) ??
+                      "other";
+                    return (
+                      <div
+                        key={cuenta.id}
+                        className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-black text-zinc-950">
+                            Mesa {cuenta.mesa}
+                          </span>
+                          <span className="rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs font-bold text-zinc-600">
+                            {paymentLabels[method] || method}
+                          </span>
+                        </div>
+                        <span className="text-sm font-black text-zinc-950">
+                          {formatPriceARS(cuenta.total)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 
