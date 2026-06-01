@@ -9,9 +9,9 @@ import {
   AlertTriangle,
   QrCode,
 } from "lucide-react";
-import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
+import { doc, onSnapshot } from "firebase/firestore";
 import { getDb } from "../lib/firebase";
-import type { CuentaRecord, FirestoreTimestampLike } from "../lib/restaurant";
+import type { CuentaRecord } from "../lib/restaurant";
 import { resolveRuntimeContext, parseTableNumber } from "../lib/runtime-context";
 import { getMesa } from "../lib/mesas";
 import { getSessionById } from "../lib/sessions";
@@ -58,12 +58,6 @@ const statusStyles = (estado?: string) => {
   }
 };
 
-const getTimestampMs = (value?: FirestoreTimestampLike) => {
-  if (!value) return 0;
-  if (typeof value.toMillis === "function") return value.toMillis();
-  if (typeof value.seconds === "number") return value.seconds * 1000;
-  return 0;
-};
 
 const BillConfirmed = () => {
   const location = useLocation();
@@ -136,37 +130,23 @@ const BillConfirmed = () => {
   }, [restaurantId, tableNumber, storedSessionId]);
 
   useEffect(() => {
-    const q = query(
-      collection(db, "restaurants", restaurantId, "cuentas"),
-      orderBy("createdAt", "desc")
-    );
+    if (!storedSessionId) {
+      setCuenta(null);
+      setLoading(false);
+      return;
+    }
+
+    const cuentaRef = doc(db, "restaurants", restaurantId, "cuentas", storedSessionId);
 
     const unsubscribe = onSnapshot(
-      q,
+      cuentaRef,
       (snapshot) => {
         setError(null);
-
-        const cuentas = snapshot.docs.map((cuentaDoc) => ({
-          id: cuentaDoc.id,
-          ...cuentaDoc.data(),
-        })) as CuentaRecord[];
-
-        const cuentasMesa = cuentas
-          .filter((c) => {
-            const sameMesa = Number(c.mesa) === Number(table);
-            if (!sameMesa) return false;
-
-            if (storedSessionId && c.sessionId) {
-              return c.sessionId === storedSessionId;
-            }
-
-            return sameMesa;
-          })
-          .sort(
-            (a, b) => getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt)
-          );
-
-        setCuenta(cuentasMesa[0] || null);
+        setCuenta(
+          snapshot.exists()
+            ? ({ id: snapshot.id, ...snapshot.data() } as CuentaRecord)
+            : null
+        );
         setLoading(false);
       },
       (err) => {
@@ -177,7 +157,7 @@ const BillConfirmed = () => {
     );
 
     return () => unsubscribe();
-  }, [restaurantId, table, storedSessionId]);
+  }, [restaurantId, storedSessionId]);
 
   const waitingForStaff =
     loading ||

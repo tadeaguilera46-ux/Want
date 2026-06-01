@@ -86,13 +86,17 @@ service cloud.firestore {
         && request.resource.data.active == true;
     }
 
-    function isOwnerCreatingOwnStaff(staffId) {
+    function isOwnerCreatingOwnStaff(restaurantId, staffId) {
       return isSignedIn()
         && staffId == request.auth.uid
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.role == "admin"
-        && request.resource.data.active == true;
+        && request.resource.data.active == true
+        // Verifica ownership usando getAfter() para que el batch de Onboarding
+        // (que crea restaurante y staff simultáneamente) también funcione.
+        && getAfter(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerUid
+           == request.auth.uid;
     }
 
     function isValidTableNumber(value) {
@@ -113,7 +117,15 @@ service cloud.firestore {
         && isValidOptionalString(request.resource.data.coverUrl)
         && isValidOptionalString(request.resource.data.welcomeMessage)
         && isValidOptionalColor(request.resource.data.primaryColor)
-        && isValidOptionalColor(request.resource.data.secondaryColor);
+        && isValidOptionalColor(request.resource.data.secondaryColor)
+        // Campos sensibles inmutables para el rol admin:
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.plan == resource.data.plan
+        && request.resource.data.subscriptionStatus == resource.data.subscriptionStatus
+        && request.resource.data.active == resource.data.active
+        && request.resource.data.billing == resource.data.billing
+        && request.resource.data.trialEndsAt == resource.data.trialEndsAt
+        && request.resource.data.nextBillingDate == resource.data.nextBillingDate;
     }
 
     function sessionExists(restaurantId, sessionId) {
@@ -136,14 +148,13 @@ service cloud.firestore {
         && request.resource.data.status == "active";
     }
 
-    function validMesaClientCreateOrUpdate(restaurantId) {
-      return request.resource.data.restaurantId == restaurantId
-        && isValidTableNumber(request.resource.data.numero)
-        && request.resource.data.estado in ["available", "occupied", "needs_cleaning"];
-    }
-
     match /restaurants/{restaurantId} {
-      allow read: if true;
+      // Staff autenticado: get + list.
+      allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
+      // Cliente anónimo: solo GET (branding, SubscriptionGuard). Sin LIST.
+      // Riesgo residual: ownerEmail/plan/billing visibles a anónimos; fix completo
+      // requiere separar datos públicos y privados del documento.
+      allow get: if !isSignedIn();
 
       allow create: if isSuperAdmin() || isOwnerCreatingRestaurant();
 
@@ -161,7 +172,7 @@ service cloud.firestore {
 
       allow create: if isSuperAdmin()
         || isAdmin(restaurantId)
-        || isOwnerCreatingOwnStaff(staffId);
+        || isOwnerCreatingOwnStaff(restaurantId, staffId);
 
       allow update, delete: if isSuperAdmin() || isAdmin(restaurantId);
     }
@@ -169,11 +180,12 @@ service cloud.firestore {
     match /restaurants/{restaurantId}/mesas/{mesaId} {
       allow read: if true;
 
+      // Clientes NO pueden crear mesas: las crea Onboarding/admin.
+      // Escanear un QR con mesa no configurada retorna error (comportamiento correcto).
       allow create: if (
           isSuperAdmin()
           || isAdmin(restaurantId)
           || isCashier(restaurantId)
-          || validMesaClientCreateOrUpdate(restaurantId)
         )
         && request.resource.data.restaurantId == restaurantId
         && isValidTableNumber(request.resource.data.numero)
@@ -182,18 +194,29 @@ service cloud.firestore {
       allow update: if isSuperAdmin()
         || isRunnerCashierOrAdmin(restaurantId)
         || (
-          validMesaClientCreateOrUpdate(restaurantId)
-          && request.resource.data.restaurantId == resource.data.restaurantId
+          // Cliente marca la mesa como ocupada al escanear QR (getOrCreateMesaSession).
+          // getAfter() verifica que la sesión referenciada exista y sea válida
+          // DESPUÉS de la transacción — cubre el caso en que sesión y mesa
+          // se crean/actualizan en el mismo runTransaction.
+          resource.data.restaurantId == restaurantId
+          && request.resource.data.restaurantId == restaurantId
+          && isValidTableNumber(request.resource.data.numero)
           && request.resource.data.numero == resource.data.numero
           && request.resource.data.estado == "occupied"
           && request.resource.data.activeSessionId is string
+          && getAfter(/databases/$(database)/documents/restaurants/$(restaurantId)/sessions/$(request.resource.data.activeSessionId)).data.status == "active"
+          && getAfter(/databases/$(database)/documents/restaurants/$(restaurantId)/sessions/$(request.resource.data.activeSessionId)).data.tableNumber == request.resource.data.numero
+          && getAfter(/databases/$(database)/documents/restaurants/$(restaurantId)/sessions/$(request.resource.data.activeSessionId)).data.restaurantId == restaurantId
         );
 
       allow delete: if isSuperAdmin() || isAdmin(restaurantId);
     }
 
     match /restaurants/{restaurantId}/sessions/{sessionId} {
-      allow read: if true;
+      // Staff autenticado: get + list (markMesaAvailable, getActiveSessionsByTable, etc.).
+      allow read: if isSuperAdmin() || isRunnerCashierOrAdmin(restaurantId);
+      // Cliente anónimo: solo GET de su sesión por ID (Cart.tsx, BillConfirmed.tsx).
+      allow get: if !isSignedIn();
 
       allow create: if isCashierOrAdmin(restaurantId)
         || validClientSessionCreate(restaurantId);
@@ -201,9 +224,21 @@ service cloud.firestore {
       allow update: if isSuperAdmin()
         || isRunnerCashierOrAdmin(restaurantId)
         || (
-          request.resource.data.restaurantId == resource.data.restaurantId
+          // Permite al cliente solicitar la cuenta desde RequestBill.
+          // Restricciones: la sesión debe estar activa, no puede cerrarse,
+          // los locks solo van de false→true (nunca al revés),
+          // y solo se permiten los campos que pedirCuenta() necesita escribir.
+          resource.data.status == "active"
+          && request.resource.data.status == "active"
+          && request.resource.data.restaurantId == resource.data.restaurantId
           && request.resource.data.tableNumber == resource.data.tableNumber
-          && request.resource.data.status in ["active", "closed"]
+          && (request.resource.data.ordersLocked == resource.data.ordersLocked
+              || request.resource.data.ordersLocked == true)
+          && (request.resource.data.billRequested == resource.data.billRequested
+              || request.resource.data.billRequested == true)
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['ordersLocked', 'billRequested', 'billRequestedAt',
+                         'lockedReason', 'updatedAt'])
         );
 
       allow delete: if isSuperAdmin() || isAdmin(restaurantId);
@@ -216,7 +251,13 @@ service cloud.firestore {
     }
 
     match /restaurants/{restaurantId}/pedidos/{pedidoId} {
-      allow read: if true;
+      // Staff: get + list (cocina, barra, runner, cajero, admin).
+      // Cliente anónimo: list necesario para RequestBill.tsx (onSnapshot con where sessionId).
+      // Riesgo residual: sin filtro enforced en rules, cliente puede listar todos los pedidos.
+      // Fix completo: agregar sessionId filter enforceado cuando se actualice el frontend.
+      allow read: if isSuperAdmin()
+        || isKitchenBarRunnerCashierOrAdmin(restaurantId)
+        || !isSignedIn();
 
       allow create: if request.resource.data.restaurantId == restaurantId
         && isValidTableNumber(request.resource.data.mesa)
@@ -237,7 +278,17 @@ service cloud.firestore {
     }
 
     match /restaurants/{restaurantId}/cuentas/{cuentaId} {
-      allow read: if true;
+      // Staff autenticado: acceso completo (get + list).
+      allow read: if isSuperAdmin() || isRunnerCashierOrAdmin(restaurantId);
+
+      // Cliente anónimo: puede leer documentos individuales de su sesión (cuentaId == sessionId).
+      allow get: if resource.data.sessionId == cuentaId;
+
+      // Cliente anónimo: necesita listar cuentas porque BillConfirmed usa onSnapshot(collection)
+      // sin cláusula where. Riesgo residual: un cliente puede ver PII de invoice de otros
+      // clientes del mismo restaurante. Para eliminarlo, BillConfirmed debe agregar
+      // where("sessionId", "==", storedSessionId) a su query y luego eliminar esta regla.
+      allow list: if resource.data.restaurantId == restaurantId;
 
       allow create: if (
           request.resource.data.restaurantId == restaurantId
@@ -313,7 +364,14 @@ service cloud.firestore {
 
     match /restaurants/{restaurantId}/assistanceRequests/{requestId} {
       allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
-      allow create: if true;
+
+      // Valida shape del documento antes de crear.
+      // Riesgo residual: sin sessionId en el schema no se puede verificar sesión activa.
+      // Fix completo: Menu.tsx debe incluir sessionId y la regla validar sessionIsActiveForTable.
+      allow create: if isValidTableNumber(request.resource.data.mesa)
+        && request.resource.data.type in ["sal", "hielo", "runner"]
+        && request.resource.data.status == "pending";
+
       allow update: if isSuperAdmin() || isRunnerCashierOrAdmin(restaurantId);
       allow delete: if isSuperAdmin() || isAdmin(restaurantId);
     }

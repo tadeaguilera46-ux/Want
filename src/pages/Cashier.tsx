@@ -651,9 +651,9 @@ const Cashier = () => {
         metadata: { total: manualTotal, source: "manual" },
       });
 
-      setSelectedCuentaId(cuentaRef.id);
       setManualMesa("");
       setManualItems([]);
+      toast.success("Cuenta manual creada. Seleccionala de la lista para cobrar.");
     } catch (err) {
       console.error("Error creando cuenta manual:", err);
       setError(
@@ -1361,7 +1361,9 @@ const Cashier = () => {
                   )}
                 </div>
 
-                {selectedCuenta.sessionId && (
+                {selectedCuenta.sessionId &&
+                  selectedCuenta.estado !== "pagada" &&
+                  selectedCuenta.estado !== "cerrada" && (
                 <div className="rounded-3xl border border-zinc-200 bg-white p-4">
                   <h3 className="mb-3 text-lg font-black text-zinc-950">
                     Agregar producto a esta cuenta

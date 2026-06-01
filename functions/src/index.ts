@@ -1,16 +1,64 @@
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
+import * as crypto from "crypto";
 
 admin.initializeApp();
 
 const MP_ACCESS_TOKEN = defineSecret("MP_ACCESS_TOKEN");
+const MP_WEBHOOK_SECRET = defineSecret("MP_WEBHOOK_SECRET");
 
 const MP_PLANS: Record<string, string> = {
   starter: "ec0431741ea24561a858ae740135a58c",
   pro: "3d8e990cc99a4c20baeac76f027b4c0d",
   premium: "21d0a8de8a194d269d0f7e38272145d3",
 };
+
+// ─── Verificación de firma de Mercado Pago ───────────────────────────────────
+// Referencia: https://www.mercadopago.com.ar/developers/es/docs/your-integrations/notifications/webhooks
+
+/**
+ * Verifica el header x-signature que MP incluye en cada webhook.
+ *
+ * Formato del header: "ts=<unix_seconds>,v1=<hmac_sha256_hex>"
+ * Mensaje firmado:    "id:[data.id];request-date:[x-request-id];updated-id:[data.id];"
+ *
+ * Usa comparación en tiempo constante (timingSafeEqual) para evitar timing attacks.
+ * Rechaza timestamps con más de 5 minutos de antigüedad para prevenir replay attacks.
+ */
+function verifyMpWebhookSignature(
+  xSignature: string | string[] | undefined,
+  xRequestId: string | string[] | undefined,
+  dataId: string,
+  secret: string
+): boolean {
+  if (!xSignature || typeof xSignature !== "string") return false;
+
+  const ts = xSignature.match(/ts=([^,]+)/)?.[1] ?? "";
+  const v1 = xSignature.match(/v1=([^,]+)/)?.[1] ?? "";
+
+  if (!ts || !v1) return false;
+
+  const tsNum = parseInt(ts, 10);
+  if (isNaN(tsNum) || Math.abs(Date.now() / 1000 - tsNum) > 300) return false;
+
+  const requestId = typeof xRequestId === "string" ? xRequestId : "";
+  const signedMessage = `id:${dataId};request-date:${requestId};updated-id:${dataId};`;
+
+  const computed = crypto
+    .createHmac("sha256", secret)
+    .update(signedMessage)
+    .digest("hex");
+
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(v1, "hex"),
+      Buffer.from(computed, "hex")
+    );
+  } catch {
+    return false;
+  }
+}
 
 // ─── 1. Crear suscripción ────────────────────────────────────────────────────
 
@@ -77,11 +125,30 @@ export const createSubscription = onCall(
 // ─── 2. Webhook de Mercado Pago ──────────────────────────────────────────────
 
 export const mpWebhook = onRequest(
-  { secrets: [MP_ACCESS_TOKEN] },
+  { secrets: [MP_ACCESS_TOKEN, MP_WEBHOOK_SECRET] },
   async (req, res) => {
     if (req.method !== "POST") {
       res.status(405).send("Method not allowed");
       return;
+    }
+
+    // Verificar firma antes de cualquier procesamiento.
+    // Si el secret está configurado (producción), la firma es obligatoria.
+    // Si está vacío (entorno local sin secret provisionado), se omite.
+    const webhookSecret = MP_WEBHOOK_SECRET.value();
+    if (webhookSecret) {
+      const dataId = String(req.body?.data?.id ?? req.query.id ?? "");
+      const valid = verifyMpWebhookSignature(
+        req.headers["x-signature"],
+        req.headers["x-request-id"],
+        dataId,
+        webhookSecret
+      );
+      if (!valid) {
+        console.warn("mpWebhook: x-signature inválida — request rechazado");
+        res.status(401).send("Unauthorized");
+        return;
+      }
     }
 
     const topic = req.query.topic || req.body?.type;

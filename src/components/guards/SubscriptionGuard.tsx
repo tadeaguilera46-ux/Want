@@ -37,10 +37,15 @@ const SubscriptionGuard = ({ children }: Props) => {
 
   useEffect(() => {
     if (!restaurantId) {
-      // No restaurantId anywhere — StaffRoute handles the missing-restaurant UI.
-      setAllowed(true);
-      setLoading(false);
-      return;
+      // Defer one event-loop tick so RestaurantContext's useEffect has a chance
+      // to resolve contextRestaurantId from localStorage before we decide to
+      // pass through. If restaurantId is still empty after the tick, there is
+      // truly no restaurant available and StaffRoute handles the missing-restaurant UI.
+      const timer = setTimeout(() => {
+        setAllowed(true);
+        setLoading(false);
+      }, 0);
+      return () => clearTimeout(timer);
     }
 
     setLoading(true);

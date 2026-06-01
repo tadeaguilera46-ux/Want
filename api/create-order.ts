@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import admin from "firebase-admin";
+import { UserFacingError, toApiErrorMessage } from "./_lib/errors";
 
 
 type StockUnit = "kg" | "g" | "l" | "ml" | "unit";
@@ -99,18 +100,18 @@ const mergeObservations = (...values: string[]) =>
 
 const validatePedido = (pedido: PedidoInput) => {
   if (!pedido.restaurantId || typeof pedido.restaurantId !== "string") {
-    throw new Error("Falta restaurantId");
+    throw new UserFacingError("Falta restaurantId");
   }
 
   if (!Number.isInteger(pedido.mesa) || pedido.mesa <= 0) {
-    throw new Error("Mesa inválida");
+    throw new UserFacingError("Mesa inválida");
   }
 
   if (!Array.isArray(pedido.items) || pedido.items.length === 0) {
-    throw new Error("El pedido no tiene productos");
+    throw new UserFacingError("El pedido no tiene productos");
   }
   if (!pedido.sessionId || typeof pedido.sessionId !== "string") {
-    throw new Error(
+    throw new UserFacingError(
       "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
     );
   }
@@ -120,7 +121,7 @@ const validatePedido = (pedido: PedidoInput) => {
     !Number.isFinite(pedido.total) ||
     pedido.total < 0
   ) {
-    throw new Error("Total inválido");
+    throw new UserFacingError("Total inválido");
   }
 };
 
@@ -148,7 +149,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const mesaSnap = await transaction.get(mesaRef);
 
       if (!restaurantSnap.exists) {
-        throw new Error("Restaurante inexistente");
+        throw new UserFacingError("Restaurante inexistente");
       }
 
       const restaurantData = restaurantSnap.data() || {};
@@ -159,7 +160,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
      const requestedSessionId = pedido.sessionId.trim();
 
      if (!mesaSnap.exists) {
-        throw new Error(
+        throw new UserFacingError(
           "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
         );
      }
@@ -169,7 +170,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       typeof activeSessionId !== "string" ||
       activeSessionId !== requestedSessionId
      ) {
-      throw new Error(
+      throw new UserFacingError(
         "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
       );
      }
@@ -181,7 +182,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
      const existingSessionSnap = await transaction.get(sessionRef);
 
      if (!existingSessionSnap.exists) {
-      throw new Error(
+      throw new UserFacingError(
         "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
       );
      }
@@ -192,7 +193,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sessionData.status !== "active" ||
       sessionData.tableNumber !== mesa
      ) {
-      throw new Error(
+      throw new UserFacingError(
         "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
       );
      }
@@ -200,7 +201,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sessionData.ordersLocked === true ||
       sessionData.billRequested === true
      ) {
-      throw new Error(
+      throw new UserFacingError(
         "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa."
       );
      }
@@ -221,14 +222,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           estadoCuenta === "pagada" ||
           estadoCuenta === "cerrada"
         ) {
-          throw new Error(
+          throw new UserFacingError(
             "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa."
           );
         }
       }
      
      if (sessionData.ordersLocked === true) {
-        throw new Error(
+        throw new UserFacingError(
           "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa."
         );
      }
@@ -249,20 +250,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       for (const rawItem of pedido.items) {
         if (!rawItem.id) {
-          throw new Error("Hay un producto inválido en el pedido");
+          throw new UserFacingError("Hay un producto inválido en el pedido");
         }
 
         const quantity = Number(rawItem.cantidad || rawItem.quantity || 1);
 
         if (!Number.isFinite(quantity) || quantity <= 0) {
-          throw new Error("Cantidad inválida en el pedido");
+          throw new UserFacingError("Cantidad inválida en el pedido");
         }
 
         const menuRef = db.doc(`restaurants/${restaurantId}/menu/${rawItem.id}`);
         const menuSnap = await transaction.get(menuRef);
 
         if (!menuSnap.exists) {
-          throw new Error("Uno de los productos ya no está disponible");
+          throw new UserFacingError("Uno de los productos ya no está disponible");
         }
 
         const menuData = menuSnap.data() as MenuItemDoc;
@@ -309,7 +310,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const menuData = menuSnap.data() as MenuItemDoc;
 
         if (menuData.active === false) {
-          throw new Error(`${menuData.name || rawItem.nombre} no está disponible`);
+          throw new UserFacingError(`${menuData.name || rawItem.nombre} no está disponible`);
         }
 
         const itemCategory = menuData.type === "drinks" ? "drinks" : "food";
@@ -326,7 +327,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             if (!stockSnap || !stockSnap.exists) {
               if (ingredient.essential) {
-                throw new Error(
+                throw new UserFacingError(
                   `${menuData.name || rawItem.nombre} no está disponible por falta de ${ingredient.stockItemName}`
                 );
               }
@@ -339,7 +340,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             if (stockData.active === false) {
               if (ingredient.essential) {
-                throw new Error(
+                throw new UserFacingError(
                   `${menuData.name || rawItem.nombre} no está disponible por falta de ${ingredient.stockItemName}`
                 );
               }
@@ -351,7 +352,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             const stockUnit = stockData.unit || "unit";
 
             if (!compatibleUnits(ingredient.unit, stockUnit)) {
-              throw new Error(`Unidad incompatible en ${ingredient.stockItemName}`);
+              throw new UserFacingError(`Unidad incompatible en ${ingredient.stockItemName}`);
             }
 
             const availableBase = toBaseUnit(
@@ -379,7 +380,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               );
 
               if (ingredient.essential) {
-                throw new Error(
+                throw new UserFacingError(
                   `Nos quedan ${maxAvailable} ${menuData.name || rawItem.nombre} en stock.`
                 );
               }
@@ -438,7 +439,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const stockSnap = stockSnapsById.get(stockItemId);
 
         if (!stockRef || !stockSnap || !stockSnap.exists) {
-          throw new Error("El stock cambió. Reintentá el pedido.");
+          throw new UserFacingError("El stock cambió. Reintentá el pedido.");
         }
 
         const stockData = stockSnap.data() as StockItemDoc;
@@ -504,10 +505,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(400).json({
       ok: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "No se pudo crear el pedido",
+      error: toApiErrorMessage(error),
     });
   }
 }   

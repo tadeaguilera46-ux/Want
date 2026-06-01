@@ -52,7 +52,7 @@ export default class AppErrorBoundary extends Component<Props, State> {
             intentar continuar.
           </p>
 
-          {this.state.errorMessage && (
+          {import.meta.env.DEV && this.state.errorMessage && (
             <p className="mt-4 rounded-2xl bg-slate-100 px-4 py-3 text-xs font-medium text-slate-500">
               {this.state.errorMessage}
             </p>
