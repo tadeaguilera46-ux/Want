@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import admin from "firebase-admin";
-import { UserFacingError, toApiErrorMessage } from "./_lib/errors";
+import { UserFacingError, toApiErrorMessage } from "./_lib/errors.js";
 
 
 type StockUnit = "kg" | "g" | "l" | "ml" | "unit";
