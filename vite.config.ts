@@ -8,10 +8,10 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.svg", "apple-touch-icon.png"],
+      includeAssets: ["LogoWant.png"],
       manifest: {
-        name: "Want",
-        short_name: "Want",
+        name: "WANT",
+        short_name: "WANT",
         description: "Sistema inteligente para restaurantes",
         theme_color: "#000000",
         background_color: "#ffffff",
@@ -21,17 +21,17 @@ export default defineConfig({
         start_url: "/",
         icons: [
           {
-            src: "/pwa-192x192.png",
+            src: "/LogoWant.png",
             sizes: "192x192",
             type: "image/png",
           },
           {
-            src: "/pwa-512x512.png",
+            src: "/LogoWant.png",
             sizes: "512x512",
             type: "image/png",
           },
           {
-            src: "/maskable-icon-512x512.png",
+            src: "/LogoWant.png",
             sizes: "512x512",
             type: "image/png",
             purpose: "maskable",
