@@ -438,6 +438,7 @@ const Cashier = () => {
 
   const selectedOrders = useMemo(() => {
     if (!selectedCuenta) return [];
+    if (!selectedCuenta.sessionId) return [];
 
     return orders
       .filter((order) => {

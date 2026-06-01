@@ -26,3 +26,4 @@ serviceAccountKey.json
 *.njsproj
 *.sln
 *.sw?
+.gstack/
