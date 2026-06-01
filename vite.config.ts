@@ -10,8 +10,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["LogoWant.png"],
       manifest: {
-        name: "WANT",
-        short_name: "WANT",
+        name: "Want App",
+        short_name: "Want App",
         description: "Sistema inteligente para restaurantes",
         theme_color: "#000000",
         background_color: "#ffffff",
