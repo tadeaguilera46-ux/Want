@@ -1,6 +1,15 @@
+import * as Sentry from "@sentry/node";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import admin from "firebase-admin";
 import { UserFacingError, toApiErrorMessage } from "./_lib/errors.js";
+
+// Inicializar una vez por cold start — no lanza si ya está inicializado
+if (!Sentry.isInitialized()) {
+  Sentry.init({
+    dsn: process.env.VITE_SENTRY_DSN,
+    environment: process.env.NODE_ENV ?? "production",
+  });
+}
 
 
 type StockUnit = "kg" | "g" | "l" | "ml" | "unit";
@@ -503,6 +512,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error) {
     console.error("Error creando pedido:", error);
+
+    // Solo reportar errores inesperados — UserFacingError son errores de negocio esperados
+    if (!(error instanceof UserFacingError)) {
+      Sentry.captureException(error, {
+        extra: { restaurantId: (req.body as { restaurantId?: string })?.restaurantId },
+      });
+      await Sentry.flush(2000);
+    }
 
     return res.status(400).json({
       ok: false,

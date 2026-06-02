@@ -7,13 +7,6 @@ import { RestaurantProvider } from "./lib/restaurant-context";
 import { AuthProvider } from "./lib/auth-context";
 import "./index.css";
 
-// LOG TEMPORAL — remover después de confirmar que Sentry funciona
-console.info("[Sentry]", {
-  hasDsn: Boolean(import.meta.env.VITE_SENTRY_DSN),
-  mode: import.meta.env.MODE,
-  isProd: import.meta.env.PROD,
-});
-
 Sentry.init({
   dsn: import.meta.env.VITE_SENTRY_DSN as string | undefined,
   environment: import.meta.env.MODE,
