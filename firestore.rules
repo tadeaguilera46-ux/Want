@@ -8,7 +8,7 @@ service cloud.firestore {
 
     function isSuperAdmin() {
       return isSignedIn()
-        && request.auth.uid == "avMRl4526tYfAZkOmSebwxvLCAb2";
+        && request.auth.token.superAdmin == true;
     }
 
     function staffPath(restaurantId) {
@@ -112,20 +112,19 @@ service cloud.firestore {
     }
 
     function isValidRestaurantUpdate() {
-      return isValidOptionalString(request.resource.data.name)
+      // Solo permite tocar campos de branding. Cualquier campo fuera de esta lista
+      // (plan, billing, subscriptionStatus, ownerUid, trialEndsAt, etc.) no puede
+      // ser modificado por el rol admin. Se usa affectedKeys() en lugar de == para
+      // evitar falsos negativos al comparar Timestamps o Maps con Timestamps.
+      return request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['name', 'logoUrl', 'coverUrl', 'welcomeMessage',
+                    'primaryColor', 'secondaryColor', 'updatedAt'])
+        && isValidOptionalString(request.resource.data.name)
         && isValidOptionalString(request.resource.data.logoUrl)
         && isValidOptionalString(request.resource.data.coverUrl)
         && isValidOptionalString(request.resource.data.welcomeMessage)
         && isValidOptionalColor(request.resource.data.primaryColor)
-        && isValidOptionalColor(request.resource.data.secondaryColor)
-        // Campos sensibles inmutables para el rol admin:
-        && request.resource.data.ownerUid == resource.data.ownerUid
-        && request.resource.data.plan == resource.data.plan
-        && request.resource.data.subscriptionStatus == resource.data.subscriptionStatus
-        && request.resource.data.active == resource.data.active
-        && request.resource.data.billing == resource.data.billing
-        && request.resource.data.trialEndsAt == resource.data.trialEndsAt
-        && request.resource.data.nextBillingDate == resource.data.nextBillingDate;
+        && isValidOptionalColor(request.resource.data.secondaryColor);
     }
 
     function sessionExists(restaurantId, sessionId) {

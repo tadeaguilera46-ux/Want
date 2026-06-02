@@ -7,6 +7,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 // Guards
 import SubscriptionGuard from "@/components/guards/SubscriptionGuard";
+import SuperAdminGuard from "@/components/guards/SuperAdminGuard";
+import PlanGuard from "@/components/guards/PlanGuard";
 import AppErrorBoundary from "@/components/AppErrorBoundary";
 
 
@@ -149,7 +151,14 @@ const App = () => (
               SUPER ADMIN
           ========================= */}
 
-          <Route path="/super-admin" element={<SuperAdmin />} />
+          <Route
+            path="/super-admin"
+            element={
+              <SuperAdminGuard>
+                <SuperAdmin />
+              </SuperAdminGuard>
+            }
+          />
 
           {/* =========================
               BILLING
@@ -195,9 +204,11 @@ const App = () => (
             path="/staff/cashier/invoices"
             element={
               <SubscriptionGuard>
-                <StaffRoute allowedRoles={["cashier", "admin"]}>
-                  <CashierInvoices />
-                </StaffRoute>
+                <PlanGuard feature="invoices">
+                  <StaffRoute allowedRoles={["cashier", "admin"]}>
+                    <CashierInvoices />
+                  </StaffRoute>
+                </PlanGuard>
               </SubscriptionGuard>
             }
           />
@@ -250,9 +261,11 @@ const App = () => (
             path="/staff/admin/audit-logs"
             element={
               <SubscriptionGuard>
-                <StaffRoute allowedRoles={["admin"]}>
-                  <AdminAuditLogs />
-                </StaffRoute>
+                <PlanGuard feature="auditLogs">
+                  <StaffRoute allowedRoles={["admin"]}>
+                    <AdminAuditLogs />
+                  </StaffRoute>
+                </PlanGuard>
               </SubscriptionGuard>
             }
           />

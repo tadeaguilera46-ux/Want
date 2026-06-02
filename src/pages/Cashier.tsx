@@ -273,8 +273,8 @@ const Cashier = () => {
   } | null>(null);
   const [closingCaja, setClosingCaja] = useState(false);
 
-  const sessionKey = restaurantId
-    ? `cashier_session_${restaurantId}_${new Date().toISOString().slice(0, 10)}`
+  const sessionKey = restaurantId && user?.uid
+    ? `cashier_session_${restaurantId}_${user.uid}_${new Date().toISOString().slice(0, 10)}`
     : null;
 
   useEffect(() => {

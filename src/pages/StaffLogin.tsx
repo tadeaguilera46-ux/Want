@@ -112,21 +112,21 @@ const StaffLogin = () => {
       const staffSnap = await getDoc(staffRef);
 
       if (!staffSnap.exists()) {
-        setError("El usuario no pertenece al staff");
+        setError("Credenciales inválidas o acceso no autorizado");
         return;
       }
 
       const staffData = staffSnap.data();
 
       if (staffData.active !== true) {
-        setError("El usuario está desactivado");
+        setError("Credenciales inválidas o acceso no autorizado");
         return;
       }
 
       const role = normalizeString(staffData.role) as StaffRole;
 
       if (!validRoles.includes(role)) {
-        setError("El usuario no tiene un rol válido");
+        setError("Credenciales inválidas o acceso no autorizado");
         return;
       }
 

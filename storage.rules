@@ -48,28 +48,33 @@ service firebase.storage {
     match /restaurants/{restaurantId}/branding/{fileName} {
       allow read: if true;
 
+      // S-01: solo admin (se eliminó cashier).
+      // S-02 + S-03: el nombre debe seguir el patrón que genera el frontend
+      //   (logo|cover)-{epoch}.{ext} con extensión de imagen válida.
+      //   Usar el wildcard {fileName} como validación server-side evita depender
+      //   del contentType que provee el cliente.
       allow write:
-        if (
-          isAdmin(restaurantId)
-          || isCashier(restaurantId)
-        )
-        && isImage()
+        if isAdmin(restaurantId)
+        && fileName.matches('^(logo|cover)-[0-9]+\\.(jpg|jpeg|png|webp)$')
         && validImageSize(5);
     }
 
     /*
     ============================================
     MENU IMAGES
-    restaurants/{restaurantId}/menu/{itemId}/
+    restaurants/{restaurantId}/menu/
     ============================================
     */
 
     match /restaurants/{restaurantId}/menu/{allPaths=**} {
       allow read: if true;
 
+      // S-02: se reemplaza isImage() (contentType del cliente, spoofeable) por
+      //   validación de extensión sobre request.resource.name, que requiere que
+      //   el cliente envíe el path con una extensión de imagen válida.
       allow write:
         if isAdmin(restaurantId)
-        && isImage()
+        && request.resource.name.matches('.*\\.(jpg|jpeg|png|webp)$')
         && validImageSize(8);
     }
 
