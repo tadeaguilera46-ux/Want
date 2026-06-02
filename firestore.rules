@@ -251,9 +251,8 @@ service cloud.firestore {
 
     match /restaurants/{restaurantId}/pedidos/{pedidoId} {
       // Staff: get + list (cocina, barra, runner, cajero, admin).
-      // Cliente anónimo: list necesario para RequestBill.tsx (onSnapshot con where sessionId).
-      // Riesgo residual: sin filtro enforced en rules, cliente puede listar todos los pedidos.
-      // Fix completo: agregar sessionId filter enforceado cuando se actualice el frontend.
+      // Cliente anónimo: list necesario para RequestBill.tsx (usa where sessionId pero
+      // Firestore rules no puede enforcar filtros de query — riesgo residual anotado).
       allow read: if isSuperAdmin()
         || isKitchenBarRunnerCashierOrAdmin(restaurantId)
         || !isSignedIn();
@@ -280,14 +279,8 @@ service cloud.firestore {
       // Staff autenticado: acceso completo (get + list).
       allow read: if isSuperAdmin() || isRunnerCashierOrAdmin(restaurantId);
 
-      // Cliente anónimo: puede leer documentos individuales de su sesión (cuentaId == sessionId).
+      // Cliente anónimo: solo GET del documento cuyo ID es su sessionId.
       allow get: if resource.data.sessionId == cuentaId;
-
-      // Cliente anónimo: necesita listar cuentas porque BillConfirmed usa onSnapshot(collection)
-      // sin cláusula where. Riesgo residual: un cliente puede ver PII de invoice de otros
-      // clientes del mismo restaurante. Para eliminarlo, BillConfirmed debe agregar
-      // where("sessionId", "==", storedSessionId) a su query y luego eliminar esta regla.
-      allow list: if resource.data.restaurantId == restaurantId;
 
       allow create: if (
           request.resource.data.restaurantId == restaurantId
