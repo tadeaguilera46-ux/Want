@@ -279,12 +279,14 @@ const Menu = () => {
 
   const sendAssistance = async (type: "sal" | "hielo" | "runner") => {
     if (sendingAssist) return;
+    const sessionId = getStoredTableSessionId({ restaurantId, table: tableNumber });
+    if (!sessionId) return;
     try {
       setSendingAssist(true);
       const db = getDb();
       await addDoc(
         collection(db, "restaurants", restaurantId, "assistanceRequests"),
-        { mesa: tableNumber, type, status: "pending", createdAt: serverTimestamp() }
+        { mesa: tableNumber, type, status: "pending", sessionId, createdAt: serverTimestamp() }
       );
       setAssistSent(type);
       setTimeout(() => { setAssistOpen(false); setAssistSent(null); }, 2000);

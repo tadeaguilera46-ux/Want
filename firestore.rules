@@ -357,12 +357,14 @@ service cloud.firestore {
     match /restaurants/{restaurantId}/assistanceRequests/{requestId} {
       allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
 
-      // Valida shape del documento antes de crear.
-      // Riesgo residual: sin sessionId en el schema no se puede verificar sesión activa.
-      // Fix completo: Menu.tsx debe incluir sessionId y la regla validar sessionIsActiveForTable.
       allow create: if isValidTableNumber(request.resource.data.mesa)
         && request.resource.data.type in ["sal", "hielo", "runner"]
-        && request.resource.data.status == "pending";
+        && request.resource.data.status == "pending"
+        && sessionIsActiveForTable(
+             restaurantId,
+             request.resource.data.sessionId,
+             request.resource.data.mesa
+           );
 
       allow update: if isSuperAdmin() || isRunnerCashierOrAdmin(restaurantId);
       allow delete: if isSuperAdmin() || isAdmin(restaurantId);
