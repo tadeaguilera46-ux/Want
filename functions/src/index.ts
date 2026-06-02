@@ -1,9 +1,18 @@
+import * as Sentry from "@sentry/node";
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 
 admin.initializeApp();
+
+// Inicializar Sentry una vez — Cloud Functions reutiliza la instancia entre invocaciones calientes.
+// DSN via functions/.env (SENTRY_DSN=https://...) o variable de entorno de Firebase.
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV ?? "production",
+  tracesSampleRate: 0, // Sin tracing en functions — solo captura de errores
+});
 
 const MP_ACCESS_TOKEN = defineSecret("MP_ACCESS_TOKEN");
 const MP_WEBHOOK_SECRET = defineSecret("MP_WEBHOOK_SECRET");
@@ -271,6 +280,13 @@ export const mpWebhook = onRequest(
       res.status(200).send("OK");
     } catch (error) {
       console.error("mpWebhook error:", error);
+      Sentry.captureException(error, {
+        extra: {
+          topic: String(topic ?? ""),
+          resourceId: String(resourceId ?? ""),
+        },
+      });
+      await Sentry.flush(2000);
       res.status(200).send("OK"); // Siempre 200 a MP para evitar reintentos
     }
   }
