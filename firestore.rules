@@ -343,12 +343,13 @@ service cloud.firestore {
     match /restaurants/{restaurantId}/auditLogs/{auditLogId} {
       allow read: if isSuperAdmin() || isAdmin(restaurantId);
 
-      allow create: if isSuperAdmin()
+      allow create: if (isSuperAdmin()
         || isAdmin(restaurantId)
         || isCashier(restaurantId)
         || isRunner(restaurantId)
         || isKitchen(restaurantId)
-        || isBar(restaurantId);
+        || isBar(restaurantId))
+        && request.resource.data.actorUid == request.auth.uid;
 
       allow update: if false;
       allow delete: if isSuperAdmin() || isAdmin(restaurantId);
