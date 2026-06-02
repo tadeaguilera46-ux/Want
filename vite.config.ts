@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { VitePWA } from "vite-plugin-pwa";
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 
 export default defineConfig({
   plugins: [
@@ -79,6 +80,18 @@ export default defineConfig({
         enabled: false,
       },
     }),
+    // Solo sube source maps a Sentry cuando SENTRY_AUTH_TOKEN está configurado.
+    // En CI/Vercel: agregar SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT como env vars.
+    ...(process.env.SENTRY_AUTH_TOKEN
+      ? [
+          sentryVitePlugin({
+            org: process.env.SENTRY_ORG,
+            project: process.env.SENTRY_PROJECT,
+            // Borra los source maps del bundle después de subirlos a Sentry
+            sourcemaps: { filesToDeleteAfterUpload: ["./dist/**/*.map"] },
+          }),
+        ]
+      : []),
   ],
 
   resolve: {
@@ -89,5 +102,8 @@ export default defineConfig({
 
   build: {
     chunkSizeWarningLimit: 1200,
+    // Source maps requeridos para stack traces legibles en Sentry.
+    // El plugin los sube y los borra del bundle final — no llegan al cliente.
+    sourcemap: true,
   },
 });

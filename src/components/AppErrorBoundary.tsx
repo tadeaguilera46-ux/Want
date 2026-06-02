@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/react";
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
@@ -25,6 +26,9 @@ export default class AppErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("AppErrorBoundary:", error, errorInfo);
+    Sentry.captureException(error, {
+      extra: { componentStack: errorInfo.componentStack },
+    });
   }
 
   handleReload = () => {
