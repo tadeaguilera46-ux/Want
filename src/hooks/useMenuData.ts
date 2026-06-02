@@ -7,7 +7,8 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import { getDb } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { getDb, auth } from "@/lib/firebase";
 import type { MenuIngredient } from "@/lib/store";
 import type { StockItem } from "@/types/stock";
 import { getMenuItemAvailability } from "@/lib/stock-availability";
@@ -56,6 +57,15 @@ export const useMenuData = (restaurantId: string) => {
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [loadingMenu, setLoadingMenu] = useState(true);
   const [loadingStock, setLoadingStock] = useState(true);
+  // Stock solo se carga para usuarios autenticados (staff).
+  // Clientes anónimos no tienen acceso a stock en Firestore rules (F-01).
+  const [isAuthenticated, setIsAuthenticated] = useState(!!auth.currentUser);
+
+  useEffect(() => {
+    return onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user);
+    });
+  }, []);
 
   useEffect(() => {
     if (!restaurantId) return;
@@ -102,7 +112,11 @@ export const useMenuData = (restaurantId: string) => {
   }, [restaurantId]);
 
   useEffect(() => {
-    if (!restaurantId) return;
+    if (!restaurantId || !isAuthenticated) {
+      setStockItems([]);
+      setLoadingStock(false);
+      return;
+    }
 
     setLoadingStock(true);
 
@@ -130,9 +144,13 @@ export const useMenuData = (restaurantId: string) => {
     );
 
     return () => unsubscribe();
-  }, [restaurantId]);
+  }, [restaurantId, isAuthenticated]);
 
   const availableMenuItems = useMemo(() => {
+    // Anónimos: mostrar todos los items activos sin filtrar por stock.
+    // La validación real de stock ocurre server-side en create-order.ts.
+    if (!isAuthenticated) return menuItems;
+
     return menuItems.filter((item) => {
       const availability = getMenuItemAvailability({
         ingredients: item.ingredients,
@@ -141,7 +159,7 @@ export const useMenuData = (restaurantId: string) => {
 
       return availability.visible;
     });
-  }, [menuItems, stockItems]);
+  }, [menuItems, stockItems, isAuthenticated]);
 
   const categories = useMemo(() => {
     const unique = Array.from(

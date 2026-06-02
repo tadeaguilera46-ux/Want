@@ -293,9 +293,9 @@ service cloud.firestore {
     }
 
     match /restaurants/{restaurantId}/stock/{stockItemId} {
-      // Riesgo residual anotado (F-01): stock público visible a anónimos.
-      // Fix requiere actualizar useMenuData.ts para no leer stock desde el cliente.
-      allow read: if true;
+      // F-01: stock restringido a staff autenticado y superAdmin.
+      // useMenuData.ts no carga stock para usuarios anónimos.
+      allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
 
       allow create: if (isSuperAdmin() || isAdmin(restaurantId))
         && isPremiumRestaurant(restaurantId)
