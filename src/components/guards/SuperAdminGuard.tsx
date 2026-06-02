@@ -19,7 +19,7 @@ const SuperAdminGuard = ({ children }: Props) => {
     }
 
     user
-      .getIdTokenResult()
+      .getIdTokenResult(true)
       .then((result) => {
         setHasClaim(result.claims["superAdmin"] === true);
         setClaimChecked(true);

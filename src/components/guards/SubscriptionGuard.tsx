@@ -42,7 +42,7 @@ const SubscriptionGuard = ({ children }: Props) => {
       return;
     }
     user
-      .getIdTokenResult()
+      .getIdTokenResult(true)
       .then((result) => {
         setIsSuperAdmin(result.claims["superAdmin"] === true);
         setClaimChecked(true);
