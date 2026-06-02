@@ -211,7 +211,7 @@ export const mpWebhook = onRequest(
       }
 
       if (restaurantsSnap.empty) {
-        console.log("No se encontró restaurante para payer_email:", subscription.payer_email);
+        console.log("No se encontró restaurante para subscription ID:", subscription.id);
         res.status(200).send("OK");
         return;
       }
