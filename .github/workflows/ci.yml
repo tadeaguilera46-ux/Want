@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          # Vite reemplaza estas vars en el bundle — valores vacíos son suficientes para validar que compila
+          VITE_FIREBASE_API_KEY: placeholder
+          VITE_FIREBASE_AUTH_DOMAIN: placeholder
+          VITE_FIREBASE_PROJECT_ID: placeholder
+          VITE_FIREBASE_STORAGE_BUCKET: placeholder
+          VITE_FIREBASE_MESSAGING_SENDER_ID: placeholder
+          VITE_FIREBASE_APP_ID: placeholder
+          VITE_FIREBASE_MEASUREMENT_ID: placeholder
+          VITE_MP_PUBLIC_KEY: placeholder
+          VITE_SENTRY_DSN: placeholder
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Install Functions dependencies
+        working-directory: functions
+        run: npm ci
+
+      - name: Build Functions
+        working-directory: functions
+        run: npm run build
