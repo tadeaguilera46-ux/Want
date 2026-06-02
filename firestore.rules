@@ -231,11 +231,10 @@ service cloud.firestore {
     }
 
     match /restaurants/{restaurantId}/pedidos/{pedidoId} {
-      // Riesgo residual anotado (F-03): list anónimo sin filtro enforceado.
-      // Fix completo requiere refactor de RequestBill.tsx.
+      // F-03: lectura anónima eliminada. RequestBill.tsx y bill.ts leen
+      // pedidos via /api/get-session-bill (Admin SDK, validación server-side).
       allow read: if isSuperAdmin()
-        || isKitchenBarRunnerCashierOrAdmin(restaurantId)
-        || !isSignedIn();
+        || isKitchenBarRunnerCashierOrAdmin(restaurantId);
 
       allow create: if request.resource.data.restaurantId == restaurantId
         && isValidTableNumber(request.resource.data.mesa)

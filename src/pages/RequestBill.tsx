@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
 import { getDb } from "../lib/firebase";
-import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
+import { collection, doc, onSnapshot } from "firebase/firestore";
 import { pedirCuenta } from "../lib/bill";
 import type { MetodoPago, PedidoRecord } from "../lib/restaurant";
 import { resolveRuntimeContext } from "../lib/runtime-context";
@@ -173,36 +173,42 @@ const RequestBill = () => {
       return;
     }
 
+    let cancelled = false;
     setLoadingPedidos(true);
 
-    const q = query(
-      collection(db, "restaurants", restaurantId, "pedidos"),
-      where("sessionId", "==", sessionId)
-    );
+    const loadBill = async () => {
+      try {
+        const url = `/api/get-session-bill?restaurantId=${encodeURIComponent(restaurantId)}&sessionId=${encodeURIComponent(sessionId)}&mesa=${encodeURIComponent(String(tableNumber))}`;
+        const response = await fetch(url);
+        const data = await response.json() as {
+          ok: boolean;
+          pedidos?: PedidoRecord[];
+          error?: string;
+        };
 
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const data = snapshot.docs.map((document) => ({
-          id: document.id,
-          ...document.data(),
-        })) as PedidoRecord[];
-
-        const pedidosFiltrados = data.filter(
-          (pedido) => String(pedido.mesa) === String(tableNumber)
-        );
-
-        setPedidos(pedidosFiltrados);
-        setLoadingPedidos(false);
-      },
-      (err) => {
-        console.error("Error leyendo pedidos:", err);
-        setError("No se pudieron cargar los pedidos de la mesa.");
-        setLoadingPedidos(false);
+        if (!cancelled) {
+          if (data.ok && Array.isArray(data.pedidos)) {
+            setPedidos(data.pedidos);
+          } else {
+            setError(data.error ?? "No se pudieron cargar los pedidos de la mesa.");
+            setPedidos([]);
+          }
+          setLoadingPedidos(false);
+        }
+      } catch (err) {
+        console.error("Error cargando cuenta:", err);
+        if (!cancelled) {
+          setError("No se pudieron cargar los pedidos de la mesa.");
+          setLoadingPedidos(false);
+        }
       }
-    );
+    };
 
-    return () => unsubscribe();
+    void loadBill();
+
+    return () => {
+      cancelled = true;
+    };
   }, [restaurantId, sessionId, tableNumber]);
 
   const menuPriceByName = useMemo(() => {

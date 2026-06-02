@@ -1,13 +1,9 @@
 import { getDb } from "../lib/firebase";
 import {
-  collection,
   doc,
   getDoc,
-  getDocs,
-  query,
   runTransaction,
   serverTimestamp,
-  where,
 } from "firebase/firestore";
 import { mesaDocRef } from "./mesas";
 import { sessionDocRef } from "./sessions";
@@ -109,19 +105,16 @@ const calcularTotalRealSesion = async ({
   restaurantId: string;
   mesa: number;
   sessionId: string;
-}) => {
-  const pedidosRef = collection(db, "restaurants", restaurantId, "pedidos");
-  const pedidosQuery = query(pedidosRef, where("sessionId", "==", sessionId));
-  const snapshot = await getDocs(pedidosQuery);
+}): Promise<number> => {
+  const url = `/api/get-session-bill?restaurantId=${encodeURIComponent(restaurantId)}&sessionId=${encodeURIComponent(sessionId)}&mesa=${encodeURIComponent(String(mesa))}`;
+  const response = await fetch(url);
+  const data = await response.json() as { ok: boolean; total?: number; error?: string };
 
-  const pedidosSesion = snapshot.docs
-    .map((docSnap) => docSnap.data())
-    .filter((pedido) => String(pedido.mesa) === String(mesa));
+  if (!data.ok) {
+    throw new Error(data.error || "No se pudo calcular el total de la sesión.");
+  }
 
-  return pedidosSesion.reduce((acc, pedido) => {
-    const pedidoTotal = Number(pedido.total || 0);
-    return acc + (Number.isFinite(pedidoTotal) ? pedidoTotal : 0);
-  }, 0);
+  return Number(data.total ?? 0);
 };
 
 export const getCuentaBySessionId = async (
