@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   collection,
   doc,
@@ -27,8 +27,6 @@ import { createStaffMember } from "../lib/staff";
 
 const db = getDb();
 const auth = getAuth();
-
-const SUPER_ADMIN_EMAILS = ["tadeaguilera46@gmail.com"];
 
 type RestaurantRecord = {
   id: string;
@@ -85,14 +83,23 @@ const SuperAdmin = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
-  const isSuperAdmin = useMemo(() => {
-    return !!user?.email && SUPER_ADMIN_EMAILS.includes(user.email);
-  }, [user]);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (currentUser) => {
+    const unsub = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       setAuthReady(true);
+
+      if (currentUser) {
+        try {
+          const result = await currentUser.getIdTokenResult(true);
+          setIsSuperAdmin(result.claims["superAdmin"] === true);
+        } catch {
+          setIsSuperAdmin(false);
+        }
+      } else {
+        setIsSuperAdmin(false);
+      }
     });
 
     return () => unsub();
