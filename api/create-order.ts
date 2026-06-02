@@ -191,7 +191,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
      if (
       sessionData.status !== "active" ||
-      sessionData.tableNumber !== mesa
+      sessionData.tableNumber !== mesa ||
+      sessionData.restaurantId !== restaurantId
      ) {
       throw new UserFacingError(
         "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
