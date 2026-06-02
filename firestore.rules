@@ -54,9 +54,7 @@ service cloud.firestore {
       return isCashier(restaurantId) || isAdmin(restaurantId);
     }
 
-    function isRunnerOrAdmin(restaurantId) {
-      return isRunner(restaurantId) || isAdmin(restaurantId);
-    }
+    // F-08: isRunnerOrAdmin eliminado — no se usaba en ninguna regla.
 
     function isRunnerCashierOrAdmin(restaurantId) {
       return isRunner(restaurantId)
@@ -93,8 +91,6 @@ service cloud.firestore {
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.role == "admin"
         && request.resource.data.active == true
-        // Verifica ownership usando getAfter() para que el batch de Onboarding
-        // (que crea restaurante y staff simultáneamente) también funcione.
         && getAfter(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerUid
            == request.auth.uid;
     }
@@ -112,10 +108,6 @@ service cloud.firestore {
     }
 
     function isValidRestaurantUpdate() {
-      // Solo permite tocar campos de branding. Cualquier campo fuera de esta lista
-      // (plan, billing, subscriptionStatus, ownerUid, trialEndsAt, etc.) no puede
-      // ser modificado por el rol admin. Se usa affectedKeys() en lugar de == para
-      // evitar falsos negativos al comparar Timestamps o Maps con Timestamps.
       return request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['name', 'logoUrl', 'coverUrl', 'welcomeMessage',
                     'primaryColor', 'secondaryColor', 'updatedAt'])
@@ -132,13 +124,16 @@ service cloud.firestore {
         && exists(sessionPath(restaurantId, sessionId));
     }
 
+    // F-07: Consolidado en un solo get() usando let para evitar 4 lecturas repetidas.
+    // Comportamiento idéntico al anterior — solo mejora de legibilidad y eficiencia.
     function sessionIsActiveForTable(restaurantId, sessionId, tableNumber) {
+      let s = get(sessionPath(restaurantId, sessionId)).data;
       return sessionExists(restaurantId, sessionId)
-        && get(sessionPath(restaurantId, sessionId)).data.restaurantId == restaurantId
-        && get(sessionPath(restaurantId, sessionId)).data.tableNumber == tableNumber
-        && get(sessionPath(restaurantId, sessionId)).data.status == "active"
-        && get(sessionPath(restaurantId, sessionId)).data.ordersLocked != true
-        && get(sessionPath(restaurantId, sessionId)).data.billRequested != true;
+        && s.restaurantId == restaurantId
+        && s.tableNumber == tableNumber
+        && s.status == "active"
+        && s.ordersLocked != true
+        && s.billRequested != true;
     }
 
     function validClientSessionCreate(restaurantId) {
@@ -148,11 +143,9 @@ service cloud.firestore {
     }
 
     match /restaurants/{restaurantId} {
-      // Staff autenticado: get + list.
       allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
-      // Cliente anónimo: solo GET (branding, SubscriptionGuard). Sin LIST.
-      // Riesgo residual: ownerEmail/plan/billing visibles a anónimos; fix completo
-      // requiere separar datos públicos y privados del documento.
+      // Riesgo residual anotado (F-02): ownerEmail/plan/billing visibles a anónimos.
+      // Fix completo requiere separar datos públicos y privados del documento.
       allow get: if !isSignedIn();
 
       allow create: if isSuperAdmin() || isOwnerCreatingRestaurant();
@@ -179,8 +172,6 @@ service cloud.firestore {
     match /restaurants/{restaurantId}/mesas/{mesaId} {
       allow read: if true;
 
-      // Clientes NO pueden crear mesas: las crea Onboarding/admin.
-      // Escanear un QR con mesa no configurada retorna error (comportamiento correcto).
       allow create: if (
           isSuperAdmin()
           || isAdmin(restaurantId)
@@ -193,10 +184,6 @@ service cloud.firestore {
       allow update: if isSuperAdmin()
         || isRunnerCashierOrAdmin(restaurantId)
         || (
-          // Cliente marca la mesa como ocupada al escanear QR (getOrCreateMesaSession).
-          // getAfter() verifica que la sesión referenciada exista y sea válida
-          // DESPUÉS de la transacción — cubre el caso en que sesión y mesa
-          // se crean/actualizan en el mismo runTransaction.
           resource.data.restaurantId == restaurantId
           && request.resource.data.restaurantId == restaurantId
           && isValidTableNumber(request.resource.data.numero)
@@ -212,9 +199,7 @@ service cloud.firestore {
     }
 
     match /restaurants/{restaurantId}/sessions/{sessionId} {
-      // Staff autenticado: get + list (markMesaAvailable, getActiveSessionsByTable, etc.).
       allow read: if isSuperAdmin() || isRunnerCashierOrAdmin(restaurantId);
-      // Cliente anónimo: solo GET de su sesión por ID (Cart.tsx, BillConfirmed.tsx).
       allow get: if !isSignedIn();
 
       allow create: if isCashierOrAdmin(restaurantId)
@@ -223,10 +208,6 @@ service cloud.firestore {
       allow update: if isSuperAdmin()
         || isRunnerCashierOrAdmin(restaurantId)
         || (
-          // Permite al cliente solicitar la cuenta desde RequestBill.
-          // Restricciones: la sesión debe estar activa, no puede cerrarse,
-          // los locks solo van de false→true (nunca al revés),
-          // y solo se permiten los campos que pedirCuenta() necesita escribir.
           resource.data.status == "active"
           && request.resource.data.status == "active"
           && request.resource.data.restaurantId == resource.data.restaurantId
@@ -250,9 +231,8 @@ service cloud.firestore {
     }
 
     match /restaurants/{restaurantId}/pedidos/{pedidoId} {
-      // Staff: get + list (cocina, barra, runner, cajero, admin).
-      // Cliente anónimo: list necesario para RequestBill.tsx (usa where sessionId pero
-      // Firestore rules no puede enforcar filtros de query — riesgo residual anotado).
+      // Riesgo residual anotado (F-03): list anónimo sin filtro enforceado.
+      // Fix completo requiere refactor de RequestBill.tsx.
       allow read: if isSuperAdmin()
         || isKitchenBarRunnerCashierOrAdmin(restaurantId)
         || !isSignedIn();
@@ -276,10 +256,7 @@ service cloud.firestore {
     }
 
     match /restaurants/{restaurantId}/cuentas/{cuentaId} {
-      // Staff autenticado: acceso completo (get + list).
       allow read: if isSuperAdmin() || isRunnerCashierOrAdmin(restaurantId);
-
-      // Cliente anónimo: solo GET del documento cuyo ID es su sessionId.
       allow get: if resource.data.sessionId == cuentaId;
 
       allow create: if (
@@ -287,6 +264,10 @@ service cloud.firestore {
           && isValidTableNumber(request.resource.data.mesa)
           && request.resource.data.sessionId is string
           && sessionExists(restaurantId, request.resource.data.sessionId)
+          // F-06: cross-check que la sesión pertenece a la misma mesa.
+          // Usa get() que lee estado pre-transacción: tableNumber no cambia en pedirCuenta().
+          && get(sessionPath(restaurantId, request.resource.data.sessionId)).data.tableNumber
+             == request.resource.data.mesa
           && request.resource.data.total is number
           && request.resource.data.total >= 0
           && request.resource.data.estado == "pendiente"
@@ -295,7 +276,8 @@ service cloud.firestore {
 
       allow update: if isRunnerCashierOrAdmin(restaurantId);
 
-      allow delete: if isSuperAdmin() || isAdmin(restaurantId);
+      // F-05: solo superAdmin puede borrar audit logs — admin del restaurante no.
+      allow delete: if isSuperAdmin();
     }
 
     match /restaurants/{restaurantId}/payments/{paymentId} {
@@ -311,6 +293,8 @@ service cloud.firestore {
     }
 
     match /restaurants/{restaurantId}/stock/{stockItemId} {
+      // Riesgo residual anotado (F-01): stock público visible a anónimos.
+      // Fix requiere actualizar useMenuData.ts para no leer stock desde el cliente.
       allow read: if true;
 
       allow create: if (isSuperAdmin() || isAdmin(restaurantId))
@@ -352,7 +336,8 @@ service cloud.firestore {
         && request.resource.data.actorUid == request.auth.uid;
 
       allow update: if false;
-      allow delete: if isSuperAdmin() || isAdmin(restaurantId);
+      // F-05: solo superAdmin puede borrar audit logs — admin del restaurante no.
+      allow delete: if isSuperAdmin();
     }
 
     match /restaurants/{restaurantId}/assistanceRequests/{requestId} {

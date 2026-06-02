@@ -7,6 +7,12 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    // S-01: superAdmin con acceso completo a Storage para gestión de imágenes.
+    function isSuperAdmin() {
+      return isSignedIn()
+        && request.auth.token.superAdmin == true;
+    }
+
     function staffPath(restaurantId) {
       return /databases/(default)/documents/restaurants/$(restaurantId)/staff/$(request.auth.uid);
     }
@@ -48,13 +54,11 @@ service firebase.storage {
     match /restaurants/{restaurantId}/branding/{fileName} {
       allow read: if true;
 
-      // S-01: solo admin (se eliminó cashier).
-      // S-02 + S-03: el nombre debe seguir el patrón que genera el frontend
-      //   (logo|cover)-{epoch}.{ext} con extensión de imagen válida.
-      //   Usar el wildcard {fileName} como validación server-side evita depender
-      //   del contentType que provee el cliente.
+      // S-01: superAdmin puede gestionar branding de cualquier restaurante.
+      // S-02: isImage() verifica contentType real además del patrón de nombre.
       allow write:
-        if isAdmin(restaurantId)
+        if (isAdmin(restaurantId) || isSuperAdmin())
+        && isImage()
         && fileName.matches('^(logo|cover)-[0-9]+\\.(jpg|jpeg|png|webp)$')
         && validImageSize(5);
     }
@@ -69,11 +73,11 @@ service firebase.storage {
     match /restaurants/{restaurantId}/menu/{allPaths=**} {
       allow read: if true;
 
-      // S-02: se reemplaza isImage() (contentType del cliente, spoofeable) por
-      //   validación de extensión sobre request.resource.name, que requiere que
-      //   el cliente envíe el path con una extensión de imagen válida.
+      // S-01: superAdmin puede gestionar imágenes de menú de cualquier restaurante.
+      // S-02: isImage() verifica contentType real además de la extensión del path.
       allow write:
-        if isAdmin(restaurantId)
+        if (isAdmin(restaurantId) || isSuperAdmin())
+        && isImage()
         && request.resource.name.matches('.*\\.(jpg|jpeg|png|webp)$')
         && validImageSize(8);
     }
