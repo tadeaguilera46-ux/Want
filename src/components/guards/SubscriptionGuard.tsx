@@ -4,6 +4,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 
 import { getDb } from "@/lib/firebase";
 import { useRestaurant } from "@/lib/restaurant-context";
+import { useAuth } from "@/lib/auth-context";
 
 const db = getDb();
 
@@ -26,9 +27,31 @@ type RestaurantData = {
 const SubscriptionGuard = ({ children }: Props) => {
   const [searchParams] = useSearchParams();
   const { restaurantId: contextRestaurantId } = useRestaurant();
+  const { user, loading: authLoading } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [claimChecked, setClaimChecked] = useState(false);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) {
+      setIsSuperAdmin(false);
+      setClaimChecked(true);
+      return;
+    }
+    user
+      .getIdTokenResult()
+      .then((result) => {
+        setIsSuperAdmin(result.claims["superAdmin"] === true);
+        setClaimChecked(true);
+      })
+      .catch(() => {
+        setIsSuperAdmin(false);
+        setClaimChecked(true);
+      });
+  }, [user, authLoading]);
 
   // URL param takes priority; fall back to context (which itself falls back to localStorage).
   // Only truly absent when neither URL nor any prior navigation provided an ID.
@@ -118,7 +141,7 @@ const SubscriptionGuard = ({ children }: Props) => {
     return () => unsubscribe();
   }, [restaurantId]);
 
-  if (loading) {
+  if (loading || !claimChecked) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f6f4ef]">
         <p className="text-sm font-semibold text-zinc-500">
@@ -126,6 +149,10 @@ const SubscriptionGuard = ({ children }: Props) => {
         </p>
       </div>
     );
+  }
+
+  if (isSuperAdmin) {
+    return <>{children}</>;
   }
 
   if (!allowed) {
