@@ -218,6 +218,20 @@ const SuperAdmin = () => {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+
+      // Crear subcollección pública con solo campos de branding.
+      await setDoc(
+        doc(db, "restaurants", cleanRestaurantId, "public", "branding"),
+        {
+          name: cleanName,
+          active: true,
+          primaryColor: "#000000",
+          secondaryColor: "#FFFFFF",
+          logoUrl: "",
+          coverUrl: "",
+          welcomeMessage: "",
+        }
+      );
       
       await createStaffMember({
         restaurantId: cleanRestaurantId,

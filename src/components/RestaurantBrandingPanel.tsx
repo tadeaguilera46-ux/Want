@@ -144,12 +144,18 @@ export function RestaurantBrandingPanel({
         setCoverUrl(downloadUrl);
       }
 
+      const brandingField = target === "logo" ? "logoUrl" : "coverUrl";
+
       await setDoc(
         doc(db, "restaurants", restaurantId),
-        {
-          [target === "logo" ? "logoUrl" : "coverUrl"]: downloadUrl,
-          updatedAt: serverTimestamp(),
-        },
+        { [brandingField]: downloadUrl, updatedAt: serverTimestamp() },
+        { merge: true }
+      );
+
+      // Mantener public/branding sincronizado con el doc raíz.
+      await setDoc(
+        doc(db, "restaurants", restaurantId, "public", "branding"),
+        { [brandingField]: downloadUrl },
         { merge: true }
       );
 
@@ -177,17 +183,25 @@ export function RestaurantBrandingPanel({
       setSaving(true);
       setMessage("");
 
+      const brandingData = {
+        name: name.trim(),
+        logoUrl: logoUrl.trim(),
+        coverUrl: coverUrl.trim(),
+        primaryColor,
+        secondaryColor,
+        welcomeMessage: welcomeMessage.trim(),
+      };
+
       await setDoc(
         doc(db, "restaurants", restaurantId),
-        {
-          name: name.trim(),
-          logoUrl: logoUrl.trim(),
-          coverUrl: coverUrl.trim(),
-          primaryColor,
-          secondaryColor,
-          welcomeMessage: welcomeMessage.trim(),
-          updatedAt: serverTimestamp(),
-        },
+        { ...brandingData, updatedAt: serverTimestamp() },
+        { merge: true }
+      );
+
+      // Mantener public/branding sincronizado con el doc raíz.
+      await setDoc(
+        doc(db, "restaurants", restaurantId, "public", "branding"),
+        brandingData,
         { merge: true }
       );
 

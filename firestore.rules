@@ -159,6 +159,13 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
+    match /restaurants/{restaurantId}/public/{docId} {
+      // Campos públicos de branding: name, logoUrl, coverUrl, primaryColor,
+      // secondaryColor, welcomeMessage, active. Sin billing ni datos privados.
+      allow read: if true;
+      allow write: if isSuperAdmin() || isAdmin(restaurantId);
+    }
+
     match /restaurants/{restaurantId}/staff/{staffId} {
       allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
 

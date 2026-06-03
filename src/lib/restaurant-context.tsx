@@ -9,7 +9,8 @@ import {
 } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import { doc, onSnapshot } from "firebase/firestore";
-import { getDb } from "./firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { getDb, auth } from "./firebase";
 import { normalizePlan, type RestaurantPlan } from "./plan";
 
 type FirestoreTimestamp = {
@@ -62,6 +63,15 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
   const [restaurant, setRestaurant] =
     useState<RestaurantContextRestaurant | null>(null);
   const [restaurantLoading, setRestaurantLoading] = useState(false);
+  // El doc raíz del restaurante contiene campos privados (billing, plan).
+  // Solo se lee cuando el usuario está autenticado (staff/superAdmin).
+  const [isAuthenticated, setIsAuthenticated] = useState(!!auth.currentUser);
+
+  useEffect(() => {
+    return onAuthStateChanged(auth, (user) => {
+      setIsAuthenticated(!!user);
+    });
+  }, []);
 
   useEffect(() => {
     const restaurantIdFromQuery = normalizeRestaurantId(
@@ -92,7 +102,7 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
   }, [searchParams, location.state]);
 
   useEffect(() => {
-    if (!restaurantId) {
+    if (!restaurantId || !isAuthenticated) {
       setRestaurant(null);
       setRestaurantLoading(false);
       return;
@@ -156,7 +166,7 @@ export const RestaurantProvider = ({ children }: { children: ReactNode }) => {
     );
 
     return () => unsub();
-  }, [restaurantId]);
+  }, [restaurantId, isAuthenticated]);
 
   const setRestaurantId = useCallback((nextRestaurantId: string) => {
     const normalized = normalizeRestaurantId(nextRestaurantId);

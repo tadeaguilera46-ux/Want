@@ -256,6 +256,20 @@ const Onboarding = () => {
         updatedAt: serverTimestamp(),
       });
 
+      // Crear subcollección pública con solo campos de branding.
+      batch.set(
+        doc(db, "restaurants", cleanRestaurantId, "public", "branding"),
+        {
+          name: cleanName,
+          active: true,
+          primaryColor: "#000000",
+          secondaryColor: "#FFFFFF",
+          logoUrl: "",
+          coverUrl: "",
+          welcomeMessage: "Bienvenido. Elegí productos y agregalos a tu pedido.",
+        }
+      );
+
       batch.set(staffRef, {
         uid: credential.user.uid,
         email: cleanEmail,

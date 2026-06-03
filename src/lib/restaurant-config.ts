@@ -91,7 +91,8 @@ export const useRestaurantConfig = (restaurantId?: string | null) => {
     setLoading(true);
     setError(null);
 
-    const ref = doc(db, "restaurants", restaurantId);
+    // Lee solo campos públicos de branding — sin billing ni datos privados.
+    const ref = doc(db, "restaurants", restaurantId, "public", "branding");
 
     const unsubscribe = onSnapshot(
       ref,
