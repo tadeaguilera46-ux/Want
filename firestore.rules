@@ -152,9 +152,6 @@ service cloud.firestore {
 
     match /restaurants/{restaurantId} {
       allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
-      // Riesgo residual anotado (F-02): ownerEmail/plan/billing visibles a anónimos.
-      // Fix completo requiere separar datos públicos y privados del documento.
-      allow get: if !isSignedIn();
 
       allow create: if isSuperAdmin() || isOwnerCreatingRestaurant();
 
