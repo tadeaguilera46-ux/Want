@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Loader2, AlertTriangle } from "lucide-react";
+import { collection, doc, getDoc, getDocs, limit, query } from "firebase/firestore";
 import { getOrCreateMesaSession } from "../lib/mesas";
 import { parseTableNumber, resolveRuntimeContext } from "../lib/runtime-context";
 import {
@@ -8,6 +9,77 @@ import {
   saveTableSessionId,
 } from "../lib/table-session";
 import { useCart } from "@/lib/CartContext";
+import { auth, getDb } from "@/lib/firebase";
+
+const db = getDb();
+
+// DIAGNÓSTICO TEMPORAL — remover después de identificar el error
+async function diagQrPaths(restaurantId: string, tableNumber: number) {
+  const user = auth.currentUser;
+  console.log("[DIAG] auth state:", user
+    ? `signed-in uid=${user.uid} anonymous=${user.isAnonymous}`
+    : "anonymous (not signed in)");
+
+  const paths: Array<{ label: string; fn: () => Promise<string> }> = [
+    {
+      label: `restaurants/${restaurantId}`,
+      fn: async () => {
+        const snap = await getDoc(doc(db, "restaurants", restaurantId));
+        return snap.exists() ? "exists" : "not found";
+      },
+    },
+    {
+      label: `restaurants/${restaurantId}/public/branding`,
+      fn: async () => {
+        const snap = await getDoc(doc(db, "restaurants", restaurantId, "public", "branding"));
+        return snap.exists() ? `exists name="${snap.data()?.name}"` : "not found";
+      },
+    },
+    {
+      label: `restaurants/${restaurantId}/mesas/${tableNumber}`,
+      fn: async () => {
+        const snap = await getDoc(doc(db, "restaurants", restaurantId, "mesas", String(tableNumber)));
+        if (!snap.exists()) return "not found";
+        const d = snap.data();
+        return `exists estado=${d?.estado} activeSessionId=${d?.activeSessionId ?? "null"}`;
+      },
+    },
+    {
+      label: `restaurants/${restaurantId}/menu (limit 1)`,
+      fn: async () => {
+        const snap = await getDocs(query(collection(db, "restaurants", restaurantId, "menu"), limit(1)));
+        return `ok (${snap.size} doc(s))`;
+      },
+    },
+  ];
+
+  for (const { label, fn } of paths) {
+    try {
+      const result = await fn();
+      console.log(`[DIAG] ✅ ${label}: ${result}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`[DIAG] ❌ ${label}: FAILED — ${msg}`);
+    }
+  }
+
+  // Si la mesa tiene activeSessionId, probamos leer esa sesión también
+  try {
+    const mesaSnap = await getDoc(doc(db, "restaurants", restaurantId, "mesas", String(tableNumber)));
+    const activeSessionId = mesaSnap.data()?.activeSessionId;
+    if (activeSessionId) {
+      try {
+        const sessionSnap = await getDoc(doc(db, "restaurants", restaurantId, "sessions", activeSessionId));
+        console.log(`[DIAG] ✅ sessions/${activeSessionId}: ${sessionSnap.exists() ? "exists" : "not found"}`);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        console.error(`[DIAG] ❌ sessions/${activeSessionId}: FAILED — ${msg}`);
+      }
+    }
+  } catch {
+    // mesa read already logged above
+  }
+}
 
 const QrEntry = () => {
   const [searchParams] = useSearchParams();
@@ -30,6 +102,8 @@ const QrEntry = () => {
     const run = async () => {
       try {
         setError(null);
+
+        await diagQrPaths(restaurantId, tableNumber);
 
         const existingSessionId = getStoredTableSessionId({
           restaurantId,

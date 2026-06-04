@@ -95,6 +95,14 @@ service cloud.firestore {
            == request.auth.uid;
     }
 
+    // Permite escribir documentos adicionales (public/branding, mesas) en el mismo
+    // batch de onboarding, cuando el restaurante que se está creando tiene ownerUid == uid.
+    function isOwnerCreatingForRestaurant(restaurantId) {
+      return isSignedIn()
+        && getAfter(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerUid
+           == request.auth.uid;
+    }
+
     function isValidTableNumber(value) {
       return value is int && value > 0 && value <= 500;
     }
@@ -163,7 +171,9 @@ service cloud.firestore {
       // Campos públicos de branding: name, logoUrl, coverUrl, primaryColor,
       // secondaryColor, welcomeMessage, active. Sin billing ni datos privados.
       allow read: if true;
-      allow write: if isSuperAdmin() || isAdmin(restaurantId);
+      allow write: if isSuperAdmin()
+        || isAdmin(restaurantId)
+        || isOwnerCreatingForRestaurant(restaurantId);
     }
 
     match /restaurants/{restaurantId}/staff/{staffId} {
@@ -183,6 +193,7 @@ service cloud.firestore {
           isSuperAdmin()
           || isAdmin(restaurantId)
           || isCashier(restaurantId)
+          || isOwnerCreatingForRestaurant(restaurantId)
         )
         && request.resource.data.restaurantId == restaurantId
         && isValidTableNumber(request.resource.data.numero)
