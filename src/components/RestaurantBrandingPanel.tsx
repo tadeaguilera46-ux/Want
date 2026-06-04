@@ -340,7 +340,7 @@ export function RestaurantBrandingPanel({
               </div>
               {!/^#[0-9A-Fa-f]{6}$/.test(primaryColor) && (
                 <p className="mt-1.5 text-xs text-red-500">
-                  Formato inválido. Usá #RRGGBB, ej: #1a2b3c
+                  Formato inválido: el código debe comenzar con un #
                 </p>
               )}
             </label>
@@ -364,7 +364,7 @@ export function RestaurantBrandingPanel({
               </div>
               {!/^#[0-9A-Fa-f]{6}$/.test(secondaryColor) && (
                 <p className="mt-1.5 text-xs text-red-500">
-                  Formato inválido. Usá #RRGGBB, ej: #ffffff
+                  Formato inválido: el código debe comenzar con un #
                 </p>
               )}
             </label>
