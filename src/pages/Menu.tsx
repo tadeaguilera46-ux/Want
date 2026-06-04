@@ -224,6 +224,10 @@ const Menu = () => {
   }, [restaurantId, tableNumber]);
 
   const getAutomaticObservation = (item: MenuItem) => {
+    // Sin stock cargado (cliente anónimo) no hay información real de faltantes.
+    // create-order.ts agrega la observación correcta al momento de confirmar.
+    if (stockItems.length === 0) return "";
+
     const availability = getMenuItemAvailability({
       ingredients: item.ingredients,
       stockItems,
@@ -257,6 +261,9 @@ const Menu = () => {
   };
 
   const confirmOptionalMissing = (item: MenuItem) => {
+    // Sin stock cargado (cliente anónimo) no podemos saber qué falta realmente.
+    if (stockItems.length === 0) return true;
+
     const availability = getMenuItemAvailability({
       ingredients: item.ingredients,
       stockItems,
