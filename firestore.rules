@@ -218,7 +218,10 @@ service cloud.firestore {
 
     match /restaurants/{restaurantId}/sessions/{sessionId} {
       allow read: if isSuperAdmin() || isRunnerCashierOrAdmin(restaurantId);
-      allow get: if !isSignedIn();
+      // Cualquier usuario (incluso signed-in no-staff) puede GET una sesión por su ID.
+      // El ID es UUID/no guessable y no contiene PII ni datos de pago.
+      // Necesario para el flujo QR cuando Firebase Auth restaura una sesión previa desde storage.
+      allow get: if true;
 
       allow create: if isCashierOrAdmin(restaurantId)
         || validClientSessionCreate(restaurantId);
