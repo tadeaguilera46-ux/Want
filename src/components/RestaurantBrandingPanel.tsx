@@ -338,6 +338,11 @@ export function RestaurantBrandingPanel({
                   className="h-10 flex-1 rounded-xl border border-zinc-200 px-3"
                 />
               </div>
+              {!/^#[0-9A-Fa-f]{6}$/.test(primaryColor) && (
+                <p className="mt-1.5 text-xs text-red-500">
+                  Formato inválido. Usá #RRGGBB, ej: #1a2b3c
+                </p>
+              )}
             </label>
 
             <label className="rounded-2xl border border-zinc-200 p-3">
@@ -357,6 +362,11 @@ export function RestaurantBrandingPanel({
                   className="h-10 flex-1 rounded-xl border border-zinc-200 px-3"
                 />
               </div>
+              {!/^#[0-9A-Fa-f]{6}$/.test(secondaryColor) && (
+                <p className="mt-1.5 text-xs text-red-500">
+                  Formato inválido. Usá #RRGGBB, ej: #ffffff
+                </p>
+              )}
             </label>
           </div>
 
