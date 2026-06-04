@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useMemo, useState, useEffect } from "react";
 import { getDb } from "../lib/firebase";
-import { collection, doc, onSnapshot } from "firebase/firestore";
+import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
 import { pedirCuenta } from "../lib/bill";
 import type { MetodoPago, PedidoRecord } from "../lib/restaurant";
 import { resolveRuntimeContext } from "../lib/runtime-context";
@@ -108,7 +108,7 @@ const RequestBill = () => {
     setLoadingMenu(true);
 
     const menuUnsubscribe = onSnapshot(
-      collection(db, "restaurants", restaurantId, "menu"),
+      query(collection(db, "restaurants", restaurantId, "menu"), where("active", "==", true)),
       (snapshot) => {
         const data = snapshot.docs.map((document) => ({
           id: document.id,

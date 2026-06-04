@@ -277,7 +277,10 @@ service cloud.firestore {
 
     match /restaurants/{restaurantId}/cuentas/{cuentaId} {
       allow read: if isSuperAdmin() || isRunnerCashierOrAdmin(restaurantId);
-      allow get: if resource.data.sessionId == cuentaId;
+      // resource == null cubre el caso en que la cuenta no existe todavía
+      // (el cliente lee dentro de una transacción para saber si crear o actualizar).
+      // Cuando existe, solo puede leerla quien conoce su propio sessionId.
+      allow get: if resource == null || resource.data.sessionId == cuentaId;
 
       allow create: if (
           request.resource.data.restaurantId == restaurantId
