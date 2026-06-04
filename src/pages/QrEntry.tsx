@@ -95,6 +95,7 @@ const QrEntry = () => {
   const tableNumber = parseTableNumber(table);
 
   const [error, setError] = useState<string | null>(null);
+  const [diagLines, setDiagLines] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -103,7 +104,36 @@ const QrEntry = () => {
       try {
         setError(null);
 
+        const lines: string[] = [];
+        const log = (line: string) => { lines.push(line); setDiagLines([...lines]); };
+
+        const user = auth.currentUser;
+        log(`auth: ${user ? `signed-in uid=${user.uid.slice(0,8)}… anon=${user.isAnonymous}` : "anonymous"}`);
+
         await diagQrPaths(restaurantId, tableNumber);
+
+        // Reproduce los checks clave en pantalla
+        const checks: Array<{ label: string; fn: () => Promise<string> }> = [
+          { label: `restaurants/${restaurantId}`, fn: async () => { const s = await getDoc(doc(db, "restaurants", restaurantId)); return s.exists() ? "✅ exists" : "⚠️ not found"; } },
+          { label: `public/branding`, fn: async () => { const s = await getDoc(doc(db, "restaurants", restaurantId, "public", "branding")); return s.exists() ? `✅ name="${s.data()?.name}"` : "⚠️ not found"; } },
+          { label: `mesas/${tableNumber}`, fn: async () => { const s = await getDoc(doc(db, "restaurants", restaurantId, "mesas", String(tableNumber))); if (!s.exists()) return "⚠️ not found"; const d = s.data(); return `✅ estado=${d?.estado} session=${d?.activeSessionId ?? "null"}`; } },
+          { label: `menu (limit 1)`, fn: async () => { const s = await getDocs(query(collection(db, "restaurants", restaurantId, "menu"), limit(1))); return `✅ ${s.size} doc(s)`; } },
+        ];
+
+        for (const { label, fn } of checks) {
+          try { log(`${label}: ${await fn()}`); }
+          catch (e) { log(`${label}: ❌ ${e instanceof Error ? e.message : String(e)}`); }
+        }
+
+        // Si mesa tiene activeSessionId, probamos leer esa sesión
+        try {
+          const mesaSnap = await getDoc(doc(db, "restaurants", restaurantId, "mesas", String(tableNumber)));
+          const sid = mesaSnap.data()?.activeSessionId;
+          if (sid) {
+            try { const ss = await getDoc(doc(db, "restaurants", restaurantId, "sessions", sid)); log(`sessions/${sid.slice(0,8)}…: ${ss.exists() ? "✅ exists" : "⚠️ not found"}`); }
+            catch (e) { log(`sessions/${sid.slice(0,8)}…: ❌ ${e instanceof Error ? e.message : String(e)}`); }
+          } else { log("sessions: no activeSessionId en mesa"); }
+        } catch { /* mesa ya logueada arriba */ }
 
         const existingSessionId = getStoredTableSessionId({
           restaurantId,
@@ -184,6 +214,14 @@ const QrEntry = () => {
         <p className="mt-2 text-sm text-slate-500">
           Estamos preparando el menú.
         </p>
+
+        {diagLines.length > 0 && (
+          <div className="mt-4 rounded-xl bg-slate-100 p-3 text-left">
+            {diagLines.map((line, i) => (
+              <p key={i} className="font-mono text-[10px] text-slate-700 break-all">{line}</p>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
