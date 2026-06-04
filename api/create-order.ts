@@ -150,9 +150,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const restaurantId = pedido.restaurantId.trim();
     const mesa = Number(pedido.mesa);
 
-    // DIAG TEMP — hoisted so it's accessible after the transaction
-    const _diag: Record<string, unknown> = { plan: null, isPremium: null, items: [] };
-
     const pedidoId = await db.runTransaction(async (transaction) => {
       const restaurantRef = db.doc(`restaurants/${restaurantId}`);
       const mesaRef = db.doc(`restaurants/${restaurantId}/mesas/${mesa}`);
@@ -166,9 +163,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const restaurantData = restaurantSnap.data() || {};
       const isPremium = restaurantData.plan === "premium";
-      // DIAG TEMP
-      _diag.plan = restaurantData.plan;
-      _diag.isPremium = isPremium;
 
       const mesaData = mesaSnap.exists ? mesaSnap.data() || {} : {};
      const activeSessionId = mesaData.activeSessionId;
@@ -337,15 +331,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const itemStockMovements = [];
         const missingOptionalIngredients: string[] = [];
 
-        // DIAG TEMP
-        const _diagItem: Record<string, unknown> = {
-          name: menuData.name,
-          ingredientsInMenuDoc: Array.isArray(menuData.ingredients) ? menuData.ingredients.length : "no-array",
-          ingredientIds: Array.isArray(menuData.ingredients) ? menuData.ingredients.map(i => i.stockItemId) : [],
-          stockValidationEnters: isPremium && Array.isArray(menuData.ingredients) && menuData.ingredients.length > 0,
-          stockChecks: [] as unknown[],
-        };
-        (_diag.items as unknown[]).push(_diagItem);
 
         if (isPremium && Array.isArray(menuData.ingredients)) {
           for (const ingredient of menuData.ingredients) {
@@ -393,17 +378,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
             const requiredTotalBase = requiredPerUnitBase * quantity;
 
-            // DIAG TEMP
-            (_diagItem.stockChecks as unknown[]).push({
-              ingredient: ingredient.stockItemName,
-              essential: ingredient.essential,
-              stockCurrentQty: stockData.currentQuantity,
-              stockUnit,
-              availableBase,
-              requiredPerUnitBase,
-              requiredTotalBase,
-              passes: availableBase >= requiredPerUnitBase * quantity,
-            });
 
             if (requiredPerUnitBase <= 0) continue;
 
@@ -537,7 +511,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       ok: true,
       pedidoId,
-      _debug: _diag,
     });
   } catch (error) {
     console.error("Error creando pedido:", error);
