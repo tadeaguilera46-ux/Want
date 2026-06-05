@@ -105,9 +105,7 @@ export const createSubscription = onCall(
       throw new HttpsError("permission-denied", "No tenés permisos");
     }
 
-    // Guardar estado pendiente para que el webhook pueda identificar el restaurante por email
-    const payerEmailResolved =
-      payerEmail || request.auth.token.email || "";
+    const payerEmailResolved = payerEmail || request.auth.token.email || "";
 
     await admin
       .firestore()
@@ -121,12 +119,35 @@ export const createSubscription = onCall(
         "billing.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
       });
 
-    // URL de checkout directo al plan — el usuario ingresa su tarjeta ahí
-    const initPoint = `https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=${MP_PLANS[plan]}`;
+    // Crear suscripción vía API de MP para poder incluir back_url de retorno a la app
+    const appUrl = process.env.APP_URL || "https://want-livid.vercel.app";
+    const token = MP_ACCESS_TOKEN.value();
+
+    const mpRes = await fetch("https://api.mercadopago.com/preapproval", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        preapproval_plan_id: MP_PLANS[plan],
+        payer_email: payerEmailResolved,
+        back_url: `${appUrl}/payment-required?restaurantId=${restaurantId}`,
+        external_reference: restaurantId,
+      }),
+    });
+
+    if (!mpRes.ok) {
+      const errorText = await mpRes.text();
+      console.error("MP API error al crear suscripción:", mpRes.status, errorText);
+      throw new HttpsError("internal", "No se pudo iniciar el checkout con Mercado Pago");
+    }
+
+    const mpData = await mpRes.json() as { id: string; init_point: string };
 
     return {
-      subscriptionId: null,
-      initPoint,
+      subscriptionId: mpData.id ?? null,
+      initPoint: mpData.init_point,
     };
   }
 );
