@@ -4,7 +4,7 @@ import {
   useLocation,
   useSearchParams,
 } from "react-router-dom";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, getDb } from "../lib/firebase";
 import { useRestaurant } from "../lib/restaurant-context";
@@ -70,6 +70,28 @@ const StaffLogin = () => {
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const [showReset, setShowReset] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetMessage, setResetMessage] = useState("");
+
+  const handlePasswordReset = async () => {
+    const cleanEmail = resetEmail.trim();
+    if (!cleanEmail) {
+      setResetMessage("Ingresá tu email.");
+      return;
+    }
+    try {
+      setResetLoading(true);
+      await sendPasswordResetEmail(auth, cleanEmail);
+      setResetMessage("Te mandamos un email para restablecer tu contraseña. Revisá tu bandeja de entrada.");
+    } catch {
+      setResetMessage("No se pudo enviar el email. Verificá que sea el correcto.");
+    } finally {
+      setResetLoading(false);
+    }
+  };
 
   const restaurantId =
     normalizeString(searchParams.get("restaurantId")) ||
@@ -205,6 +227,46 @@ const StaffLogin = () => {
           >
             {loading ? "Ingresando..." : "Ingresar"}
           </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setShowReset(!showReset);
+              setResetMessage("");
+              setResetEmail("");
+            }}
+            className="w-full text-center text-sm text-zinc-400 transition hover:text-zinc-700"
+          >
+            {showReset ? "Volver al login" : "¿Olvidaste tu contraseña?"}
+          </button>
+
+          {showReset && (
+            <div className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+              <p className="text-sm font-semibold text-zinc-700">
+                Ingresá tu email y te mandamos un link para restablecer tu contraseña.
+              </p>
+              <input
+                type="email"
+                placeholder="tu@email.com"
+                value={resetEmail}
+                onChange={(e) => setResetEmail(e.target.value)}
+                className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none transition focus:ring-2 focus:ring-black/10"
+              />
+              {resetMessage && (
+                <p className={`text-xs font-medium ${resetMessage.includes("mandamos") ? "text-emerald-600" : "text-red-500"}`}>
+                  {resetMessage}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => void handlePasswordReset()}
+                disabled={resetLoading}
+                className="h-11 w-full rounded-2xl bg-zinc-900 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-60"
+              >
+                {resetLoading ? "Enviando..." : "Enviar email de recuperación"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
