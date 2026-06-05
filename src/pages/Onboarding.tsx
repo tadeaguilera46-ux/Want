@@ -49,16 +49,16 @@ const PLAN_OPTIONS: {
   {
     id: "pro",
     name: "Pro",
-    price: 100000,
-    setup: 400000,
+    price: 90000,
+    setup: 350000,
     description: "Recomendado para restaurantes con más operación y métricas.",
     recommended: true,
   },
   {
     id: "premium",
     name: "Premium",
-    price: 160000,
-    setup: 600000,
+    price: 115000,
+    setup: 425000,
     description: "Para locales grandes con stock, analytics y operación avanzada.",
   },
 ];
@@ -213,7 +213,7 @@ const Onboarding = () => {
       });
 
       const trialEndsAt = new Date();
-      trialEndsAt.setDate(trialEndsAt.getDate() + 7);
+      trialEndsAt.setDate(trialEndsAt.getDate() + 30);
       trialEndsAt.setHours(12, 0, 0, 0);
 
       const batch = writeBatch(db);
@@ -326,14 +326,14 @@ const Onboarding = () => {
                   Creá tu restaurante digital
                 </h1>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-500">
-                  Configurá tu cuenta, generá tu panel admin y empezá con 7 días
+                  Configurá tu cuenta, generá tu panel admin y empezá con 30 días
                   de prueba.
                 </p>
               </div>
             </div>
 
             <div className="rounded-3xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">
-              Trial gratis 7 días
+              Trial gratis 30 días
             </div>
           </div>
         </header>
