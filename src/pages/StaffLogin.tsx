@@ -84,6 +84,7 @@ const StaffLogin = () => {
     }
     try {
       setResetLoading(true);
+      auth.languageCode = "es";
       await sendPasswordResetEmail(auth, cleanEmail);
       setResetMessage("Te mandamos un email para restablecer tu contraseña. Revisá tu bandeja de entrada.");
     } catch {
