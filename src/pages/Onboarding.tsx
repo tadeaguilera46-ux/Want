@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import {
   doc,
+  getDoc,
   serverTimestamp,
   Timestamp,
   writeBatch,
@@ -201,6 +202,12 @@ const Onboarding = () => {
     try {
       setLoading(true);
       setMessage("");
+
+      const existingSnap = await getDoc(doc(db, "restaurants", cleanRestaurantId));
+      if (existingSnap.exists()) {
+        setMessage("Ese ID de restaurante ya está en uso. Elegí otro nombre o cambiá el ID manualmente.");
+        return;
+      }
 
       const credential = await createUserWithEmailAndPassword(
         auth,

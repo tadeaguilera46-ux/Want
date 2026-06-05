@@ -244,22 +244,31 @@ export const mpWebhook = onRequest(
 
       const billingStatus = statusMap[subscription.status] ?? "pending";
 
+      const nextBillingDate = subscription.next_payment_date
+        ? admin.firestore.Timestamp.fromDate(new Date(subscription.next_payment_date))
+        : null;
+
+      // Mapear billingStatus a subscriptionStatus (campo que usan los guards de acceso)
+      const subscriptionStatusMap: Record<string, string> = {
+        active: "active",
+        past_due: "past_due",
+        canceled: "blocked",
+      };
+      const newSubscriptionStatus = subscriptionStatusMap[billingStatus];
+
       await admin
         .firestore()
         .collection("restaurants")
         .doc(restaurantId)
         .update({
           plan: billingStatus === "active" ? plan : "starter",
+          ...(newSubscriptionStatus && { subscriptionStatus: newSubscriptionStatus }),
+          ...(billingStatus === "active" && nextBillingDate && { nextBillingDate }),
           "billing.status": billingStatus,
           "billing.subscriptionId": subscription.id,
           "billing.provider": "mercadopago",
-          "billing.currentPeriodEnd": subscription.next_payment_date
-            ? admin.firestore.Timestamp.fromDate(
-                new Date(subscription.next_payment_date)
-              )
-            : null,
-          "billing.lastWebhookAt":
-            admin.firestore.FieldValue.serverTimestamp(),
+          "billing.currentPeriodEnd": nextBillingDate,
+          "billing.lastWebhookAt": admin.firestore.FieldValue.serverTimestamp(),
           "billing.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
         });
 
