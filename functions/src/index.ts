@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/node";
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
+import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
@@ -392,5 +393,59 @@ export const cancelSubscription = onCall(
       });
 
     return { success: true };
+  }
+);
+
+// ─── 4. Sync diario de billing ───────────────────────────────────────────────
+
+export const dailyBillingSync = onSchedule(
+  { schedule: "0 3 * * *", timeZone: "America/Argentina/Buenos_Aires" },
+  async () => {
+    const now = admin.firestore.Timestamp.now();
+    const db = admin.firestore();
+    const batch = db.batch();
+    let updates = 0;
+
+    try {
+      // Trials vencidos → past_due
+      const expiredTrials = await db
+        .collection("restaurants")
+        .where("subscriptionStatus", "==", "trial")
+        .where("trialEndsAt", "<", now)
+        .get();
+
+      expiredTrials.docs.forEach((doc) => {
+        batch.update(doc.ref, {
+          subscriptionStatus: "past_due",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        updates++;
+      });
+
+      // Suscripciones activas con nextBillingDate vencida → past_due
+      const expiredActive = await db
+        .collection("restaurants")
+        .where("subscriptionStatus", "==", "active")
+        .where("nextBillingDate", "<", now)
+        .get();
+
+      expiredActive.docs.forEach((doc) => {
+        batch.update(doc.ref, {
+          subscriptionStatus: "past_due",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        updates++;
+      });
+
+      if (updates > 0) {
+        await batch.commit();
+      }
+
+      console.log(`dailyBillingSync: ${updates} restaurante(s) actualizados`);
+    } catch (error) {
+      console.error("dailyBillingSync error:", error);
+      Sentry.captureException(error);
+      await Sentry.flush(2000);
+    }
   }
 );
