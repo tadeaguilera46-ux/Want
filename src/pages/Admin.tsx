@@ -47,6 +47,7 @@ import { ReservationsPanel } from "../components/ReservationsPanel";
 import { ShiftsPanel } from "../components/ShiftsPanel";
 import { StaffMetricsPanel } from "../components/StaffMetricsPanel";
 import { PromotionsPanel } from "../components/PromotionsPanel";
+import { AfipConfigPanel } from "../components/AfipConfigPanel";
 import { canUseAnalytics, canUseAuditLogs, canUseInvoices, canUseStock } from "../lib/plan";
 import { ReceiptText, Activity } from "lucide-react";
 import type {
@@ -870,6 +871,7 @@ return (
               { id: "shifts", label: "Turnos" },
               { id: "staff-metrics", label: "Performance" },
               { id: "promotions", label: "Promociones" },
+              { id: "afip", label: "Facturación AFIP" },
               { id: "billing", label: "Plan" },
             ].map((item) => (
               <button
@@ -1348,6 +1350,15 @@ return (
               description="Configurá descuentos automáticos por horario, categoría y día de la semana."
             >
               <PromotionsPanel restaurantId={restaurantId} />
+            </AdminSectionShell>
+          )}
+
+          {adminSection === "afip" && (
+            <AdminSectionShell
+              title="Facturación electrónica AFIP"
+              description="Conectá el restaurante con AFIP para emitir facturas A, B y C directamente desde la caja."
+            >
+              <AfipConfigPanel restaurantId={restaurantId} />
             </AdminSectionShell>
           )}
 

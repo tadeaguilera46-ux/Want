@@ -9,4 +9,5 @@ export type AdminSection =
   | "reservations"
   | "shifts"
   | "staff-metrics"
-  | "promotions";
+  | "promotions"
+  | "afip";

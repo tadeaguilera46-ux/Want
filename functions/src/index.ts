@@ -5,6 +5,10 @@ import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { Resend } from "resend";
+import { generateKeyPairAndCsr, encryptPrivateKey, decryptPrivateKey } from "./afip/crypto.js";
+import { getAfipToken } from "./afip/wsaa.js";
+import { getLastInvoiceNumber, issueFECAE } from "./afip/wsfe.js";
+import { INVOICE_TYPE_CODES, type InvoiceRequest, type AfipConfig } from "./afip/types.js";
 
 admin.initializeApp();
 
@@ -19,6 +23,10 @@ Sentry.init({
 const MP_ACCESS_TOKEN = defineSecret("MP_ACCESS_TOKEN");
 const MP_WEBHOOK_SECRET = defineSecret("MP_WEBHOOK_SECRET");
 const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
+const AFIP_MASTER_KEY = defineSecret("AFIP_MASTER_KEY");
+
+// Entorno AFIP: "homologacion" en dev, "produccion" en prod
+const AFIP_ENV = (process.env.AFIP_ENV ?? "produccion") as "homologacion" | "produccion";
 
 const PLAN_LABELS: Record<string, string> = {
   starter: "Starter",
@@ -648,5 +656,180 @@ export const dailyBillingSync = onSchedule(
       Sentry.captureException(error);
       await Sentry.flush(2000);
     }
+  }
+);
+
+// ─── AFIP: Generar CSR ────────────────────────────────────────────────────────
+
+export const afipGenerateCsr = onCall(
+  { secrets: [AFIP_MASTER_KEY], cors: true },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
+
+    const { restaurantId, cuit, puntoVenta, fiscalCondition } = request.data as {
+      restaurantId: string;
+      cuit: string;
+      puntoVenta: number;
+      fiscalCondition: "monotributista" | "responsable_inscripto";
+    };
+
+    if (!restaurantId || !cuit || !puntoVenta || !fiscalCondition) {
+      throw new HttpsError("invalid-argument", "Faltan datos fiscales");
+    }
+
+    const staffDoc = await admin.firestore()
+      .collection("restaurants").doc(restaurantId)
+      .collection("staff").doc(request.auth.uid).get();
+    if (!staffDoc.exists || staffDoc.data()?.role !== "admin") {
+      throw new HttpsError("permission-denied", "No tenés permisos");
+    }
+
+    const restaurantDoc = await admin.firestore()
+      .collection("restaurants").doc(restaurantId).get();
+    const restaurantName = restaurantDoc.data()?.name ?? "Restaurante";
+
+    const { privateKeyPem, csrPem } = generateKeyPairAndCsr(restaurantName, cuit);
+
+    const masterKey = AFIP_MASTER_KEY.value();
+    const { encrypted, iv } = encryptPrivateKey(privateKeyPem, masterKey);
+
+    await admin.firestore()
+      .collection("restaurants").doc(restaurantId)
+      .collection("afipConfig").doc("main")
+      .set({
+        cuit: cuit.replace(/\D/g, "").replace(/^(\d{2})(\d{8})(\d)$/, "$1-$2-$3"),
+        puntoVenta,
+        fiscalCondition,
+        privateKeyEncrypted: encrypted,
+        privateKeyIv: iv,
+        certificate: "",
+        status: "pending_certificate",
+        env: AFIP_ENV,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+    return { csrPem };
+  }
+);
+
+// ─── AFIP: Guardar certificado ────────────────────────────────────────────────
+
+export const afipSaveCertificate = onCall(
+  { cors: true },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
+
+    const { restaurantId, certificatePem } = request.data as {
+      restaurantId: string;
+      certificatePem: string;
+    };
+
+    if (!restaurantId || !certificatePem?.includes("BEGIN CERTIFICATE")) {
+      throw new HttpsError("invalid-argument", "Certificado inválido — debe ser un archivo .crt en formato PEM");
+    }
+
+    const staffDoc = await admin.firestore()
+      .collection("restaurants").doc(restaurantId)
+      .collection("staff").doc(request.auth.uid).get();
+    if (!staffDoc.exists || staffDoc.data()?.role !== "admin") {
+      throw new HttpsError("permission-denied", "No tenés permisos");
+    }
+
+    const configRef = admin.firestore()
+      .collection("restaurants").doc(restaurantId)
+      .collection("afipConfig").doc("main");
+
+    const config = await configRef.get();
+    if (!config.exists || config.data()?.status !== "pending_certificate") {
+      throw new HttpsError("failed-precondition", "Primero generá el CSR desde el panel de configuración");
+    }
+
+    await configRef.update({
+      certificate: certificatePem.trim(),
+      status: "active",
+      activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return { success: true };
+  }
+);
+
+// ─── AFIP: Emitir comprobante ─────────────────────────────────────────────────
+
+export const afipIssueInvoice = onCall(
+  { secrets: [AFIP_MASTER_KEY], cors: true, timeoutSeconds: 60 },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
+
+    const invoiceReq = request.data as InvoiceRequest;
+
+    if (!invoiceReq.restaurantId || !invoiceReq.cuentaId) {
+      throw new HttpsError("invalid-argument", "Faltan datos de la cuenta");
+    }
+
+    const staffDoc = await admin.firestore()
+      .collection("restaurants").doc(invoiceReq.restaurantId)
+      .collection("staff").doc(request.auth.uid).get();
+    if (!staffDoc.exists) throw new HttpsError("permission-denied", "No tenés permisos");
+
+    const configSnap = await admin.firestore()
+      .collection("restaurants").doc(invoiceReq.restaurantId)
+      .collection("afipConfig").doc("main").get();
+
+    if (!configSnap.exists) {
+      throw new HttpsError("failed-precondition", "El restaurante no tiene AFIP configurado");
+    }
+
+    const config = configSnap.data() as AfipConfig & { env?: string };
+    if (config.status !== "active") {
+      throw new HttpsError("failed-precondition", "La configuración AFIP no está activa. Completá el wizard de configuración.");
+    }
+
+    const env = (config.env ?? AFIP_ENV) as "homologacion" | "produccion";
+    const masterKey = AFIP_MASTER_KEY.value();
+    const privateKeyPem = decryptPrivateKey(
+      config.privateKeyEncrypted,
+      config.privateKeyIv,
+      masterKey
+    );
+
+    const { token, sign } = await getAfipToken(
+      invoiceReq.restaurantId,
+      privateKeyPem,
+      config.certificate,
+      env
+    );
+
+    const invoiceType: "A" | "B" | "C" = invoiceReq.invoiceType ??
+      (config.fiscalCondition === "monotributista" ? "C" : "B");
+
+    const cbteTypeCode = INVOICE_TYPE_CODES[invoiceType];
+    if (!cbteTypeCode) throw new HttpsError("invalid-argument", "Tipo de comprobante inválido");
+
+    const lastNumber = await getLastInvoiceNumber(
+      token, sign, config.cuit, config.puntoVenta, cbteTypeCode, env
+    );
+
+    const result = await issueFECAE(
+      token, sign, config.cuit, config.puntoVenta, lastNumber + 1,
+      { ...invoiceReq, invoiceType },
+      env
+    );
+
+    await admin.firestore()
+      .collection("restaurants").doc(invoiceReq.restaurantId)
+      .collection("cuentas").doc(invoiceReq.cuentaId)
+      .update({
+        "invoice.status": "issued",
+        "invoice.cae": result.cae,
+        "invoice.caeExpiry": result.caeExpiry,
+        "invoice.invoiceNumber": result.invoiceNumber,
+        "invoice.invoiceType": result.invoiceType,
+        "invoice.puntoVenta": result.puntoVenta,
+        "invoice.issuedAt": admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+    return result;
   }
 );

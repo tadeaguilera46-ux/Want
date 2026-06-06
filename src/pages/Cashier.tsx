@@ -30,6 +30,7 @@ import { getDb } from "../lib/firebase";
 import { useAuth } from "../lib/auth-context";
 import { useRestaurant } from "../lib/restaurant-context";
 import { crearPedido } from "../lib/orders";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import {
   createCashierAuditLog,
   createOrRefreshCashierBill,
@@ -993,6 +994,7 @@ const Cashier = () => {
       setProcessing(true);
       setError(null);
 
+      // Guardar datos de factura en Firestore (status "requested")
       await requestCashierInvoice({
         restaurantId,
         cuentaId: selectedCuenta.id,
@@ -1014,7 +1016,39 @@ const Cashier = () => {
           provider: "manual",
         },
       });
-    
+
+      // Intentar emisión automática vía AFIP si el restaurante lo tiene configurado
+      try {
+        const fns = getFunctions(undefined, "us-central1");
+        const afipIssue = httpsCallable<unknown, { cae: string; invoiceNumber: number; invoiceType: string }>(
+          fns, "afipIssueInvoice"
+        );
+        const docType = invoiceDocumentType === "CUIT" ? "CUIT"
+          : invoiceDocumentType === "DNI" ? "DNI"
+          : "consumidor_final";
+
+        const result = await afipIssue({
+          restaurantId,
+          cuentaId: selectedCuenta.id,
+          customerName: invoiceCustomerName.trim(),
+          customerDocType: docType,
+          customerDocNumber: invoiceDocumentNumber.trim() || undefined,
+          invoiceType,
+          total: Number(selectedCuenta.total || 0),
+        });
+
+        toast.success(
+          `Factura ${result.data.invoiceType} N° ${result.data.invoiceNumber} emitida. CAE: ${result.data.cae}`
+        );
+      } catch (afipErr) {
+        // Si AFIP no está configurado o falla, la solicitud manual ya quedó guardada
+        const msg = afipErr instanceof Error ? afipErr.message : "";
+        if (!msg.includes("no tiene AFIP configurado") && !msg.includes("no está activa")) {
+          console.warn("AFIP error (no crítico):", afipErr);
+        }
+        // Silencioso si AFIP no está configurado — la solicitud manual alcanza
+      }
+
     } catch (err) {
       console.error("Error solicitando factura:", err);
       setError(
@@ -2153,11 +2187,27 @@ ${adjRows ? `<h2>Ajustes de caja</h2><table><thead><tr><th>Monto</th><th>Motivo<
                     Guardar solicitud de factura
                   </button>
 
-                  {selectedCuenta.invoice?.status && (
-                    <p className="mt-3 text-sm font-semibold text-zinc-500">
-                      Estado factura: {selectedCuenta.invoice.status}
+                  {selectedCuenta.invoice?.status === "issued" && selectedCuenta.invoice.cae ? (
+                    <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                      <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide">
+                        Factura emitida ✓
+                      </p>
+                      <p className="mt-1 font-mono text-xs text-emerald-900">
+                        {selectedCuenta.invoice.invoiceType} N°{" "}
+                        {String(selectedCuenta.invoice.invoiceNumber).padStart(8, "0")}
+                      </p>
+                      <p className="mt-0.5 font-mono text-xs text-emerald-700">
+                        CAE: {selectedCuenta.invoice.cae}
+                      </p>
+                      <p className="mt-0.5 text-xs text-emerald-600">
+                        Vence: {selectedCuenta.invoice.caeExpiry}
+                      </p>
+                    </div>
+                  ) : selectedCuenta.invoice?.status === "requested" ? (
+                    <p className="mt-3 text-sm font-semibold text-amber-600">
+                      Solicitud de factura pendiente
                     </p>
-                  )}
+                  ) : null}
                 </div>
               </div>
             )}
