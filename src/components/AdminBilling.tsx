@@ -109,10 +109,10 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 const STATUS_STYLES: Record<string, string> = {
-  trial: "border-blue-200 bg-blue-100 text-blue-800",
-  active: "border-emerald-200 bg-emerald-100 text-emerald-800",
-  past_due: "border-amber-200 bg-amber-100 text-amber-800",
-  blocked: "border-red-200 bg-red-100 text-red-800",
+  trial: "border-blue-800/50 bg-blue-100 text-blue-400",
+  active: "border-emerald-800/50 bg-emerald-100 text-emerald-400",
+  past_due: "border-amber-800/50 bg-amber-100 text-amber-400",
+  blocked: "border-red-800/50 bg-red-100 text-red-800",
 };
 
 export function AdminBilling({ restaurantId }: { restaurantId: string }) {
@@ -191,11 +191,11 @@ export function AdminBilling({ restaurantId }: { restaurantId: string }) {
   return (
     <div className="space-y-6">
       {isBlocked && (
-        <div className="flex items-start gap-4 rounded-3xl border border-red-200 bg-red-50 p-5">
-          <Ban size={22} className="mt-0.5 shrink-0 text-red-600" />
+        <div className="flex items-start gap-4 rounded-xl border border-red-800/50 bg-red-950/30 p-5">
+          <Ban size={22} className="mt-0.5 shrink-0 text-red-400" />
           <div>
-            <p className="font-black text-red-900">Cuenta bloqueada</p>
-            <p className="mt-1 text-sm text-red-700">
+            <p className="font-bold text-red-900">Cuenta bloqueada</p>
+            <p className="mt-1 text-sm text-red-400">
               Tu cuenta fue bloqueada por falta de pago. Contactá al soporte de
               WANT para regularizar tu situación.
             </p>
@@ -204,11 +204,11 @@ export function AdminBilling({ restaurantId }: { restaurantId: string }) {
       )}
 
       {isPastDue && (
-        <div className="flex items-start gap-4 rounded-3xl border border-amber-200 bg-amber-50 p-5">
-          <AlertTriangle size={22} className="mt-0.5 shrink-0 text-amber-600" />
+        <div className="flex items-start gap-4 rounded-xl border border-amber-800/50 bg-amber-950/30 p-5">
+          <AlertTriangle size={22} className="mt-0.5 shrink-0 text-amber-400" />
           <div>
-            <p className="font-black text-amber-900">Suscripción vencida</p>
-            <p className="mt-1 text-sm text-amber-700">
+            <p className="font-bold text-amber-300">Suscripción vencida</p>
+            <p className="mt-1 text-sm text-amber-400">
               Tu suscripción está vencida. Seleccioná un plan para renovar y
               seguir accediendo a todas las funcionalidades.
             </p>
@@ -221,15 +221,15 @@ export function AdminBilling({ restaurantId }: { restaurantId: string }) {
         <div className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full bg-white/5 blur-3xl" />
         <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.24em] text-white/50">
+            <p className="text-xs font-bold uppercase tracking-[0.24em] text-white/50">
               Tu plan actual
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-3">
-              <h2 className="text-4xl font-black tracking-tight">
+              <h2 className="text-4xl font-bold tracking-tight">
                 {PLAN_LABELS[currentPlan]}
               </h2>
               <span
-                className={`rounded-full border px-3 py-1 text-xs font-black uppercase tracking-wide ${
+                className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wide ${
                   STATUS_STYLES[subscriptionStatus] ?? STATUS_STYLES["trial"]
                 }`}
               >
@@ -240,7 +240,7 @@ export function AdminBilling({ restaurantId }: { restaurantId: string }) {
 
           <div className="flex flex-col gap-2 lg:text-right">
             {monthlyPrice !== undefined && (
-              <p className="text-3xl font-black">
+              <p className="text-3xl font-bold">
                 {formatPriceARS(monthlyPrice)}
                 <span className="ml-1 text-sm font-medium text-white/40">
                   /mes
@@ -270,7 +270,7 @@ export function AdminBilling({ restaurantId }: { restaurantId: string }) {
 
       {/* Plan cards */}
       <div>
-        <h3 className="mb-4 text-lg font-black text-zinc-950">
+        <h3 className="mb-4 text-lg font-bold text-foreground">
           Planes disponibles
         </h3>
         <div className="grid gap-4 md:grid-cols-3">
@@ -283,15 +283,15 @@ export function AdminBilling({ restaurantId }: { restaurantId: string }) {
                 key={plan.key}
                 className={`relative flex flex-col overflow-hidden rounded-[2rem] border p-6 shadow-sm transition ${
                   isCurrent
-                    ? "border-zinc-950 bg-white ring-2 ring-zinc-950/10"
+                    ? "border-zinc-950 bg-card ring-2 ring-zinc-950/10"
                     : plan.popular
-                      ? "border-zinc-200 bg-white"
-                      : "border-zinc-200 bg-zinc-50"
+                      ? "border-border bg-card"
+                      : "border-border bg-secondary"
                 }`}
               >
                 {plan.popular && !isCurrent && (
                   <div className="absolute right-4 top-4">
-                    <span className="rounded-full bg-zinc-950 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-white">
+                    <span className="rounded-full bg-zinc-950 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
                       Popular
                     </span>
                   </div>
@@ -299,19 +299,19 @@ export function AdminBilling({ restaurantId }: { restaurantId: string }) {
 
                 {isCurrent && (
                   <div className="absolute right-4 top-4">
-                    <span className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-white">
+                    <span className="rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-white">
                       Actual
                     </span>
                   </div>
                 )}
 
                 <div className="mb-5">
-                  <p className="text-base font-black text-zinc-950">
+                  <p className="text-base font-bold text-foreground">
                     {plan.label}
                   </p>
-                  <p className="mt-1 text-3xl font-black tracking-tight text-zinc-950">
+                  <p className="mt-1 text-3xl font-bold tracking-tight text-foreground">
                     {formatPriceARS(plan.price)}
-                    <span className="ml-1 text-sm font-medium text-zinc-400">
+                    <span className="ml-1 text-sm font-medium text-muted-foreground">
                       /mes
                     </span>
                   </p>
@@ -321,7 +321,7 @@ export function AdminBilling({ restaurantId }: { restaurantId: string }) {
                   {plan.features.map((feature) => (
                     <li
                       key={feature}
-                      className="flex items-center gap-2 text-sm text-zinc-700"
+                      className="flex items-center gap-2 text-sm text-foreground"
                     >
                       <Check
                         size={14}
@@ -333,7 +333,7 @@ export function AdminBilling({ restaurantId }: { restaurantId: string }) {
                   {plan.lockedFeatures.map((feature) => (
                     <li
                       key={feature}
-                      className="flex items-center gap-2 text-sm text-zinc-400"
+                      className="flex items-center gap-2 text-sm text-muted-foreground"
                     >
                       <X size={14} className="shrink-0 text-zinc-300" />
                       {feature}
@@ -342,17 +342,17 @@ export function AdminBilling({ restaurantId }: { restaurantId: string }) {
                 </ul>
 
                 {isCurrent ? (
-                  <div className="flex h-12 items-center justify-center rounded-2xl border-2 border-zinc-200 text-sm font-black text-zinc-500">
+                  <div className="flex h-12 items-center justify-center rounded-lg border-2 border-border text-sm font-bold text-muted-foreground">
                     Plan actual
                   </div>
                 ) : (
                   <button
                     onClick={() => void handleSubscribe(plan.key)}
                     disabled={subscribing || cancelling}
-                    className={`flex h-12 items-center justify-center gap-2 rounded-2xl text-sm font-black transition disabled:opacity-60 ${
+                    className={`flex h-12 items-center justify-center gap-2 rounded-lg text-sm font-bold transition disabled:opacity-60 ${
                       isUpgrade
                         ? "bg-zinc-950 text-white hover:opacity-90"
-                        : "border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50"
+                        : "border border-border bg-card text-foreground hover:bg-secondary"
                     }`}
                   >
                     {subscribing ? (
@@ -380,18 +380,18 @@ export function AdminBilling({ restaurantId }: { restaurantId: string }) {
 
       {/* Cancel subscription — only shown when an active MP subscription exists */}
       {mpSubscriptionId && (
-        <div className="rounded-[2rem] border border-red-200 bg-red-50 p-5">
+        <div className="rounded-[2rem] border border-red-800/50 bg-red-950/30 p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="font-black text-red-900">Cancelar suscripción</p>
-              <p className="mt-1 text-sm text-red-700">
+              <p className="font-bold text-red-900">Cancelar suscripción</p>
+              <p className="mt-1 text-sm text-red-400">
                 Tu plan seguirá activo hasta el próximo vencimiento.
               </p>
             </div>
             <button
               onClick={() => void handleCancel()}
               disabled={cancelling || subscribing}
-              className="flex h-11 shrink-0 items-center gap-2 rounded-2xl border border-red-300 bg-white px-5 text-sm font-black text-red-700 transition hover:bg-red-100 disabled:opacity-60"
+              className="flex h-11 shrink-0 items-center gap-2 rounded-lg border border-red-300 bg-card px-5 text-sm font-bold text-red-400 transition hover:bg-red-100 disabled:opacity-60"
             >
               {cancelling && <Loader2 size={15} className="animate-spin" />}
               {cancelling ? "Cancelando..." : "Cancelar suscripción"}
@@ -456,44 +456,44 @@ function BillingHistory({
   const visible = showAllPayments ? filtered : filtered.slice(0, 5);
 
   return (
-    <div className="rounded-[2rem] border border-zinc-200 bg-white p-5 shadow-sm">
+    <div className="rounded-[2rem] border border-border bg-card p-5 shadow-sm">
       {/* Header */}
       <div className="mb-5 flex items-center gap-2">
-        <ReceiptText size={18} className="text-zinc-500" />
-        <h3 className="text-base font-black text-zinc-950">
+        <ReceiptText size={18} className="text-muted-foreground" />
+        <h3 className="text-base font-bold text-foreground">
           Historial de facturación
         </h3>
       </div>
 
       {paymentsLoading ? (
         <div className="flex items-center justify-center py-10">
-          <Loader2 size={20} className="animate-spin text-zinc-400" />
+          <Loader2 size={20} className="animate-spin text-muted-foreground" />
         </div>
       ) : payments.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-zinc-200 p-5 text-sm text-zinc-500">
+        <p className="rounded-lg border border-dashed border-border p-5 text-sm text-muted-foreground">
           No hay movimientos registrados aún.
         </p>
       ) : (
         <>
           {/* Summary strip */}
           <div className="mb-5 grid grid-cols-3 gap-3">
-            <div className="flex flex-col items-center gap-1 rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-3">
+            <div className="flex flex-col items-center gap-1 rounded-lg border border-emerald-100 bg-emerald-950/30 px-3 py-3">
               <CheckCircle2 size={18} className="text-emerald-600" />
-              <p className="text-xl font-black text-emerald-800">{emitidas.length}</p>
+              <p className="text-xl font-bold text-emerald-400">{emitidas.length}</p>
               <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-600">
                 Emitidas
               </p>
             </div>
-            <div className="flex flex-col items-center gap-1 rounded-2xl border border-amber-100 bg-amber-50 px-3 py-3">
-              <Clock size={18} className="text-amber-600" />
-              <p className="text-xl font-black text-amber-800">{pendientes.length}</p>
-              <p className="text-[11px] font-bold uppercase tracking-wide text-amber-600">
+            <div className="flex flex-col items-center gap-1 rounded-lg border border-amber-100 bg-amber-950/30 px-3 py-3">
+              <Clock size={18} className="text-amber-400" />
+              <p className="text-xl font-bold text-amber-400">{pendientes.length}</p>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-amber-400">
                 Pendientes
               </p>
             </div>
-            <div className="flex flex-col items-center gap-1 rounded-2xl border border-red-100 bg-red-50 px-3 py-3">
+            <div className="flex flex-col items-center gap-1 rounded-lg border border-red-100 bg-red-950/30 px-3 py-3">
               <XCircle size={18} className="text-red-500" />
-              <p className="text-xl font-black text-red-700">{fallidas.length}</p>
+              <p className="text-xl font-bold text-red-400">{fallidas.length}</p>
               <p className="text-[11px] font-bold uppercase tracking-wide text-red-500">
                 Fallidas
               </p>
@@ -518,18 +518,18 @@ function BillingHistory({
                     setFilter(tab.key);
                     setShowAllPayments(false);
                   }}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-black transition ${
+                  className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-bold transition ${
                     filter === tab.key
                       ? "border-zinc-950 bg-zinc-950 text-white"
-                      : "border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
+                      : "border-border bg-secondary text-muted-foreground hover:bg-background"
                   }`}
                 >
                   {tab.label}
                   <span
-                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-black ${
+                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
                       filter === tab.key
                         ? "bg-white/20 text-white"
-                        : "bg-zinc-200 text-zinc-600"
+                        : "bg-zinc-200 text-muted-foreground"
                     }`}
                   >
                     {count}
@@ -541,7 +541,7 @@ function BillingHistory({
 
           {/* Rows */}
           {filtered.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-zinc-200 p-4 text-center text-sm text-zinc-500">
+            <p className="rounded-lg border border-dashed border-border p-4 text-center text-sm text-muted-foreground">
               No hay registros en esta categoría.
             </p>
           ) : (
@@ -553,7 +553,7 @@ function BillingHistory({
               {filtered.length > 5 && (
                 <button
                   onClick={() => setShowAllPayments(!showAllPayments)}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-zinc-50 py-2.5 text-sm font-bold text-zinc-600 transition hover:bg-zinc-100"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-secondary py-2.5 text-sm font-bold text-muted-foreground transition hover:bg-background"
                 >
                   {showAllPayments ? (
                     <>
@@ -583,16 +583,16 @@ const ROW_ICON: Record<string, React.ReactNode> = {
 };
 
 const ROW_BG: Record<string, string> = {
-  emitidas: "bg-emerald-50 border-emerald-100",
-  pendientes: "bg-amber-50 border-amber-100",
-  fallidas: "bg-red-50 border-red-100",
+  emitidas: "bg-emerald-950/30 border-emerald-100",
+  pendientes: "bg-amber-950/30 border-amber-100",
+  fallidas: "bg-red-950/30 border-red-100",
 };
 
 const STATUS_BADGE_CLASS: Record<string, string> = {
-  active: "border-emerald-200 bg-emerald-100 text-emerald-800",
-  past_due: "border-amber-200 bg-amber-100 text-amber-800",
-  canceled: "border-red-200 bg-red-100 text-red-800",
-  pending: "border-zinc-200 bg-zinc-100 text-zinc-600",
+  active: "border-emerald-800/50 bg-emerald-100 text-emerald-400",
+  past_due: "border-amber-800/50 bg-amber-100 text-amber-400",
+  canceled: "border-red-800/50 bg-red-100 text-red-800",
+  pending: "border-border bg-background text-muted-foreground",
 };
 
 const STATUS_BADGE_LABELS: Record<string, string> = {
@@ -620,19 +620,19 @@ function PaymentRow({ payment }: { payment: PaymentRecord }) {
 
   return (
     <div
-      className={`flex items-center gap-3 rounded-2xl border px-4 py-3 ${ROW_BG[category]}`}
+      className={`flex items-center gap-3 rounded-lg border px-4 py-3 ${ROW_BG[category]}`}
     >
       <div className="shrink-0">{ROW_ICON[category]}</div>
 
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-black text-zinc-950">{typeLabel}</p>
-        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-zinc-500">
+        <p className="text-sm font-bold text-foreground">{typeLabel}</p>
+        <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
           {planLabel && (
             <span className="flex items-center gap-1">
               <CreditCard size={11} />
               Plan {planLabel}
               {planPrice !== undefined && (
-                <span className="text-zinc-400">
+                <span className="text-muted-foreground">
                   · {formatPriceARS(planPrice)}/mes
                 </span>
               )}
@@ -643,7 +643,7 @@ function PaymentRow({ payment }: { payment: PaymentRecord }) {
             {dateStr}
           </span>
           {shortId && (
-            <span className="font-mono text-zinc-400" title={payment.subscriptionId}>
+            <span className="font-mono text-muted-foreground" title={payment.subscriptionId}>
               ID: {shortId}
             </span>
           )}
@@ -651,7 +651,7 @@ function PaymentRow({ payment }: { payment: PaymentRecord }) {
       </div>
 
       <span
-        className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-black ${badgeClass}`}
+        className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-bold ${badgeClass}`}
       >
         {badgeLabel}
       </span>

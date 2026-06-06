@@ -150,8 +150,8 @@ const StaffRoute = ({ children, allowedRoles }: StaffRouteProps) => {
 
   if (authLoading || checkingStaff) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
-        <div className="rounded-3xl border border-zinc-200 bg-white px-6 py-5 shadow-sm">
+      <div className="flex min-h-screen items-center justify-center bg-background p-6">
+        <div className="rounded-xl border border-border bg-card px-6 py-5 shadow-sm">
           Verificando acceso staff...
         </div>
       </div>
@@ -183,19 +183,19 @@ const StaffRoute = ({ children, allowedRoles }: StaffRouteProps) => {
 
   if (!restaurantId) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
-        <div className="rounded-3xl border border-zinc-200 bg-white px-6 py-5 shadow-sm text-center">
-          <h1 className="text-lg font-black text-zinc-950">
+      <div className="flex min-h-screen items-center justify-center bg-background p-6">
+        <div className="rounded-xl border border-border bg-card px-6 py-5 shadow-sm text-center">
+          <h1 className="text-lg font-bold text-foreground">
             Falta restaurante activo
           </h1>
-          <p className="mt-2 text-sm text-zinc-600">
+          <p className="mt-2 text-sm text-muted-foreground">
             Entrá desde una URL con{" "}
             <span className="font-mono">?restaurantId=...</span>
           </p>
           <button
             onClick={handleLogout}
             disabled={loggingOut}
-            className="mt-4 h-11 w-full rounded-2xl bg-red-600 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+            className="mt-4 h-11 w-full rounded-lg bg-red-600 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
           >
             {loggingOut ? "Cerrando..." : "Cerrar sesión"}
           </button>
@@ -216,23 +216,23 @@ const StaffRoute = ({ children, allowedRoles }: StaffRouteProps) => {
 
   if (!isAllowed) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
-        <div className="rounded-3xl border border-zinc-200 bg-white px-6 py-5 shadow-sm text-center max-w-md">
-          <h1 className="text-lg font-black text-zinc-950">Acceso denegado</h1>
+      <div className="flex min-h-screen items-center justify-center bg-background p-6">
+        <div className="rounded-xl border border-border bg-card px-6 py-5 shadow-sm text-center max-w-md">
+          <h1 className="text-lg font-bold text-foreground">Acceso denegado</h1>
 
-          <p className="mt-2 text-sm text-zinc-600">
+          <p className="mt-2 text-sm text-muted-foreground">
             No tenés permisos para entrar a esta sección del restaurante{" "}
             <span className="font-semibold">{restaurantId}</span>.
           </p>
 
           {staffRole && (
-            <p className="mt-2 text-xs text-zinc-500">
+            <p className="mt-2 text-xs text-muted-foreground">
               Rol actual: <span className="font-semibold">{staffRole}</span>
             </p>
           )}
 
           {user?.email && (
-            <p className="mt-1 text-xs text-zinc-400">
+            <p className="mt-1 text-xs text-muted-foreground">
               Usuario: {user.email}
             </p>
           )}
@@ -240,7 +240,7 @@ const StaffRoute = ({ children, allowedRoles }: StaffRouteProps) => {
           <button
             onClick={handleLogout}
             disabled={loggingOut}
-            className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-red-600 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+            className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-red-600 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
           >
             <LogOut size={16} />
             {loggingOut ? "Cerrando..." : "Cerrar sesión"}

@@ -316,30 +316,30 @@ const Onboarding = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#f6f4ef] px-4 py-6">
+    <div className="min-h-screen bg-background px-4 py-6">
       <div className="mx-auto w-full max-w-5xl">
-        <header className="mb-6 rounded-[32px] border border-black/5 bg-white p-6 shadow-[0_18px_50px_-24px_rgba(0,0,0,0.22)]">
+        <header className="mb-6 rounded-xl border border-border bg-card p-6 shadow-[0_18px_50px_-24px_rgba(0,0,0,0.22)]">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-start gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-3xl bg-zinc-950 text-white">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-zinc-950 text-white">
                 <Sparkles size={24} />
               </div>
 
               <div>
-                <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-zinc-500">
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-muted-foreground">
                   WANT RESTAURANT SAAS
                 </p>
-                <h1 className="mt-2 text-3xl font-black tracking-tight text-zinc-950 md:text-4xl">
+                <h1 className="mt-2 text-3xl font-bold tracking-tight text-foreground md:text-4xl">
                   Creá tu restaurante digital
                 </h1>
-                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-500">
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
                   Configurá tu cuenta, generá tu panel admin y empezá con 30 días
                   de prueba.
                 </p>
               </div>
             </div>
 
-            <div className="rounded-3xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">
+            <div className="rounded-xl border border-emerald-800/50 bg-emerald-950/30 px-4 py-3 text-sm font-bold text-emerald-400">
               Trial gratis 30 días
             </div>
           </div>
@@ -348,31 +348,31 @@ const Onboarding = () => {
         <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
           <form
             onSubmit={handleSubmit}
-            className="rounded-[32px] border border-black/5 bg-white p-6 shadow-[0_18px_50px_-24px_rgba(0,0,0,0.22)]"
+            className="rounded-xl border border-border bg-card p-6 shadow-[0_18px_50px_-24px_rgba(0,0,0,0.22)]"
           >
             <div className="mb-5 flex items-start gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-950 text-white">
+              <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-zinc-950 text-white">
                 <Building2 size={20} />
               </div>
 
               <div>
-                <h2 className="text-xl font-black text-zinc-950">
+                <h2 className="text-xl font-bold text-foreground">
                   Datos del restaurante
                 </h2>
-                <p className="mt-1 text-sm text-zinc-500">
+                <p className="mt-1 text-sm text-muted-foreground">
                   Estos datos crean tu espacio privado en WANT.
                 </p>
               </div>
             </div>
 
             {message && (
-              <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+              <div className="mb-5 rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-3 text-sm font-bold text-red-400">
                 {message}
               </div>
             )}
 
             <div className="grid gap-4">
-              <label className="grid gap-1 text-sm font-bold text-zinc-700">
+              <label className="grid gap-1 text-sm font-bold text-foreground">
                 Nombre del restaurante
                 <input
                   value={restaurantName}
@@ -381,12 +381,12 @@ const Onboarding = () => {
                   }
                   placeholder="Ej: La Parrilla"
                   disabled={loading}
-                  className="h-12 rounded-2xl border border-zinc-200 px-4 text-sm font-medium outline-none transition focus:ring-2 focus:ring-black/10 disabled:opacity-60"
+                  className="h-12 w-full rounded-md border border-border bg-secondary px-4 text-sm text-foreground placeholder:text-muted-foreground outline-none transition focus:ring-2 focus:ring-ring/40 disabled:opacity-60"
                   required
                 />
               </label>
 
-              <label className="grid gap-1 text-sm font-bold text-zinc-700">
+              <label className="grid gap-1 text-sm font-bold text-foreground">
                 ID del restaurante
                 <input
                   value={restaurantId}
@@ -395,16 +395,16 @@ const Onboarding = () => {
                   }
                   placeholder="la-parrilla"
                   disabled={loading}
-                  className="h-12 rounded-2xl border border-zinc-200 px-4 text-sm font-medium outline-none transition focus:ring-2 focus:ring-black/10 disabled:opacity-60"
+                  className="h-12 w-full rounded-md border border-border bg-secondary px-4 text-sm text-foreground placeholder:text-muted-foreground outline-none transition focus:ring-2 focus:ring-ring/40 disabled:opacity-60"
                   required
                 />
-                <span className="text-xs font-medium text-zinc-400">
+                <span className="text-xs font-medium text-muted-foreground">
                   Se usará para tus links internos.
                 </span>
               </label>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <label className="grid gap-1 text-sm font-bold text-zinc-700">
+                <label className="grid gap-1 text-sm font-bold text-foreground">
                   Email del administrador
                   <input
                     type="email"
@@ -412,12 +412,12 @@ const Onboarding = () => {
                     onChange={(event) => setEmail(event.target.value)}
                     placeholder="dueño@restaurante.com"
                     disabled={loading}
-                    className="h-12 rounded-2xl border border-zinc-200 px-4 text-sm font-medium outline-none transition focus:ring-2 focus:ring-black/10 disabled:opacity-60"
+                    className="h-12 w-full rounded-md border border-border bg-secondary px-4 text-sm text-foreground placeholder:text-muted-foreground outline-none transition focus:ring-2 focus:ring-ring/40 disabled:opacity-60"
                     required
                   />
                 </label>
 
-                <label className="grid gap-1 text-sm font-bold text-zinc-700">
+                <label className="grid gap-1 text-sm font-bold text-foreground">
                   Contraseña
                   <input
                     type="password"
@@ -426,13 +426,13 @@ const Onboarding = () => {
                     placeholder="Mínimo 6 caracteres"
                     disabled={loading}
                     minLength={6}
-                    className="h-12 rounded-2xl border border-zinc-200 px-4 text-sm font-medium outline-none transition focus:ring-2 focus:ring-black/10 disabled:opacity-60"
+                    className="h-12 w-full rounded-md border border-border bg-secondary px-4 text-sm text-foreground placeholder:text-muted-foreground outline-none transition focus:ring-2 focus:ring-ring/40 disabled:opacity-60"
                     required
                   />
                 </label>
               </div>
 
-              <label className="grid gap-1 text-sm font-bold text-zinc-700">
+              <label className="grid gap-1 text-sm font-bold text-foreground">
                 Cantidad inicial de mesas
                 <input
                   type="number"
@@ -441,17 +441,17 @@ const Onboarding = () => {
                   value={tableCount}
                   onChange={(event) => setTableCount(event.target.value)}
                   disabled={loading}
-                  className={`h-12 rounded-2xl border px-4 text-sm font-medium outline-none transition focus:ring-2 focus:ring-black/10 disabled:opacity-60 ${
+                  className={`h-12 w-full rounded-md border px-4 text-sm text-foreground bg-secondary placeholder:text-muted-foreground outline-none transition focus:ring-2 focus:ring-ring/40 disabled:opacity-60 ${
                     tableLimitReached
-                      ? "border-red-300 bg-red-50"
-                      : "border-zinc-200"
+                      ? "border-red-800/50 bg-red-950/30"
+                      : "border-border"
                   }`}
                   required
                 />
 
                 <span
                   className={`text-xs font-semibold ${
-                    tableLimitReached ? "text-red-600" : "text-zinc-400"
+                    tableLimitReached ? "text-red-400" : "text-muted-foreground"
                   }`}
                 >
                   Límite del plan {selectedPlan.name}:{" "}
@@ -461,7 +461,7 @@ const Onboarding = () => {
             </div>
 
             <div className="mt-6">
-              <h3 className="mb-3 text-sm font-black text-zinc-950">
+              <h3 className="mb-3 text-sm font-bold text-foreground">
                 Elegí un plan
               </h3>
 
@@ -476,23 +476,23 @@ const Onboarding = () => {
                       type="button"
                       disabled={loading}
                       onClick={() => handlePlanChange(option.id)}
-                      className={`rounded-3xl border p-4 text-left transition ${
+                      className={`rounded-xl border p-4 text-left transition ${
                         selected
                           ? "border-zinc-950 bg-zinc-950 text-white"
-                          : "border-zinc-200 bg-white text-zinc-950 hover:bg-zinc-50"
+                          : "border-border bg-card text-foreground hover:bg-secondary"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-lg font-black">{option.name}</p>
+                            <p className="text-lg font-bold">{option.name}</p>
 
                             {option.recommended && (
                               <span
-                                className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide ${
+                                className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${
                                   selected
                                     ? "bg-white/15 text-white"
-                                    : "bg-emerald-100 text-emerald-700"
+                                    : "bg-emerald-100 text-emerald-400"
                                 }`}
                               >
                                 Recomendado
@@ -502,7 +502,7 @@ const Onboarding = () => {
 
                           <p
                             className={`mt-1 text-sm ${
-                              selected ? "text-white/70" : "text-zinc-500"
+                              selected ? "text-white/70" : "text-muted-foreground"
                             }`}
                           >
                             {option.description}
@@ -516,35 +516,35 @@ const Onboarding = () => {
 
                       <div className="mt-4 grid gap-2 sm:grid-cols-2">
                         <div
-                          className={`rounded-2xl px-3 py-2 ${
-                            selected ? "bg-white/10" : "bg-zinc-50"
+                          className={`rounded-lg px-3 py-2 ${
+                            selected ? "bg-white/10" : "bg-secondary"
                           }`}
                         >
                           <p
                             className={`text-xs font-bold ${
-                              selected ? "text-white/60" : "text-zinc-400"
+                              selected ? "text-white/60" : "text-muted-foreground"
                             }`}
                           >
                             Mensualidad
                           </p>
-                          <p className="text-sm font-black">
+                          <p className="text-sm font-bold">
                             {formatPriceARS(option.price)}
                           </p>
                         </div>
 
                         <div
-                          className={`rounded-2xl px-3 py-2 ${
-                            selected ? "bg-white/10" : "bg-zinc-50"
+                          className={`rounded-lg px-3 py-2 ${
+                            selected ? "bg-white/10" : "bg-secondary"
                           }`}
                         >
                           <p
                             className={`text-xs font-bold ${
-                              selected ? "text-white/60" : "text-zinc-400"
+                              selected ? "text-white/60" : "text-muted-foreground"
                             }`}
                           >
                             Setup
                           </p>
-                          <p className="text-sm font-black">
+                          <p className="text-sm font-bold">
                             {formatPriceARS(option.setup)}
                           </p>
                         </div>
@@ -552,8 +552,8 @@ const Onboarding = () => {
 
                       <div className="mt-4 grid gap-2">
                         <div
-                          className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-bold ${
-                            selected ? "bg-white/10" : "bg-zinc-50"
+                          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${
+                            selected ? "bg-white/10" : "bg-secondary"
                           }`}
                         >
                           <DoorOpen size={14} />
@@ -564,8 +564,8 @@ const Onboarding = () => {
                         </div>
 
                         <div
-                          className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-bold ${
-                            selected ? "bg-white/10" : "bg-zinc-50"
+                          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${
+                            selected ? "bg-white/10" : "bg-secondary"
                           }`}
                         >
                           <Users size={14} />
@@ -576,14 +576,14 @@ const Onboarding = () => {
                         </div>
 
                         <div
-                          className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-bold ${
+                          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${
                             limits.analytics
                               ? selected
                                 ? "bg-emerald-500/20 text-emerald-100"
-                                : "bg-emerald-50 text-emerald-700"
+                                : "bg-emerald-950/30 text-emerald-400"
                               : selected
                                 ? "bg-white/10 text-white/50"
-                                : "bg-zinc-50 text-zinc-400"
+                                : "bg-secondary text-muted-foreground"
                           }`}
                         >
                           <BarChart3 size={14} />
@@ -591,14 +591,14 @@ const Onboarding = () => {
                         </div>
 
                         <div
-                          className={`flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-bold ${
+                          className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold ${
                             limits.stock
                               ? selected
                                 ? "bg-emerald-500/20 text-emerald-100"
-                                : "bg-emerald-50 text-emerald-700"
+                                : "bg-emerald-950/30 text-emerald-400"
                               : selected
                                 ? "bg-white/10 text-white/50"
-                                : "bg-zinc-50 text-zinc-400"
+                                : "bg-secondary text-muted-foreground"
                           }`}
                         >
                           <Boxes size={14} />
@@ -614,7 +614,7 @@ const Onboarding = () => {
             <button
               type="submit"
               disabled={loading || tableLimitReached}
-              className="mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-950 text-base font-black text-white transition hover:opacity-90 disabled:opacity-40"
+              className="mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-lg bg-zinc-950 text-base font-bold text-white transition hover:opacity-90 disabled:opacity-40"
             >
               {loading ? (
                 <>
@@ -630,12 +630,12 @@ const Onboarding = () => {
             </button>
           </form>
 
-          <aside className="rounded-[32px] border border-black/5 bg-zinc-950 p-6 text-white shadow-[0_18px_50px_-24px_rgba(0,0,0,0.35)]">
-            <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-white/10">
+          <aside className="rounded-xl border border-border bg-zinc-950 p-6 text-white shadow-[0_18px_50px_-24px_rgba(0,0,0,0.35)]">
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/10">
               <ShieldCheck size={24} />
             </div>
 
-            <h2 className="mt-5 text-2xl font-black tracking-tight">
+            <h2 className="mt-5 text-2xl font-bold tracking-tight">
               Qué se crea automáticamente
             </h2>
 
@@ -657,11 +657,11 @@ const Onboarding = () => {
               ))}
             </div>
 
-            <div className="mt-6 rounded-3xl bg-white/10 p-4">
-              <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-white/50">
+            <div className="mt-6 rounded-xl bg-white/10 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/50">
                 Plan seleccionado
               </p>
-              <p className="mt-2 text-2xl font-black">{selectedPlan.name}</p>
+              <p className="mt-2 text-2xl font-bold">{selectedPlan.name}</p>
               <p className="mt-1 text-sm text-white/60">
                 {formatPriceARS(selectedPlan.price)} / mes
               </p>

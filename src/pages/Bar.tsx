@@ -297,11 +297,11 @@ const Bar = () => {
     const minutes = getElapsedMinutes(order);
 
     if (minutes >= DANGER_MINUTES) {
-      return "bg-red-50 text-red-700 border border-red-200";
+      return "bg-red-950/30 text-red-400 border border-red-800/50";
     }
 
     if (minutes >= WARNING_MINUTES) {
-      return "bg-amber-50 text-amber-800 border border-amber-200";
+      return "bg-amber-950/30 text-amber-400 border border-amber-800/50";
     }
 
     return "bg-slate-100 text-slate-700 border border-slate-200";
@@ -316,15 +316,15 @@ const Bar = () => {
 
   const getBadgeStyles = (status: EstadoBarra) => {
     if (status === "pendiente") {
-      return "bg-red-100 text-red-700 border border-red-200";
+      return "bg-red-100 text-red-400 border border-red-800/50";
     }
 
     if (status === "preparando") {
-      return "bg-amber-100 text-amber-800 border border-amber-200";
+      return "bg-amber-100 text-amber-400 border border-amber-800/50";
     }
 
     if (status === "listo") {
-      return "bg-emerald-100 text-emerald-700 border border-emerald-200";
+      return "bg-emerald-100 text-emerald-400 border border-emerald-800/50";
     }
 
     return "bg-slate-100 text-slate-700 border border-slate-200";
@@ -380,8 +380,8 @@ const Bar = () => {
   if (!restaurantId) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100 px-6">
-        <div className="rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm">
-          <h1 className="text-lg font-black text-slate-950">
+        <div className="rounded-xl border border-red-800/50 bg-card p-6 text-center shadow-sm">
+          <h1 className="text-lg font-bold text-slate-950">
             Falta restaurante activo
           </h1>
           <p className="mt-2 text-sm text-slate-600">
@@ -398,12 +398,12 @@ const Bar = () => {
         <div className="mx-auto max-w-[1800px] px-4 py-4 md:px-6 lg:px-8">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex items-start gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white shadow-sm">
                 <Wine size={22} />
               </div>
 
               <div>
-                <h1 className="text-2xl font-black tracking-tight text-slate-950 md:text-3xl">
+                <h1 className="text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">
                   Bar
                 </h1>
                 <p className="text-sm text-slate-500 md:text-base">
@@ -417,10 +417,10 @@ const Bar = () => {
               </div>
             </div>
             <div
-              className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-2 text-sm font-black shadow-sm ${
+              className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-bold shadow-sm ${
                 isWakeLockActive
-                  ? "border-blue-200 bg-blue-50 text-blue-700"
-                  : "border-zinc-200 bg-white text-zinc-500"
+                  ? "border-blue-800/50 bg-blue-950/30 text-blue-400"
+                  : "border-border bg-card text-muted-foreground"
               }`}
             >
               <span
@@ -437,10 +437,10 @@ const Bar = () => {
             </div>
             <div className="flex flex-col gap-3 xl:items-end">
               <div
-                className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-2 text-sm font-black shadow-sm ${
+                className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-bold shadow-sm ${
                   isOnline
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                    : "border-red-200 bg-red-50 text-red-700"
+                    ? "border-emerald-800/50 bg-emerald-950/30 text-emerald-400"
+                    : "border-red-800/50 bg-red-950/30 text-red-400"
                 }`}
               >
                 <span
@@ -455,45 +455,45 @@ const Bar = () => {
               <button
                 onClick={handleLogout}
                 disabled={loggingOut}
-                className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-card px-4 font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <LogOut size={16} />
                 {loggingOut ? "Cerrando..." : "Cerrar sesión"}
               </button>
 
               <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
-                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                  <p className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500">
+                <div className="rounded-lg border border-slate-200 bg-card px-4 py-3 shadow-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                     Activos
                   </p>
-                  <p className="mt-1 text-2xl font-black text-slate-950">
+                  <p className="mt-1 text-2xl font-bold text-slate-950">
                     {stats.activos}
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 shadow-sm">
-                  <p className="text-[11px] font-extrabold uppercase tracking-wide text-red-600">
+                <div className="rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-3 shadow-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-red-400">
                     Pendientes
                   </p>
-                  <p className="mt-1 text-2xl font-black text-red-700">
+                  <p className="mt-1 text-2xl font-bold text-red-400">
                     {stats.pendientes}
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm">
-                  <p className="text-[11px] font-extrabold uppercase tracking-wide text-amber-700">
+                <div className="rounded-lg border border-amber-800/50 bg-amber-950/30 px-4 py-3 shadow-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-400">
                     Preparando
                   </p>
-                  <p className="mt-1 text-2xl font-black text-amber-800">
+                  <p className="mt-1 text-2xl font-bold text-amber-400">
                     {stats.preparando}
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 shadow-sm">
-                  <p className="text-[11px] font-extrabold uppercase tracking-wide text-orange-700">
+                <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 shadow-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-orange-700">
                     Urgentes
                   </p>
-                  <p className="mt-1 text-2xl font-black text-orange-800">
+                  <p className="mt-1 text-2xl font-bold text-orange-800">
                     {stats.urgentes}
                   </p>
                 </div>
@@ -505,24 +505,24 @@ const Bar = () => {
         
       <main className="mx-auto max-w-[1800px] px-4 py-4 md:px-6 md:py-6 lg:px-8">
         {!isOnline && (
-          <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+          <div className="mb-4 rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-3 text-sm font-bold text-red-400">
             Sin conexión. Estás viendo datos guardados localmente. Las acciones quedan deshabilitadas hasta reconectar.
           </div>
         )}
         {!soundEnabled && (
-          <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+          <div className="mb-4 rounded-lg border border-amber-300 bg-amber-950/30 px-4 py-3 text-sm font-medium text-amber-300">
             Tocá la pantalla una vez para habilitar el sonido.
           </div>
         )}
 
         {error && (
-          <div className="mb-4 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+          <div className="mb-4 rounded-lg border border-red-300 bg-red-950/30 px-4 py-3 text-sm font-medium text-red-400">
             {error}
           </div>
         )}
 
         {visibleOrders.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-8 py-14 text-center shadow-sm">
+          <div className="rounded-xl border border-dashed border-slate-300 bg-card px-8 py-14 text-center shadow-sm">
             <p className="text-lg font-semibold text-slate-700">
               No hay pedidos de barra activos
             </p>
@@ -543,19 +543,19 @@ const Bar = () => {
                 <motion.div
                   key={order.id}
                   layout
-                  className={`rounded-3xl border border-slate-200 border-l-4 bg-white p-5 shadow-sm transition-all duration-200 ${getCardAccent(
+                  className={`rounded-xl border border-slate-200 border-l-4 bg-card p-5 shadow-sm transition-all duration-200 ${getCardAccent(
                     status
                   )} ${isNew ? "ring-2 ring-orange-300" : ""}`}
                 >
                   <div className="mb-4 flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-2xl font-black tracking-tight text-slate-950">
+                        <p className="text-2xl font-bold tracking-tight text-slate-950">
                           Mesa {order.mesa}
                         </p>
 
                         {isNew && (
-                          <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide text-white">
+                          <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
                             Nuevo
                           </span>
                         )}
@@ -563,7 +563,7 @@ const Bar = () => {
 
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <span
-                          className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide ${getBadgeStyles(
+                          className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide ${getBadgeStyles(
                             status
                           )}`}
                         >
@@ -598,7 +598,7 @@ const Bar = () => {
                       return (
                         <div
                           key={`${item.nombre}-${observation || "sin-observacion"}-${index}`}
-                          className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+                          className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
@@ -607,13 +607,13 @@ const Bar = () => {
                                   size={16}
                                   className="mt-0.5 shrink-0 text-slate-500"
                                 />
-                                <p className="text-base font-extrabold leading-tight text-slate-950 break-words">
+                                <p className="text-base font-semibold leading-tight text-slate-950 break-words">
                                   {item.nombre}
                                 </p>
                               </div>
                             </div>
 
-                            <div className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-black text-slate-900">
+                            <div className="shrink-0 rounded-xl border border-slate-200 bg-card px-3 py-1.5 text-sm font-bold text-slate-900">
                               x{item.cantidad}
                             </div>
                           </div>
@@ -623,10 +623,10 @@ const Bar = () => {
                               <div className="flex items-start gap-2">
                                 <MessageSquareText
                                   size={14}
-                                  className="mt-0.5 shrink-0 text-amber-900"
+                                  className="mt-0.5 shrink-0 text-amber-300"
                                 />
                                 <div className="min-w-0">
-                                  <p className="mb-1 text-[11px] font-extrabold uppercase tracking-wide text-amber-900">
+                                  <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-300">
                                     OBS
                                   </p>
                                   <p className="text-sm font-semibold leading-snug text-amber-950 break-words">
@@ -646,7 +646,7 @@ const Bar = () => {
                       whileTap={{ scale: 0.99 }}
                       onClick={() => updateStatus(order.id, next)}
                       disabled={isLoading || !isOnline}
-                      className={`mt-5 flex h-12 w-full items-center justify-center rounded-2xl px-4 text-sm font-extrabold text-white transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
+                      className={`mt-5 flex h-12 w-full items-center justify-center rounded-lg px-4 text-sm font-semibold text-white transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
                         next === "preparando"
                           ? "bg-slate-950 hover:opacity-90"
                           : "bg-emerald-600 hover:opacity-90"

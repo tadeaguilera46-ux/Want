@@ -985,12 +985,12 @@ const Cashier = () => {
 
   if (!restaurantId) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
-        <div className="rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm">
-          <h1 className="text-lg font-black text-zinc-950">
+      <div className="flex min-h-screen items-center justify-center bg-background p-6">
+        <div className="rounded-xl border border-red-800/50 bg-card p-6 text-center shadow-sm">
+          <h1 className="text-lg font-bold text-foreground">
             Falta restaurante activo
           </h1>
-          <p className="mt-2 text-sm text-zinc-600">
+          <p className="mt-2 text-sm text-muted-foreground">
             Entrá con una URL que tenga restaurantId.
           </p>
         </div>
@@ -1000,24 +1000,24 @@ const Cashier = () => {
 
   return (
     <>
-    <div className="min-h-screen bg-zinc-100">
+    <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-7xl px-4 py-6">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.25em] text-zinc-500">
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-muted-foreground">
               WANT POS
             </p>
-            <h1 className="mt-1 text-4xl font-black tracking-tight text-zinc-950">
+            <h1 className="mt-1 text-4xl font-bold tracking-tight text-foreground">
               Caja
             </h1>
-            <p className="mt-2 text-sm text-zinc-500">
+            <p className="mt-2 text-sm text-muted-foreground">
               Cuentas, cobros, descuentos, carga manual e impresión.
             </p>
             <div
               className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold border ${
                 isOnline
-                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                  : "bg-red-50 text-red-700 border-red-200"
+                  ? "bg-emerald-950/30 text-emerald-400 border-emerald-800/50"
+                  : "bg-red-950/30 text-red-400 border-red-800/50"
               }`}
             >
               <span
@@ -1031,33 +1031,33 @@ const Cashier = () => {
 
           <div className="flex flex-col items-stretch gap-3 sm:items-end">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <div className="rounded-3xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
-                <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">
+              <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-sm">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                   Pendientes
                 </p>
-                <p className="mt-1 text-3xl font-black text-zinc-950">
+                <p className="mt-1 text-3xl font-bold text-foreground">
                   {pendingBills.length}
                 </p>
               </div>
 
-              <div className="rounded-3xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
-                <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">
+              <div className="rounded-xl border border-border bg-card px-5 py-4 shadow-sm">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                   Sesiones activas
                 </p>
-                <p className="mt-1 text-3xl font-black text-zinc-950">
+                <p className="mt-1 text-3xl font-bold text-foreground">
                   {activeBills.length}
                 </p>
               </div>
 
               <Link
                 to={invoiceRequestsPath}
-                className="col-span-2 flex rounded-3xl border border-zinc-950 bg-zinc-950 px-5 py-4 text-white shadow-sm transition hover:bg-zinc-800 sm:col-span-1"
+                className="col-span-2 flex rounded-xl border border-zinc-950 bg-zinc-950 px-5 py-4 text-white shadow-sm transition hover:bg-zinc-800 sm:col-span-1"
               >
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wide text-white/70">
                     Facturas
                   </p>
-                  <p className="mt-1 text-3xl font-black">
+                  <p className="mt-1 text-3xl font-bold">
                     {invoiceRequestsCount}
                   </p>
                   <p className="mt-1 text-xs font-bold text-white/70">
@@ -1070,7 +1070,7 @@ const Cashier = () => {
             <div className="flex gap-2">
               <button
                 onClick={() => setShowCierreModal(true)}
-                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-2xl border border-zinc-300 bg-white px-5 font-black text-zinc-800 shadow-sm transition hover:bg-zinc-50 sm:flex-none"
+                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-card px-5 font-bold text-zinc-800 shadow-sm transition hover:bg-secondary sm:flex-none"
               >
                 <BarChart3 size={17} />
                 Cierre de caja
@@ -1079,7 +1079,7 @@ const Cashier = () => {
               <button
                 onClick={handleLogout}
                 disabled={loggingOut}
-                className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 font-bold text-zinc-500 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                className="flex h-12 items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 font-bold text-muted-foreground shadow-sm transition hover:border-red-800/50 hover:bg-red-950/30 hover:text-red-400 disabled:opacity-50"
               >
                 <LogOut size={16} />
                 {loggingOut ? "Saliendo..." : "Cerrar sesión"}
@@ -1088,35 +1088,35 @@ const Cashier = () => {
           </div>
         </div>
         {!isOnline && (
-          <div className="mb-5 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+          <div className="mb-5 rounded-lg border border-red-300 bg-red-950/30 px-4 py-3 text-sm font-bold text-red-400">
             Sin conexión. Estás viendo datos guardados localmente. Los cobros,
             facturas y modificaciones están deshabilitados hasta reconectar.
           </div>
         )}
         {error && (
-          <div className="mb-5 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          <div className="mb-5 rounded-lg border border-red-300 bg-red-950/30 px-4 py-3 text-sm font-semibold text-red-400">
             {error}
           </div>
         )}
 
         <div className="grid gap-6 lg:grid-cols-[390px_1fr]">
           <div className="space-y-6">
-            <section className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
                 <Receipt size={20} />
-                <h2 className="text-lg font-black text-zinc-950">
+                <h2 className="text-lg font-bold text-foreground">
                   Cuentas activas
                 </h2>
               </div>
 
               {loading ? (
-                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">
+                <div className="rounded-lg border border-border bg-secondary p-4 text-sm text-muted-foreground">
                   Cargando cuentas...
                 </div>
               ) : activeBills.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-6 text-center">
-                  <AlertTriangle className="mx-auto mb-3 text-zinc-400" />
-                  <p className="font-semibold text-zinc-700">
+                <div className="rounded-lg border border-dashed border-zinc-300 bg-secondary p-6 text-center">
+                  <AlertTriangle className="mx-auto mb-3 text-muted-foreground" />
+                  <p className="font-semibold text-foreground">
                     No hay cuentas activas
                   </p>
                 </div>
@@ -1129,27 +1129,27 @@ const Cashier = () => {
                       <button
                         key={cuenta.id}
                         onClick={() => setSelectedCuentaId(cuenta.id)}
-                        className={`w-full rounded-3xl border p-4 text-left transition ${
+                        className={`w-full rounded-xl border p-4 text-left transition ${
                           selected
                             ? "border-zinc-950 bg-zinc-950 text-white"
-                            : "border-zinc-200 bg-white hover:border-zinc-300"
+                            : "border-border bg-card hover:border-zinc-300"
                         }`}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p
                               className={`text-xs font-bold uppercase tracking-wide ${
-                                selected ? "text-white/70" : "text-zinc-500"
+                                selected ? "text-white/70" : "text-muted-foreground"
                               }`}
                             >
                               Mesa
                             </p>
-                            <h3 className="text-3xl font-black">
+                            <h3 className="text-3xl font-bold">
                               {cuenta.mesa}
                             </h3>
                             <p
                               className={`mt-1 text-xs font-semibold ${
-                                selected ? "text-white/70" : "text-zinc-500"
+                                selected ? "text-white/70" : "text-muted-foreground"
                               }`}
                             >
                               {cuenta.estado}
@@ -1159,12 +1159,12 @@ const Cashier = () => {
                           <div className="text-right">
                             <p
                               className={`text-xs font-bold uppercase tracking-wide ${
-                                selected ? "text-white/70" : "text-zinc-500"
+                                selected ? "text-white/70" : "text-muted-foreground"
                               }`}
                             >
                               Total
                             </p>
-                            <p className="text-xl font-black">
+                            <p className="text-xl font-bold">
                               {formatPriceARS(cuenta.total)}
                             </p>
                           </div>
@@ -1176,10 +1176,10 @@ const Cashier = () => {
               )}
             </section>
 
-            <section className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
                 <Plus size={20} />
-                <h2 className="text-lg font-black text-zinc-950">
+                <h2 className="text-lg font-bold text-foreground">
                   Crear cuenta manual
                 </h2>
               </div>
@@ -1191,14 +1191,14 @@ const Cashier = () => {
                   type="number"
                   min={1}
                   placeholder="Número de mesa"
-                  className="h-12 w-full rounded-2xl border border-zinc-200 px-4 outline-none focus:ring-2 focus:ring-black/10"
+                  className="h-12 w-full rounded-lg border border-border px-4 outline-none focus:ring-2 focus:ring-ring/40"
                 />
 
                 <div className="grid grid-cols-[1fr_90px] gap-2">
                   <select
                     value={manualSelectedMenuId}
                     onChange={(e) => setManualSelectedMenuId(e.target.value)}
-                    className="h-12 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+                    className="h-12 rounded-lg border border-border px-3 outline-none focus:ring-2 focus:ring-ring/40"
                   >
                     <option value="">Seleccionar producto</option>
                     {menuItems.map((item) => (
@@ -1213,19 +1213,19 @@ const Cashier = () => {
                     onChange={(e) => setManualQuantity(e.target.value)}
                     type="number"
                     min={1}
-                    className="h-12 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+                    className="h-12 rounded-lg border border-border px-3 outline-none focus:ring-2 focus:ring-ring/40"
                   />
                 </div>
 
                 <button
                   onClick={addDraftManualItem}
-                  className="h-11 w-full rounded-2xl border border-zinc-200 bg-zinc-50 font-bold text-zinc-800"
+                  className="h-11 w-full rounded-lg border border-border bg-secondary font-bold text-zinc-800"
                 >
                   Agregar producto
                 </button>
 
                 {manualItems.length > 0 && (
-                  <div className="space-y-2 rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+                  <div className="space-y-2 rounded-lg border border-border bg-secondary p-3">
                     {manualItems.map((item) => (
                       <div
                         key={item.menuItem.id}
@@ -1244,14 +1244,14 @@ const Cashier = () => {
                               )
                             )
                           }
-                          className="text-red-600"
+                          className="text-red-400"
                         >
                           <Trash2 size={16} />
                         </button>
                       </div>
                     ))}
 
-                    <div className="border-t border-zinc-200 pt-2 text-right font-black">
+                    <div className="border-t border-border pt-2 text-right font-bold">
                       {formatPriceARS(manualTotal)}
                     </div>
                   </div>
@@ -1260,7 +1260,7 @@ const Cashier = () => {
                 <button
                   onClick={createManualBill}
                   disabled={processing || !isOnline}
-                  className="h-12 w-full rounded-2xl bg-zinc-950 font-black text-white disabled:opacity-50"
+                  className="h-12 w-full rounded-lg bg-zinc-950 font-bold text-white disabled:opacity-50"
                 >
                   Crear cuenta
                 </button>
@@ -1268,14 +1268,14 @@ const Cashier = () => {
             </section>
           </div>
 
-          <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
             {!selectedCuenta ? (
               <div className="flex h-full min-h-[520px] flex-col items-center justify-center text-center">
                 <Receipt size={52} className="mb-4 text-zinc-300" />
-                <h2 className="text-2xl font-black text-zinc-950">
+                <h2 className="text-2xl font-bold text-foreground">
                   Seleccioná una cuenta
                 </h2>
-                <p className="mt-2 max-w-sm text-sm text-zinc-500">
+                <p className="mt-2 max-w-sm text-sm text-muted-foreground">
                   Elegí una mesa para ver detalle, aplicar descuentos,
                   agregar productos o cobrar.
                 </p>
@@ -1284,21 +1284,21 @@ const Cashier = () => {
               <div className="space-y-8">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[0.2em] text-zinc-500">
+                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
                       Cuenta activa
                     </p>
-                    <h2 className="mt-1 text-5xl font-black tracking-tight text-zinc-950">
+                    <h2 className="mt-1 text-5xl font-bold tracking-tight text-foreground">
                       Mesa {selectedCuenta.mesa}
                     </h2>
-                    <p className="mt-3 text-sm text-zinc-500">
+                    <p className="mt-3 text-sm text-muted-foreground">
                       Método elegido por cliente:{" "}
-                      <span className="font-bold text-zinc-950">
+                      <span className="font-bold text-foreground">
                         {selectedPaymentLabel}
                       </span>
                     </p>
-                    <p className="mt-1 text-sm text-zinc-500">
+                    <p className="mt-1 text-sm text-muted-foreground">
                       Estado:{" "}
-                      <span className="font-bold capitalize text-zinc-950">
+                      <span className="font-bold capitalize text-foreground">
                         {selectedCuenta.estado}
                       </span>
                     </p>
@@ -1307,20 +1307,20 @@ const Cashier = () => {
                   <button
                      onClick={handlePrint}
                      disabled={!isOnline}
-                    className="flex h-12 items-center disabled:opacity-50 gap-2 rounded-2xl border border-zinc-200 bg-white px-4 font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                    className="flex h-12 items-center disabled:opacity-50 gap-2 rounded-lg border border-border bg-card px-4 font-semibold text-foreground transition hover:bg-secondary"
                   >
                     <Printer size={18} />
                     Imprimir pre-cuenta
                   </button>
                 </div>
 
-                <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
-                  <h3 className="mb-3 text-lg font-black text-zinc-950">
+                <div className="rounded-xl border border-border bg-secondary p-4">
+                  <h3 className="mb-3 text-lg font-bold text-foreground">
                     Detalle consumido
                   </h3>
 
                   {selectedItems.length === 0 ? (
-                    <p className="text-sm text-zinc-500">
+                    <p className="text-sm text-muted-foreground">
                       No se encontraron productos asociados a esta cuenta.
                     </p>
                   ) : (
@@ -1334,24 +1334,24 @@ const Cashier = () => {
                         return (
                           <div
                             key={`${name}-${index}`}
-                            className="rounded-2xl border border-zinc-200 bg-white px-4 py-3"
+                            className="rounded-lg border border-border bg-card px-4 py-3"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div>
-                                <p className="font-black text-zinc-950">
+                                <p className="font-bold text-foreground">
                                   {name}
                                 </p>
-                                <p className="mt-1 text-xs font-semibold text-zinc-500">
+                                <p className="mt-1 text-xs font-semibold text-muted-foreground">
                                   {quantity} x {formatPriceARS(price)}
                                 </p>
                                 {item.observacion && (
-                                  <p className="mt-1 text-xs text-amber-700">
+                                  <p className="mt-1 text-xs text-amber-400">
                                     Obs: {item.observacion}
                                   </p>
                                 )}
                               </div>
 
-                              <p className="font-black text-zinc-950">
+                              <p className="font-bold text-foreground">
                                 {formatPriceARS(subtotal)}
                               </p>
                             </div>
@@ -1365,8 +1365,8 @@ const Cashier = () => {
                 {selectedCuenta.sessionId &&
                   selectedCuenta.estado !== "pagada" &&
                   selectedCuenta.estado !== "cerrada" && (
-                <div className="rounded-3xl border border-zinc-200 bg-white p-4">
-                  <h3 className="mb-3 text-lg font-black text-zinc-950">
+                <div className="rounded-xl border border-border bg-card p-4">
+                  <h3 className="mb-3 text-lg font-bold text-foreground">
                     Agregar producto a esta cuenta
                   </h3>
 
@@ -1374,7 +1374,7 @@ const Cashier = () => {
                     <select
                       value={addSelectedMenuId}
                       onChange={(e) => setAddSelectedMenuId(e.target.value)}
-                      className="h-12 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+                      className="h-12 rounded-lg border border-border px-3 outline-none focus:ring-2 focus:ring-ring/40"
                     >
                       <option value="">Seleccionar producto</option>
                       {menuItems.map((item) => (
@@ -1389,13 +1389,13 @@ const Cashier = () => {
                       onChange={(e) => setAddQuantity(e.target.value)}
                       type="number"
                       min={1}
-                      className="h-12 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+                      className="h-12 rounded-lg border border-border px-3 outline-none focus:ring-2 focus:ring-ring/40"
                     />
 
                     <button
                       onClick={addItemToSelectedBill}
                       disabled={processing || !isOnline}
-                      className="h-12 rounded-2xl bg-zinc-950 px-5 font-black text-white disabled:opacity-50"
+                      className="h-12 rounded-lg bg-zinc-950 px-5 font-bold text-white disabled:opacity-50"
                     >
                       Agregar
                     </button>
@@ -1404,8 +1404,8 @@ const Cashier = () => {
                 )}
 
                 <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-3xl border border-zinc-200 bg-white p-4">
-                    <h3 className="mb-3 text-lg font-black text-zinc-950">
+                  <div className="rounded-xl border border-border bg-card p-4">
+                    <h3 className="mb-3 text-lg font-bold text-foreground">
                       Descuento / ajuste
                     </h3>
 
@@ -1415,7 +1415,7 @@ const Cashier = () => {
                         onChange={(e) =>
                           setDiscountType(e.target.value as CashierDiscountType)
                         }
-                        className="h-12 w-full rounded-2xl border border-zinc-200 px-3"
+                        className="h-12 w-full rounded-lg border border-border px-3"
                       >
                         <option value="none">Sin descuento</option>
                         <option value="fixed">Descuento fijo</option>
@@ -1428,14 +1428,14 @@ const Cashier = () => {
                         type="number"
                         min={0}
                         placeholder="Valor del descuento"
-                        className="h-12 w-full rounded-2xl border border-zinc-200 px-4"
+                        className="h-12 w-full rounded-lg border border-border px-4"
                       />
 
                       <input
                         value={discountReason}
                         onChange={(e) => setDiscountReason(e.target.value)}
                         placeholder="Motivo obligatorio si hay descuento"
-                        className="h-12 w-full rounded-2xl border border-zinc-200 px-4"
+                        className="h-12 w-full rounded-lg border border-border px-4"
                       />
 
                       <input
@@ -1444,28 +1444,28 @@ const Cashier = () => {
                         type="number"
                         min={0}
                         placeholder="Extra manual opcional"
-                        className="h-12 w-full rounded-2xl border border-zinc-200 px-4"
+                        className="h-12 w-full rounded-lg border border-border px-4"
                       />
 
                       <input
                         value={manualExtraReason}
                         onChange={(e) => setManualExtraReason(e.target.value)}
                         placeholder="Motivo del extra"
-                        className="h-12 w-full rounded-2xl border border-zinc-200 px-4"
+                        className="h-12 w-full rounded-lg border border-border px-4"
                       />
 
                       <button
                           onClick={saveAdjustments}
                           disabled={processing || !isOnline}
-                        className="h-12 w-full rounded-2xl bg-zinc-950 font-black text-white disabled:opacity-50"
+                        className="h-12 w-full rounded-lg bg-zinc-950 font-bold text-white disabled:opacity-50"
                       >
                         Guardar ajustes
                       </button>
                     </div>
                   </div>
 
-                  <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
-                    <h3 className="mb-3 text-lg font-black text-zinc-950">
+                  <div className="rounded-xl border border-border bg-secondary p-4">
+                    <h3 className="mb-3 text-lg font-bold text-foreground">
                       Resumen
                     </h3>
 
@@ -1475,7 +1475,7 @@ const Cashier = () => {
                         <strong>{formatPriceARS(realSubtotal)}</strong>
                       </div>
 
-                      <div className="flex justify-between text-sm text-red-600">
+                      <div className="flex justify-between text-sm text-red-400">
                         <span>Descuento</span>
                         <strong>-{formatPriceARS(discountAmount)}</strong>
                       </div>
@@ -1490,14 +1490,14 @@ const Cashier = () => {
                         <strong>{formatPriceARS(paidTotal)}</strong>
                       </div>
 
-                      <div className="border-t border-zinc-200 pt-4">
-                        <p className="text-xs font-black uppercase tracking-[0.2em] text-zinc-500">
+                      <div className="border-t border-border pt-4">
+                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
                           Total final
                         </p>
-                        <p className="mt-1 text-5xl font-black text-zinc-950">
+                        <p className="mt-1 text-5xl font-bold text-foreground">
                           {formatPriceARS(finalTotal)}
                         </p>
-                        <p className="mt-2 text-sm font-bold text-zinc-600">
+                        <p className="mt-2 text-sm font-bold text-muted-foreground">
                           Saldo pendiente: {formatPriceARS(remainingAmount)}
                         </p>
                       </div>
@@ -1505,8 +1505,8 @@ const Cashier = () => {
                   </div>
                 </div>
 
-                <div className="rounded-3xl border border-zinc-200 bg-white p-4">
-                  <h3 className="mb-4 text-lg font-black text-zinc-950">
+                <div className="rounded-xl border border-border bg-card p-4">
+                  <h3 className="mb-4 text-lg font-bold text-foreground">
                     Registrar pago
                   </h3>
 
@@ -1516,7 +1516,7 @@ const Cashier = () => {
                       onChange={(e) =>
                         setPaymentMethod(e.target.value as CashierPaymentMethod)
                       }
-                      className="h-12 rounded-2xl border border-zinc-200 px-3"
+                      className="h-12 rounded-lg border border-border px-3"
                     >
                       <option value="cash">Efectivo</option>
                       <option value="debit">Débito</option>
@@ -1533,10 +1533,10 @@ const Cashier = () => {
                       type="number"
                       min={remainingAmount}
                       placeholder="Monto"
-                      className={`h-12 rounded-2xl border px-4 ${
+                      className={`h-12 rounded-lg border px-4 ${
                         isPaymentAmountInvalid
-                          ? "border-red-300 bg-red-50"
-                          : "border-zinc-200"
+                          ? "border-red-300 bg-red-950/30"
+                          : "border-border"
                       }`}
                     />
 
@@ -1548,7 +1548,7 @@ const Cashier = () => {
                         selectedCuenta.estado === "pagada" ||
                         isPaymentAmountInvalid
                       }
-                      className="flex h-12 items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-5 font-black text-white disabled:opacity-50"
+                      className="flex h-12 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 font-bold text-white disabled:opacity-50"
                     >
                       <Wallet size={18} />
                       Cobrar
@@ -1556,7 +1556,7 @@ const Cashier = () => {
                   </div>
 
                   {isPaymentAmountInvalid && selectedCuenta.estado !== "pagada" && (
-                    <p className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+                    <p className="mt-3 rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-3 text-sm font-bold text-red-400">
                       El monto a cobrar debe ser igual o mayor al saldo pendiente:{" "}
                       {formatPriceARS(remainingAmount)}.
                     </p>
@@ -1568,7 +1568,7 @@ const Cashier = () => {
                         {selectedCuenta.payments.map((payment) => (
                           <div
                             key={payment.id}
-                            className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3"
+                            className="flex items-center justify-between rounded-lg border border-border bg-secondary px-4 py-3"
                           >
                             <span className="font-semibold">
                               {paymentLabels[payment.method] || payment.method}
@@ -1580,10 +1580,10 @@ const Cashier = () => {
                     )}
                 </div>
 
-                <div className="rounded-3xl border border-zinc-200 bg-white p-4">
+                <div className="rounded-xl border border-border bg-card p-4">
                   <div className="mb-4 flex items-center gap-2">
                     <FileText size={18} />
-                    <h3 className="text-lg font-black text-zinc-950">
+                    <h3 className="text-lg font-bold text-foreground">
                       Solicitud de factura
                     </h3>
                   </div>
@@ -1596,7 +1596,7 @@ const Cashier = () => {
                           e.target.value as "A" | "B" | "C" | "ticket"
                         )
                       }
-                      className="h-12 rounded-2xl border border-zinc-200 px-3"
+                      className="h-12 rounded-lg border border-border px-3"
                     >
                       <option value="ticket">Ticket / comprobante</option>
                       <option value="A">Factura A</option>
@@ -1608,7 +1608,7 @@ const Cashier = () => {
                       value={invoiceCustomerName}
                       onChange={(e) => setInvoiceCustomerName(e.target.value)}
                       placeholder="Nombre / Razón social"
-                      className="h-12 rounded-2xl border border-zinc-200 px-4"
+                      className="h-12 rounded-lg border border-border px-4"
                     />
 
                     <select
@@ -1622,7 +1622,7 @@ const Cashier = () => {
                             | "PASSPORT"
                         )
                       }
-                      className="h-12 rounded-2xl border border-zinc-200 px-3"
+                      className="h-12 rounded-lg border border-border px-3"
                     >
                       <option value="DNI">DNI</option>
                       <option value="CUIT">CUIT</option>
@@ -1634,69 +1634,69 @@ const Cashier = () => {
                       value={invoiceDocumentNumber}
                       onChange={(e) => setInvoiceDocumentNumber(e.target.value)}
                       placeholder="Número de documento"
-                      className="h-12 rounded-2xl border border-zinc-200 px-4"
+                      className="h-12 rounded-lg border border-border px-4"
                     />
 
                     <input
                       value={invoiceIvaCondition}
                       onChange={(e) => setInvoiceIvaCondition(e.target.value)}
                       placeholder="Condición IVA"
-                      className="h-12 rounded-2xl border border-zinc-200 px-4"
+                      className="h-12 rounded-lg border border-border px-4"
                     />
 
                     <input
                       value={invoiceFiscalRegime}
                       onChange={(e) => setInvoiceFiscalRegime(e.target.value)}
                       placeholder="Régimen fiscal"
-                      className="h-12 rounded-2xl border border-zinc-200 px-4"
+                      className="h-12 rounded-lg border border-border px-4"
                     />
 
                     <input
                       value={invoiceFiscalAddress}
                       onChange={(e) => setInvoiceFiscalAddress(e.target.value)}
                       placeholder="Dirección fiscal"
-                      className="h-12 rounded-2xl border border-zinc-200 px-4"
+                      className="h-12 rounded-lg border border-border px-4"
                     />
 
                     <input
                       value={invoicePostalCode}
                       onChange={(e) => setInvoicePostalCode(e.target.value)}
                       placeholder="Código postal"
-                      className="h-12 rounded-2xl border border-zinc-200 px-4"
+                      className="h-12 rounded-lg border border-border px-4"
                     />
 
                     <input
                       value={invoiceProvince}
                       onChange={(e) => setInvoiceProvince(e.target.value)}
                       placeholder="Provincia"
-                      className="h-12 rounded-2xl border border-zinc-200 px-4"
+                      className="h-12 rounded-lg border border-border px-4"
                     />
 
                     <input
                       value={invoiceCity}
                       onChange={(e) => setInvoiceCity(e.target.value)}
                       placeholder="Localidad"
-                      className="h-12 rounded-2xl border border-zinc-200 px-4"
+                      className="h-12 rounded-lg border border-border px-4"
                     />
 
                     <input
                       value={invoiceEmail}
                       onChange={(e) => setInvoiceEmail(e.target.value)}
                       placeholder="Email para enviar factura"
-                      className="h-12 rounded-2xl border border-zinc-200 px-4 md:col-span-2"
+                      className="h-12 rounded-lg border border-border px-4 md:col-span-2"
                     />
                   </div>
 
                   <button
                       onClick={handleRequestInvoice}
                       disabled={processing || !isOnline}
-                    className="mt-3 h-12 w-full rounded-2xl border border-zinc-200 bg-zinc-50 font-black text-zinc-800 disabled:opacity-50"
+                    className="mt-3 h-12 w-full rounded-lg border border-border bg-secondary font-bold text-zinc-800 disabled:opacity-50"
                   >
                     Guardar solicitud de factura
                   </button>
 
                   {selectedCuenta.invoice?.status && (
-                    <p className="mt-3 text-sm font-semibold text-zinc-500">
+                    <p className="mt-3 text-sm font-semibold text-muted-foreground">
                       Estado factura: {selectedCuenta.invoice.status}
                     </p>
                   )}
@@ -1711,9 +1711,9 @@ const Cashier = () => {
     {/* Opening cash dialog */}
     {showOpeningDialog && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-        <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
-          <h2 className="text-2xl font-black text-zinc-950">Apertura de caja</h2>
-          <p className="mt-2 text-sm text-zinc-500">
+        <div className="w-full max-w-sm rounded-xl bg-card p-6 shadow-2xl">
+          <h2 className="text-2xl font-bold text-foreground">Apertura de caja</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
             Ingresá el monto inicial en efectivo que tenés en la caja.
           </p>
           <input
@@ -1722,19 +1722,19 @@ const Cashier = () => {
             type="number"
             min={0}
             placeholder="$0"
-            className="mt-4 h-14 w-full rounded-2xl border border-zinc-200 px-4 text-xl font-black outline-none focus:ring-2 focus:ring-black/10"
+            className="mt-4 h-14 w-full rounded-lg border border-border px-4 text-xl font-bold outline-none focus:ring-2 focus:ring-ring/40"
             autoFocus
             onKeyDown={(e) => e.key === "Enter" && confirmOpeningCash()}
           />
           <button
             onClick={() => confirmOpeningCash()}
-            className="mt-3 h-12 w-full rounded-2xl bg-zinc-950 font-black text-white transition hover:bg-zinc-800"
+            className="mt-3 h-12 w-full rounded-lg bg-zinc-950 font-bold text-white transition hover:bg-zinc-800"
           >
             Abrir caja
           </button>
           <button
             onClick={() => confirmOpeningCash(0)}
-            className="mt-2 w-full rounded-xl py-2 text-sm font-bold text-zinc-400 transition hover:text-zinc-600"
+            className="mt-2 w-full rounded-xl py-2 text-sm font-bold text-muted-foreground transition hover:text-muted-foreground"
           >
             Continuar sin ingresar monto
           </button>
@@ -1745,12 +1745,12 @@ const Cashier = () => {
     {/* Cierre de caja modal */}
     {showCierreModal && (
       <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-4 backdrop-blur-sm sm:items-center">
-        <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
-          <div className="sticky top-0 flex items-center justify-between border-b border-zinc-200 bg-white px-6 py-4">
+        <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl bg-card shadow-2xl">
+          <div className="sticky top-0 flex items-center justify-between border-b border-border bg-card px-6 py-4">
             <div>
-              <h2 className="text-xl font-black text-zinc-950">Cierre de caja</h2>
+              <h2 className="text-xl font-bold text-foreground">Cierre de caja</h2>
               {cashSession && (
-                <p className="mt-0.5 text-xs text-zinc-500">
+                <p className="mt-0.5 text-xs text-muted-foreground">
                   Apertura:{" "}
                   {new Intl.DateTimeFormat("es-AR", {
                     dateStyle: "short",
@@ -1762,7 +1762,7 @@ const Cashier = () => {
             </div>
             <button
               onClick={() => setShowCierreModal(false)}
-              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-zinc-200 text-zinc-700 transition hover:bg-zinc-50"
+              className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-foreground transition hover:bg-secondary"
             >
               <X size={18} />
             </button>
@@ -1771,27 +1771,27 @@ const Cashier = () => {
           <div className="space-y-6 p-6">
             {/* Summary strip */}
             <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">
+              <div className="rounded-lg border border-border bg-secondary p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                   Monto inicial
                 </p>
-                <p className="mt-1 text-2xl font-black text-zinc-950">
+                <p className="mt-1 text-2xl font-bold text-foreground">
                   {formatPriceARS(cashSession?.openingCash ?? 0)}
                 </p>
               </div>
-              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">
+              <div className="rounded-lg border border-emerald-800/50 bg-emerald-950/30 p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-emerald-400">
                   Efectivo en caja
                 </p>
-                <p className="mt-1 text-2xl font-black text-emerald-900">
+                <p className="mt-1 text-2xl font-bold text-emerald-300">
                   {formatPriceARS(totalCajaActual)}
                 </p>
               </div>
-              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
-                <p className="text-xs font-bold uppercase tracking-wide text-blue-700">
+              <div className="rounded-lg border border-blue-800/50 bg-blue-950/30 p-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-blue-400">
                   Total recaudado
                 </p>
-                <p className="mt-1 text-2xl font-black text-blue-900">
+                <p className="mt-1 text-2xl font-bold text-blue-300">
                   {formatPriceARS(totalRecaudado)}
                 </p>
               </div>
@@ -1799,11 +1799,11 @@ const Cashier = () => {
 
             {/* Breakdown by payment method */}
             <div>
-              <h3 className="mb-3 text-base font-black text-zinc-950">
+              <h3 className="mb-3 text-base font-bold text-foreground">
                 Por forma de pago
               </h3>
               {Object.keys(paymentBreakdown).length === 0 ? (
-                <p className="text-sm text-zinc-500">
+                <p className="text-sm text-muted-foreground">
                   No hay cuentas cobradas en este turno.
                 </p>
               ) : (
@@ -1818,17 +1818,17 @@ const Cashier = () => {
                     .map(([method, data]) => (
                       <div
                         key={method}
-                        className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3"
+                        className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3"
                       >
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-black text-zinc-950">
+                          <span className="text-sm font-bold text-foreground">
                             {paymentLabels[method] || method}
                           </span>
-                          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-bold text-zinc-600">
+                          <span className="rounded-full bg-background px-2 py-0.5 text-xs font-bold text-muted-foreground">
                             {data.count} cuenta{data.count !== 1 ? "s" : ""}
                           </span>
                         </div>
-                        <span className="text-base font-black text-zinc-950">
+                        <span className="text-base font-bold text-foreground">
                           {formatPriceARS(data.total)}
                         </span>
                       </div>
@@ -1840,7 +1840,7 @@ const Cashier = () => {
             {/* List of paid cuentas */}
             {paidCuentasToday.length > 0 && (
               <div>
-                <h3 className="mb-3 text-base font-black text-zinc-950">
+                <h3 className="mb-3 text-base font-bold text-foreground">
                   Cuentas cobradas ({paidCuentasToday.length})
                 </h3>
                 <div className="space-y-2">
@@ -1852,17 +1852,17 @@ const Cashier = () => {
                     return (
                       <div
                         key={cuenta.id}
-                        className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-3"
+                        className="flex items-center justify-between rounded-lg border border-border bg-secondary px-4 py-3"
                       >
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-black text-zinc-950">
+                          <span className="text-sm font-bold text-foreground">
                             Mesa {cuenta.mesa}
                           </span>
-                          <span className="rounded-full border border-zinc-200 bg-white px-2 py-0.5 text-xs font-bold text-zinc-600">
+                          <span className="rounded-full border border-border bg-card px-2 py-0.5 text-xs font-bold text-muted-foreground">
                             {paymentLabels[method] || method}
                           </span>
                         </div>
-                        <span className="text-sm font-black text-zinc-950">
+                        <span className="text-sm font-bold text-foreground">
                           {formatPriceARS(
                             cuenta.paidAmount != null && cuenta.paidAmount > 0
                               ? cuenta.paidAmount
@@ -1877,7 +1877,7 @@ const Cashier = () => {
             )}
             {/* Manual adjustments */}
             <div>
-              <h3 className="mb-3 text-base font-black text-zinc-950">
+              <h3 className="mb-3 text-base font-bold text-foreground">
                 Ajustes de caja
               </h3>
 
@@ -1887,7 +1887,7 @@ const Cashier = () => {
                     onClick={() =>
                       setAdjustForm({ type: "add", amount: "", reason: "" })
                     }
-                    className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-2xl border border-emerald-200 bg-emerald-50 text-sm font-black text-emerald-700 transition hover:bg-emerald-100"
+                    className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-lg border border-emerald-800/50 bg-emerald-950/30 text-sm font-bold text-emerald-400 transition hover:bg-emerald-100"
                   >
                     + Agregar monto
                   </button>
@@ -1895,20 +1895,20 @@ const Cashier = () => {
                     onClick={() =>
                       setAdjustForm({ type: "deduct", amount: "", reason: "" })
                     }
-                    className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-2xl border border-red-200 bg-red-50 text-sm font-black text-red-700 transition hover:bg-red-100"
+                    className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-lg border border-red-800/50 bg-red-950/30 text-sm font-bold text-red-400 transition hover:bg-red-100"
                   >
                     − Descontar monto
                   </button>
                 </div>
               ) : (
                 <div
-                  className={`rounded-2xl border p-4 ${
+                  className={`rounded-lg border p-4 ${
                     adjustForm.type === "add"
-                      ? "border-emerald-200 bg-emerald-50"
-                      : "border-red-200 bg-red-50"
+                      ? "border-emerald-800/50 bg-emerald-950/30"
+                      : "border-red-800/50 bg-red-950/30"
                   }`}
                 >
-                  <p className="mb-3 text-sm font-black text-zinc-950">
+                  <p className="mb-3 text-sm font-bold text-foreground">
                     {adjustForm.type === "add" ? "Agregar monto" : "Descontar monto"}
                   </p>
                   <div className="space-y-2">
@@ -1920,7 +1920,7 @@ const Cashier = () => {
                       onChange={(e) =>
                         setAdjustForm((f) => f && { ...f, amount: e.target.value })
                       }
-                      className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold outline-none focus:ring-2 focus:ring-black/10"
+                      className="h-11 w-full rounded-xl border border-border bg-card px-4 text-sm font-semibold outline-none focus:ring-2 focus:ring-ring/40"
                       autoFocus
                     />
                     <input
@@ -1930,7 +1930,7 @@ const Cashier = () => {
                       onChange={(e) =>
                         setAdjustForm((f) => f && { ...f, reason: e.target.value })
                       }
-                      className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold outline-none focus:ring-2 focus:ring-black/10"
+                      className="h-11 w-full rounded-xl border border-border bg-card px-4 text-sm font-semibold outline-none focus:ring-2 focus:ring-ring/40"
                       onKeyDown={(e) => e.key === "Enter" && saveAdjustment()}
                     />
                     <div className="flex gap-2">
@@ -1941,7 +1941,7 @@ const Cashier = () => {
                           Number(adjustForm.amount) <= 0 ||
                           !adjustForm.reason.trim()
                         }
-                        className={`h-10 flex-1 rounded-xl font-black text-sm text-white transition disabled:opacity-40 ${
+                        className={`h-10 flex-1 rounded-xl font-bold text-sm text-white transition disabled:opacity-40 ${
                           adjustForm.type === "add"
                             ? "bg-emerald-600 hover:bg-emerald-700"
                             : "bg-red-600 hover:bg-red-700"
@@ -1951,7 +1951,7 @@ const Cashier = () => {
                       </button>
                       <button
                         onClick={() => setAdjustForm(null)}
-                        className="h-10 rounded-xl border border-zinc-200 bg-white px-4 text-sm font-bold text-zinc-600 transition hover:bg-zinc-50"
+                        className="h-10 rounded-xl border border-border bg-card px-4 text-sm font-bold text-muted-foreground transition hover:bg-secondary"
                       >
                         Cancelar
                       </button>
@@ -1965,24 +1965,24 @@ const Cashier = () => {
                   {cashSession!.adjustments!.map((adj) => (
                     <div
                       key={adj.id}
-                      className={`flex items-center justify-between rounded-2xl border px-4 py-3 ${
+                      className={`flex items-center justify-between rounded-lg border px-4 py-3 ${
                         adj.type === "add"
-                          ? "border-emerald-200 bg-emerald-50"
-                          : "border-red-200 bg-red-50"
+                          ? "border-emerald-800/50 bg-emerald-950/30"
+                          : "border-red-800/50 bg-red-950/30"
                       }`}
                     >
                       <div>
                         <span
-                          className={`text-sm font-black ${
-                            adj.type === "add" ? "text-emerald-800" : "text-red-800"
+                          className={`text-sm font-bold ${
+                            adj.type === "add" ? "text-emerald-400" : "text-red-800"
                           }`}
                         >
                           {adj.type === "add" ? "+" : "−"}{" "}
                           {formatPriceARS(adj.amount)}
                         </span>
-                        <p className="mt-0.5 text-xs text-zinc-500">{adj.reason}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">{adj.reason}</p>
                       </div>
-                      <span className="text-xs text-zinc-400">
+                      <span className="text-xs text-muted-foreground">
                         {new Intl.DateTimeFormat("es-AR", {
                           timeStyle: "short",
                         }).format(new Date(adj.createdAt))}
@@ -1993,11 +1993,11 @@ const Cashier = () => {
               )}
             </div>
             {/* Close register */}
-            <div className="border-t border-zinc-200 pt-4">
+            <div className="border-t border-border pt-4">
               <button
                 onClick={handleCierreCaja}
                 disabled={closingCaja}
-                className="h-13 w-full rounded-2xl bg-zinc-950 font-black text-white transition hover:bg-zinc-800 disabled:opacity-50 py-3"
+                className="h-13 w-full rounded-lg bg-zinc-950 font-bold text-white transition hover:bg-zinc-800 disabled:opacity-50 py-3"
               >
                 {closingCaja ? "Registrando cierre..." : "Cerrar caja y registrar auditoría"}
               </button>

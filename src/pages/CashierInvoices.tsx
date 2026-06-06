@@ -99,19 +99,19 @@ const TABS: { key: TabKey; label: string; color: string; activeClass: string }[]
   {
     key: "requested",
     label: "Pendientes",
-    color: "text-amber-700",
+    color: "text-amber-400",
     activeClass: "bg-amber-600 text-white border-amber-600",
   },
   {
     key: "issued",
     label: "Emitidas",
-    color: "text-emerald-700",
+    color: "text-emerald-400",
     activeClass: "bg-emerald-600 text-white border-emerald-600",
   },
   {
     key: "failed",
     label: "Fallidas",
-    color: "text-red-700",
+    color: "text-red-400",
     activeClass: "bg-red-600 text-white border-red-600",
   },
 ];
@@ -289,34 +289,34 @@ const CashierInvoices = () => {
 
   if (!restaurantId) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
-        <div className="rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm">
-          <h1 className="text-lg font-black text-zinc-950">Falta restaurante activo</h1>
-          <p className="mt-2 text-sm text-zinc-600">Entrá con una URL que tenga restaurantId.</p>
+      <div className="flex min-h-screen items-center justify-center bg-background p-6">
+        <div className="rounded-xl border border-red-800/50 bg-card p-6 text-center shadow-sm">
+          <h1 className="text-lg font-bold text-foreground">Falta restaurante activo</h1>
+          <p className="mt-2 text-sm text-muted-foreground">Entrá con una URL que tenga restaurantId.</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-zinc-100">
+    <div className="min-h-screen bg-background">
       <div className="mx-auto max-w-7xl px-4 py-6">
         {/* Header */}
         <header className="mb-6">
           <button
             onClick={() => navigate(-1)}
-            className="mb-4 flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-2 text-sm font-black text-zinc-700 shadow-sm transition hover:bg-zinc-50"
+            className="mb-4 flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-bold text-foreground shadow-sm transition hover:bg-secondary"
           >
             <ArrowLeft size={15} />
             Volver al admin
           </button>
-          <p className="text-xs font-black uppercase tracking-[0.25em] text-zinc-500">
+          <p className="text-xs font-bold uppercase tracking-[0.25em] text-muted-foreground">
             WANT Fiscal
           </p>
-          <h1 className="mt-1 text-4xl font-black tracking-tight text-zinc-950">
+          <h1 className="mt-1 text-4xl font-bold tracking-tight text-foreground">
             Solicitudes de factura
           </h1>
-          <p className="mt-2 text-sm text-zinc-500">
+          <p className="mt-2 text-sm text-muted-foreground">
             Bandeja manual para emitir facturas en sistema fiscal externo y registrar el resultado.
           </p>
         </header>
@@ -325,47 +325,47 @@ const CashierInvoices = () => {
         <div className="mb-6 grid grid-cols-3 gap-3">
           <button
             onClick={() => handleTabChange("requested")}
-            className={`rounded-3xl border px-5 py-4 shadow-sm text-left transition ${
+            className={`rounded-xl border px-5 py-4 shadow-sm text-left transition ${
               activeTab === "requested"
-                ? "border-amber-300 bg-amber-50 ring-2 ring-amber-200"
-                : "border-zinc-200 bg-white hover:border-zinc-300"
+                ? "border-amber-300 bg-amber-950/30 ring-2 ring-amber-200"
+                : "border-border bg-card hover:border-zinc-300"
             }`}
           >
             <div className="flex items-center gap-2 mb-1">
-              <Clock size={15} className="text-amber-600" />
-              <p className="text-xs font-bold uppercase tracking-wide text-amber-700">Pendientes</p>
+              <Clock size={15} className="text-amber-400" />
+              <p className="text-xs font-bold uppercase tracking-wide text-amber-400">Pendientes</p>
             </div>
-            <p className="text-3xl font-black text-zinc-950">{invoiceRequests.length}</p>
+            <p className="text-3xl font-bold text-foreground">{invoiceRequests.length}</p>
           </button>
 
           <button
             onClick={() => handleTabChange("issued")}
-            className={`rounded-3xl border px-5 py-4 shadow-sm text-left transition ${
+            className={`rounded-xl border px-5 py-4 shadow-sm text-left transition ${
               activeTab === "issued"
-                ? "border-emerald-300 bg-emerald-50 ring-2 ring-emerald-200"
-                : "border-zinc-200 bg-white hover:border-zinc-300"
+                ? "border-emerald-300 bg-emerald-950/30 ring-2 ring-emerald-200"
+                : "border-border bg-card hover:border-zinc-300"
             }`}
           >
             <div className="flex items-center gap-2 mb-1">
               <CheckCircle2 size={15} className="text-emerald-600" />
-              <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Emitidas</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-emerald-400">Emitidas</p>
             </div>
-            <p className="text-3xl font-black text-zinc-950">{issuedInvoices.length}</p>
+            <p className="text-3xl font-bold text-foreground">{issuedInvoices.length}</p>
           </button>
 
           <button
             onClick={() => handleTabChange("failed")}
-            className={`rounded-3xl border px-5 py-4 shadow-sm text-left transition ${
+            className={`rounded-xl border px-5 py-4 shadow-sm text-left transition ${
               activeTab === "failed"
-                ? "border-red-300 bg-red-50 ring-2 ring-red-200"
-                : "border-zinc-200 bg-white hover:border-zinc-300"
+                ? "border-red-300 bg-red-950/30 ring-2 ring-red-200"
+                : "border-border bg-card hover:border-zinc-300"
             }`}
           >
             <div className="flex items-center gap-2 mb-1">
               <XCircle size={15} className="text-red-500" />
-              <p className="text-xs font-bold uppercase tracking-wide text-red-700">Fallidas</p>
+              <p className="text-xs font-bold uppercase tracking-wide text-red-400">Fallidas</p>
             </div>
-            <p className="text-3xl font-black text-zinc-950">{failedInvoices.length}</p>
+            <p className="text-3xl font-bold text-foreground">{failedInvoices.length}</p>
           </button>
         </div>
 
@@ -382,16 +382,16 @@ const CashierInvoices = () => {
               <button
                 key={tab.key}
                 onClick={() => handleTabChange(tab.key)}
-                className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-black transition ${
+                className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-bold transition ${
                   activeTab === tab.key
                     ? tab.activeClass
-                    : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
+                    : "border-border bg-card text-muted-foreground hover:bg-secondary"
                 }`}
               >
                 {tab.label}
                 <span
-                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-black ${
-                    activeTab === tab.key ? "bg-white/25" : "bg-zinc-100 text-zinc-500"
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                    activeTab === tab.key ? "bg-white/25" : "bg-background text-muted-foreground"
                   }`}
                 >
                   {count}
@@ -403,10 +403,10 @@ const CashierInvoices = () => {
 
         <div className="grid gap-6 lg:grid-cols-[430px_1fr]">
           {/* Left: list */}
-          <section className="rounded-3xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <section className="rounded-xl border border-border bg-card p-4 shadow-sm">
             <div className="mb-4 flex items-center gap-2">
-              <FileText size={18} className="text-zinc-500" />
-              <h2 className="text-base font-black text-zinc-950">
+              <FileText size={18} className="text-muted-foreground" />
+              <h2 className="text-base font-bold text-foreground">
                 {activeTab === "requested"
                   ? "Solicitudes pendientes"
                   : activeTab === "issued"
@@ -416,13 +416,13 @@ const CashierInvoices = () => {
             </div>
 
             {loading ? (
-              <p className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">
+              <p className="rounded-lg border border-border bg-secondary p-4 text-sm text-muted-foreground">
                 Cargando...
               </p>
             ) : activeList.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-6 text-center">
-                <AlertTriangle className="mx-auto mb-3 text-zinc-400" />
-                <p className="font-semibold text-zinc-700">
+              <div className="rounded-lg border border-dashed border-zinc-300 bg-secondary p-6 text-center">
+                <AlertTriangle className="mx-auto mb-3 text-muted-foreground" />
+                <p className="font-semibold text-foreground">
                   {activeTab === "requested"
                     ? "No hay solicitudes pendientes"
                     : activeTab === "issued"
@@ -445,47 +445,47 @@ const CashierInvoices = () => {
                     <button
                       key={cuenta.id}
                       onClick={() => setSelectedId(cuenta.id)}
-                      className={`w-full rounded-2xl border p-4 text-left transition ${
+                      className={`w-full rounded-lg border p-4 text-left transition ${
                         selected
                           ? "border-zinc-950 bg-zinc-950 text-white"
-                          : "border-zinc-200 bg-zinc-50 hover:border-zinc-300 hover:bg-white"
+                          : "border-border bg-secondary hover:border-zinc-300 hover:bg-card"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p
-                            className={`text-[11px] font-black uppercase tracking-wide ${
-                              selected ? "text-white/60" : "text-zinc-500"
+                            className={`text-[11px] font-bold uppercase tracking-wide ${
+                              selected ? "text-white/60" : "text-muted-foreground"
                             }`}
                           >
                             Mesa {cuenta.mesa}
                             {cuenta.invoice?.type && ` · Tipo ${cuenta.invoice.type}`}
                           </p>
-                          <p className="mt-1 truncate font-black">
+                          <p className="mt-1 truncate font-bold">
                             {cuenta.invoice?.customerName || "Cliente"}
                           </p>
                           <p
-                            className={`mt-0.5 text-xs ${selected ? "text-white/60" : "text-zinc-500"}`}
+                            className={`mt-0.5 text-xs ${selected ? "text-white/60" : "text-muted-foreground"}`}
                           >
                             {cuenta.invoice?.documentType} {cuenta.invoice?.documentNumber}
                           </p>
                           {activeTab === "issued" && cuenta.invoice?.invoiceNumber && (
                             <p
-                              className={`mt-0.5 text-xs font-bold ${selected ? "text-white/80" : "text-emerald-700"}`}
+                              className={`mt-0.5 text-xs font-bold ${selected ? "text-white/80" : "text-emerald-400"}`}
                             >
                               Nro. {cuenta.invoice.invoiceNumber}
                             </p>
                           )}
                           {activeTab === "failed" && cuenta.invoice?.failureReason && (
                             <p
-                              className={`mt-0.5 text-xs ${selected ? "text-red-300" : "text-red-600"}`}
+                              className={`mt-0.5 text-xs ${selected ? "text-red-300" : "text-red-400"}`}
                             >
                               {cuenta.invoice.failureReason}
                             </p>
                           )}
                           {ts && (
                             <p
-                              className={`mt-0.5 text-[11px] ${selected ? "text-white/50" : "text-zinc-400"}`}
+                              className={`mt-0.5 text-[11px] ${selected ? "text-white/50" : "text-muted-foreground"}`}
                             >
                               {ts}
                             </p>
@@ -493,7 +493,7 @@ const CashierInvoices = () => {
                         </div>
 
                         <div className="shrink-0 text-right">
-                          <p className="text-lg font-black">{formatPriceARS(cuenta.total)}</p>
+                          <p className="text-lg font-bold">{formatPriceARS(cuenta.total)}</p>
                         </div>
                       </div>
                     </button>
@@ -504,14 +504,14 @@ const CashierInvoices = () => {
           </section>
 
           {/* Right: detail */}
-          <section className="rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <section className="rounded-xl border border-border bg-card p-6 shadow-sm">
             {!selectedCuenta ? (
               <div className="flex h-full min-h-[480px] flex-col items-center justify-center text-center">
                 <Receipt size={52} className="mb-4 text-zinc-300" />
-                <h2 className="text-2xl font-black text-zinc-950">
+                <h2 className="text-2xl font-bold text-foreground">
                   Seleccioná una factura
                 </h2>
-                <p className="mt-2 max-w-sm text-sm text-zinc-500">
+                <p className="mt-2 max-w-sm text-sm text-muted-foreground">
                   {activeTab === "requested"
                     ? "Elegí una solicitud pendiente para ver los datos fiscales y marcarla como emitida o fallida."
                     : "Elegí un registro para ver todos los datos fiscales asociados."}
@@ -521,23 +521,23 @@ const CashierInvoices = () => {
               <div className="space-y-5">
                 {/* Title */}
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-zinc-500">
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
                     {activeTab === "requested"
                       ? "Solicitud pendiente"
                       : activeTab === "issued"
                         ? "Factura emitida"
                         : "Factura fallida"}
                   </p>
-                  <h2 className="mt-1 text-5xl font-black tracking-tight text-zinc-950">
+                  <h2 className="mt-1 text-5xl font-bold tracking-tight text-foreground">
                     Mesa {selectedCuenta.mesa}
                   </h2>
-                  <p className="mt-2 text-sm text-zinc-500">
+                  <p className="mt-2 text-sm text-muted-foreground">
                     Total:{" "}
-                    <span className="font-black text-zinc-950">
+                    <span className="font-bold text-foreground">
                       {formatPriceARS(selectedCuenta.total)}
                     </span>
                     {selectedCuenta.invoice?.type && (
-                      <span className="ml-3 rounded-full border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-xs font-black text-zinc-700">
+                      <span className="ml-3 rounded-full border border-border bg-background px-2 py-0.5 text-xs font-bold text-foreground">
                         Tipo {selectedCuenta.invoice.type}
                       </span>
                     )}
@@ -601,10 +601,10 @@ const CashierInvoices = () => {
 
                 {/* Issued details */}
                 {activeTab === "issued" && (
-                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                  <div className="rounded-lg border border-emerald-800/50 bg-emerald-950/30 p-4">
                     <div className="mb-3 flex items-center gap-2">
                       <CheckCircle2 size={16} className="text-emerald-600" />
-                      <h3 className="font-black text-emerald-900">Datos de emisión</h3>
+                      <h3 className="font-bold text-emerald-300">Datos de emisión</h3>
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
                       <InfoCard
@@ -620,15 +620,15 @@ const CashierInvoices = () => {
                         value={formatTs(selectedCuenta.invoice?.issuedAt)}
                       />
                       {selectedCuenta.invoice?.invoiceUrl ? (
-                        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                          <p className="text-xs font-black uppercase tracking-wide text-zinc-500">
+                        <div className="rounded-lg border border-border bg-secondary p-4">
+                          <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                             PDF / URL
                           </p>
                           <a
                             href={selectedCuenta.invoice.invoiceUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="mt-2 flex items-center gap-1.5 text-sm font-bold text-emerald-700 underline underline-offset-2"
+                            className="mt-2 flex items-center gap-1.5 text-sm font-bold text-emerald-400 underline underline-offset-2"
                           >
                             <ExternalLink size={13} />
                             Ver factura
@@ -640,7 +640,7 @@ const CashierInvoices = () => {
                     </div>
                     <button
                       onClick={() => reopenRequest(selectedCuenta)}
-                      className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-2xl border border-emerald-300 bg-white text-sm font-black text-emerald-800 transition hover:bg-emerald-100"
+                      className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-card text-sm font-bold text-emerald-400 transition hover:bg-emerald-100"
                     >
                       <RotateCcw size={14} />
                       Reabrir como pendiente
@@ -650,10 +650,10 @@ const CashierInvoices = () => {
 
                 {/* Failed details */}
                 {activeTab === "failed" && (
-                  <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
+                  <div className="rounded-lg border border-red-800/50 bg-red-950/30 p-4">
                     <div className="mb-3 flex items-center gap-2">
                       <XCircle size={16} className="text-red-500" />
-                      <h3 className="font-black text-red-900">Motivo del fallo</h3>
+                      <h3 className="font-bold text-red-900">Motivo del fallo</h3>
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
                       <InfoCard
@@ -667,7 +667,7 @@ const CashierInvoices = () => {
                     </div>
                     <button
                       onClick={() => reopenRequest(selectedCuenta)}
-                      className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-2xl border border-red-300 bg-white text-sm font-black text-red-800 transition hover:bg-red-100"
+                      className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-red-300 bg-card text-sm font-bold text-red-800 transition hover:bg-red-100"
                     >
                       <RotateCcw size={14} />
                       Reabrir como pendiente
@@ -678,50 +678,50 @@ const CashierInvoices = () => {
                 {/* Pending actions */}
                 {activeTab === "requested" && (
                   <>
-                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-                      <h3 className="mb-3 font-black text-zinc-950">Registrar emisión manual</h3>
+                    <div className="rounded-lg border border-border bg-secondary p-4">
+                      <h3 className="mb-3 font-bold text-foreground">Registrar emisión manual</h3>
                       <div className="grid gap-3 md:grid-cols-2">
                         <input
                           value={invoiceNumber}
                           onChange={(e) => setInvoiceNumber(e.target.value)}
                           placeholder="Número de factura / comprobante"
-                          className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-black/10"
+                          className="h-12 rounded-lg border border-border bg-card px-4 text-sm outline-none focus:ring-2 focus:ring-ring/40"
                         />
                         <input
                           value={cae}
                           onChange={(e) => setCae(e.target.value)}
                           placeholder="CAE (opcional)"
-                          className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-black/10"
+                          className="h-12 rounded-lg border border-border bg-card px-4 text-sm outline-none focus:ring-2 focus:ring-ring/40"
                         />
                         <input
                           value={invoiceUrl}
                           onChange={(e) => setInvoiceUrl(e.target.value)}
                           placeholder="URL PDF (opcional)"
-                          className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-black/10 md:col-span-2"
+                          className="h-12 rounded-lg border border-border bg-card px-4 text-sm outline-none focus:ring-2 focus:ring-ring/40 md:col-span-2"
                         />
                       </div>
                       <button
                         onClick={markIssued}
                         disabled={saving}
-                        className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 font-black text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                        className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50"
                       >
                         <CheckCircle2 size={17} />
                         Marcar como emitida
                       </button>
                     </div>
 
-                    <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
-                      <h3 className="mb-3 font-black text-red-900">Marcar como fallida</h3>
+                    <div className="rounded-lg border border-red-800/50 bg-red-950/30 p-4">
+                      <h3 className="mb-3 font-bold text-red-900">Marcar como fallida</h3>
                       <input
                         value={failureReason}
                         onChange={(e) => setFailureReason(e.target.value)}
                         placeholder="Motivo del fallo"
-                        className="h-12 w-full rounded-2xl border border-red-200 bg-white px-4 text-sm outline-none focus:ring-2 focus:ring-red-200"
+                        className="h-12 w-full rounded-lg border border-red-800/50 bg-card px-4 text-sm outline-none focus:ring-2 focus:ring-red-200"
                       />
                       <button
                         onClick={markFailed}
                         disabled={saving}
-                        className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-red-600 font-black text-white transition hover:bg-red-700 disabled:opacity-50"
+                        className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-lg bg-red-600 font-bold text-white transition hover:bg-red-700 disabled:opacity-50"
                       >
                         <XCircle size={17} />
                         Marcar como fallida
@@ -747,12 +747,12 @@ const InfoCard = ({
   value?: string | number | null;
   icon?: React.ReactNode;
 }) => (
-  <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3.5">
-    <div className="flex items-center gap-1.5 text-[11px] font-black uppercase tracking-wide text-zinc-500">
+  <div className="rounded-lg border border-border bg-secondary p-3.5">
+    <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
       {icon}
       <span>{label}</span>
     </div>
-    <p className="mt-1.5 break-words text-sm font-bold text-zinc-950">
+    <p className="mt-1.5 break-words text-sm font-bold text-foreground">
       {value || "—"}
     </p>
   </div>

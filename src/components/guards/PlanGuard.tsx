@@ -21,8 +21,8 @@ const PlanGuard = ({ feature, children }: Props) => {
 
   if (restaurantLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-100">
-        <p className="text-sm font-semibold text-zinc-500">
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <p className="text-sm font-semibold text-muted-foreground">
           Verificando plan...
         </p>
       </div>

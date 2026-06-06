@@ -285,11 +285,11 @@ const Runner = () => {
     const minutes = getElapsedMinutes(value);
 
     if (minutes >= DANGER_MINUTES) {
-      return "bg-red-50 text-red-700 border border-red-200";
+      return "bg-red-950/30 text-red-400 border border-red-800/50";
     }
 
     if (minutes >= WARNING_MINUTES) {
-      return "bg-amber-50 text-amber-800 border border-amber-200";
+      return "bg-amber-950/30 text-amber-400 border border-amber-800/50";
     }
 
     return "bg-slate-100 text-slate-700 border border-slate-200";
@@ -490,18 +490,18 @@ const Runner = () => {
       <motion.div
         key={req.id}
         layout
-        className={`rounded-3xl border border-slate-200 bg-white p-4 shadow-sm ${isNew ? "ring-2 ring-orange-300" : ""}`}
+        className={`rounded-xl border border-slate-200 bg-card p-4 shadow-sm ${isNew ? "ring-2 ring-orange-300" : ""}`}
       >
         <div className="mb-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <span className="text-3xl">{info.emoji}</span>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-xl font-black tracking-tight text-slate-900">
+                <h2 className="text-xl font-bold tracking-tight text-slate-900">
                   Mesa {req.mesa}
                 </h2>
                 {isNew && (
-                  <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide text-white">
+                  <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
                     Nuevo
                   </span>
                 )}
@@ -513,7 +513,7 @@ const Runner = () => {
 
         <button
           onClick={() => void markResolved(req.id)}
-          className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 text-sm font-extrabold text-white transition active:scale-[0.99]"
+          className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-slate-900 text-sm font-semibold text-white transition active:scale-[0.99]"
         >
           Marcar atendido
         </button>
@@ -687,7 +687,7 @@ const Runner = () => {
     }
 
     if (metodo === "debit" || metodo === "credit") {
-      return "bg-blue-100 text-blue-700 border border-blue-300";
+      return "bg-blue-100 text-blue-400 border border-blue-300";
     }
 
     if (metodo === "transfer") {
@@ -706,7 +706,7 @@ const Runner = () => {
 
     return (
       <div className="space-y-2">
-        <div className="flex items-center gap-2 text-xs font-extrabold uppercase tracking-wide text-slate-500">
+        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
           {icon === "food" && <Utensils size={13} />}
           {icon === "drinks" && <Wine size={13} />}
           <span>{title}</span>
@@ -723,7 +723,7 @@ const Runner = () => {
             return (
               <div
                 key={`${item.nombre}-${observation || "sin-observacion"}-${i}`}
-                className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3"
+                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -732,7 +732,7 @@ const Runner = () => {
                     </p>
                   </div>
 
-                  <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-extrabold text-slate-700 border border-slate-200">
+                  <span className="shrink-0 rounded-full bg-card px-2.5 py-1 text-xs font-semibold text-slate-700 border border-slate-200">
                     x{item.cantidad}
                   </span>
                 </div>
@@ -742,10 +742,10 @@ const Runner = () => {
                     <div className="flex items-start gap-2">
                       <MessageSquareText
                         size={14}
-                        className="mt-0.5 shrink-0 text-amber-900"
+                        className="mt-0.5 shrink-0 text-amber-300"
                       />
                       <div className="min-w-0">
-                        <p className="mb-1 text-[11px] font-extrabold uppercase tracking-wide text-amber-900">
+                        <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-300">
                           OBS
                         </p>
                         <p className="text-sm font-semibold leading-snug text-amber-950 break-words">
@@ -772,19 +772,19 @@ const Runner = () => {
       <motion.div
         key={task.id}
         layout
-        className={`rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 ${getTaskCardStyles(
+        className={`rounded-xl border border-slate-200 bg-card p-4 shadow-sm transition-all duration-200 ${getTaskCardStyles(
           task
         )} ${isNew ? "ring-2 ring-orange-300" : ""}`}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-black tracking-tight text-slate-900">
+              <h2 className="text-xl font-bold tracking-tight text-slate-900">
                 Mesa {task.order.mesa}
               </h2>
 
               {isNew && (
-                <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide text-white">
+                <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
                   Nuevo
                 </span>
               )}
@@ -800,10 +800,10 @@ const Runner = () => {
               </div>
 
               <span
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide ${
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-wide ${
                   isFood
-                    ? "border-emerald-200 bg-emerald-100 text-emerald-700"
-                    : "border-blue-200 bg-blue-100 text-blue-700"
+                    ? "border-emerald-800/50 bg-emerald-100 text-emerald-400"
+                    : "border-blue-800/50 bg-blue-100 text-blue-400"
                 }`}
               >
                 {isFood ? <Utensils size={13} /> : <Wine size={13} />}
@@ -811,7 +811,7 @@ const Runner = () => {
               </span>
 
               {hasFood(task.order) && hasDrinks(task.order) && (
-                <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-100 px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide text-amber-800">
+                <span className="inline-flex items-center rounded-full border border-amber-800/50 bg-amber-100 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-amber-400">
                   Entrega parcial
                 </span>
               )}
@@ -830,7 +830,7 @@ const Runner = () => {
         <button
           onClick={() => markDelivered(task)}
           disabled={isLoading || !isOnline}
-          className={`mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl px-4 text-sm font-extrabold text-white transition-all duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 ${
+          className={`mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-lg px-4 text-sm font-semibold text-white transition-all duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 ${
             isFood ? "bg-emerald-600" : "bg-blue-600"
           }`}
         >
@@ -855,7 +855,7 @@ const Runner = () => {
       <motion.div
         key={bill.id}
         layout
-        className={`rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 ${getBillCardStyles(
+        className={`rounded-xl border border-slate-200 bg-card p-4 shadow-sm transition-all duration-200 ${getBillCardStyles(
           bill
         )} ${bill.estado === "pendiente" ? "ring-1 ring-red-200" : ""} ${
           isNew ? "ring-2 ring-orange-300" : ""
@@ -864,12 +864,12 @@ const Runner = () => {
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-black tracking-tight text-slate-900">
+              <h2 className="text-xl font-bold tracking-tight text-slate-900">
                 Mesa {bill.mesa}
               </h2>
 
               {isNew && (
-                <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide text-white">
+                <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
                   Nuevo
                 </span>
               )}
@@ -887,14 +887,14 @@ const Runner = () => {
           </div>
 
           <span
-            className={`inline-flex rounded-full px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide ${
+            className={`inline-flex rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide ${
               bill.estado === "pendiente"
-                ? "bg-red-100 text-red-700 border border-red-200"
+                ? "bg-red-100 text-red-400 border border-red-800/50"
                 : bill.estado === "en_camino"
-                  ? "bg-blue-100 text-blue-700 border border-blue-200"
+                  ? "bg-blue-100 text-blue-400 border border-blue-800/50"
                   : bill.estado === "pagada"
-                    ? "bg-amber-100 text-amber-700 border border-amber-200"
-                    : "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                    ? "bg-amber-100 text-amber-400 border border-amber-800/50"
+                    : "bg-emerald-100 text-emerald-400 border border-emerald-800/50"
             }`}
           >
             {bill.estado === "pendiente"
@@ -918,17 +918,17 @@ const Runner = () => {
           </span>
         </div>
 
-        <div className="rounded-2xl bg-slate-50 p-3">
+        <div className="rounded-lg bg-slate-50 p-3">
           <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
             Total
           </p>
-          <p className="mt-1 text-3xl font-black tracking-tight text-slate-900">
+          <p className="mt-1 text-3xl font-bold tracking-tight text-slate-900">
             ${Number(bill.total || 0).toFixed(2)}
           </p>
         </div>
 
         {bill.estado === "pendiente" && (
-          <p className="mt-3 text-sm font-semibold text-red-600">
+          <p className="mt-3 text-sm font-semibold text-red-400">
             Nueva solicitud de cuenta
           </p>
         )}
@@ -940,7 +940,7 @@ const Runner = () => {
         )}
 
         {bill.estado === "pagada" && (
-          <p className="mt-3 text-sm font-semibold text-amber-600">
+          <p className="mt-3 text-sm font-semibold text-amber-400">
             Pago registrado. Falta marcar mesa limpia.
           </p>
         )}
@@ -950,7 +950,7 @@ const Runner = () => {
             <button
               onClick={() => updateBill(bill.id, "en_camino")}
               disabled={isLoading || !isOnline}
-              className="flex h-12 items-center justify-center rounded-2xl bg-slate-900 px-4 text-sm font-extrabold text-white transition-all duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-12 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white transition-all duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading ? "Actualizando..." : "Llevar cuenta"}
             </button>
@@ -960,7 +960,7 @@ const Runner = () => {
             <button
               onClick={() => updateBill(bill.id, "pagada")}
               disabled={isLoading || !isOnline}
-              className="flex h-12 items-center justify-center rounded-2xl bg-emerald-600 px-4 text-sm font-extrabold text-white transition-all duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-12 items-center justify-center rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white transition-all duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isLoading ? "Actualizando..." : "Marcar pagada"}
             </button>
@@ -970,7 +970,7 @@ const Runner = () => {
             <button
               onClick={() => handleMesaLimpia(bill)}
               disabled={isLoading || !isOnline}
-              className="flex h-12 items-center justify-center rounded-2xl bg-slate-900 px-4 text-sm font-extrabold text-white transition-all duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2"
+              className="flex h-12 items-center justify-center rounded-lg bg-slate-900 px-4 text-sm font-semibold text-white transition-all duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 sm:col-span-2"
             >
               {isLoading ? "Actualizando..." : "Mesa limpia"}
             </button>
@@ -983,8 +983,8 @@ const Runner = () => {
   if (!restaurantId) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 px-6">
-        <div className="rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm">
-          <h1 className="text-lg font-black text-slate-950">
+        <div className="rounded-xl border border-red-800/50 bg-card p-6 text-center shadow-sm">
+          <h1 className="text-lg font-bold text-slate-950">
             Falta restaurante activo
           </h1>
           <p className="mt-2 text-sm text-slate-600">
@@ -1001,12 +1001,12 @@ const Runner = () => {
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
           <div className="px-4 pb-4 pt-[max(12px,env(safe-area-inset-top))] sm:px-5">
             <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white shadow-sm">
                 <Truck size={20} />
               </div>
 
               <div className="min-w-0">
-                <h1 className="text-xl font-black tracking-tight text-slate-900">
+                <h1 className="text-xl font-bold tracking-tight text-slate-900">
                   Runner
                 </h1>
                 <p className="mt-0.5 text-sm text-slate-500">
@@ -1019,10 +1019,10 @@ const Runner = () => {
                 )}
               </div>
               <div
-                className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-2 text-sm font-black shadow-sm ${
+                className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-bold shadow-sm ${
                   isWakeLockActive
-                    ? "border-blue-200 bg-blue-50 text-blue-700"
-                    : "border-zinc-200 bg-white text-zinc-500"
+                    ? "border-blue-800/50 bg-blue-950/30 text-blue-400"
+                    : "border-border bg-card text-muted-foreground"
                 }`}
               >
                 <span
@@ -1041,8 +1041,8 @@ const Runner = () => {
                <div
                   className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold border ${
                     isOnline
-                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      : "bg-red-50 text-red-700 border-red-200"
+                      ? "bg-emerald-950/30 text-emerald-400 border-emerald-800/50"
+                      : "bg-red-950/30 text-red-400 border-red-800/50"
                   }`}
                 >
                   <Clock size={12} />
@@ -1059,7 +1059,7 @@ const Runner = () => {
                 <button
                   onClick={handleLogout}
                   disabled={loggingOut}
-                  className="flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
+                  className="flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-card px-3 text-xs font-bold text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:opacity-60"
                 >
                   <LogOut size={14} />
                   {loggingOut ? "Cerrando..." : "Cerrar sesión"}
@@ -1070,10 +1070,10 @@ const Runner = () => {
             <div className="mt-4 grid grid-cols-3 gap-2">
               <button
                 onClick={() => setTab("orders")}
-                className={`relative flex h-12 items-center justify-center rounded-2xl px-3 text-sm font-extrabold transition-all ${
+                className={`relative flex h-12 items-center justify-center rounded-lg px-3 text-sm font-semibold transition-all ${
                   tab === "orders"
                     ? "bg-slate-900 text-white shadow-sm"
-                    : "border border-slate-200 bg-white text-slate-700"
+                    : "border border-slate-200 bg-card text-slate-700"
                 }`}
               >
                 Entregas
@@ -1084,10 +1084,10 @@ const Runner = () => {
 
               <button
                 onClick={() => setTab("bills")}
-                className={`relative flex h-12 items-center justify-center rounded-2xl px-3 text-sm font-extrabold transition-all ${
+                className={`relative flex h-12 items-center justify-center rounded-lg px-3 text-sm font-semibold transition-all ${
                   tab === "bills"
                     ? "bg-slate-900 text-white shadow-sm"
-                    : "border border-slate-200 bg-white text-slate-700"
+                    : "border border-slate-200 bg-card text-slate-700"
                 }`}
               >
                 Cuentas
@@ -1095,7 +1095,7 @@ const Runner = () => {
                   {visibleBills.length}
                 </span>
                 {pendingBills > 0 && (
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-extrabold text-white shadow-sm">
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold text-white shadow-sm">
                     {pendingBills}
                   </span>
                 )}
@@ -1103,10 +1103,10 @@ const Runner = () => {
 
               <button
                 onClick={() => setTab("calls")}
-                className={`relative flex h-12 items-center justify-center rounded-2xl px-3 text-sm font-extrabold transition-all ${
+                className={`relative flex h-12 items-center justify-center rounded-lg px-3 text-sm font-semibold transition-all ${
                   tab === "calls"
                     ? "bg-slate-900 text-white shadow-sm"
-                    : "border border-slate-200 bg-white text-slate-700"
+                    : "border border-slate-200 bg-card text-slate-700"
                 }`}
               >
                 Llamadas
@@ -1114,7 +1114,7 @@ const Runner = () => {
                   {assistanceRequests.length}
                 </span>
                 {assistanceRequests.length > 0 && tab !== "calls" && (
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-orange-500 px-1.5 text-[11px] font-extrabold text-white shadow-sm">
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-orange-500 px-1.5 text-[11px] font-semibold text-white shadow-sm">
                     {assistanceRequests.length}
                   </span>
                 )}
@@ -1125,7 +1125,7 @@ const Runner = () => {
 
         <main className="px-4 py-4 pb-24 sm:px-5 sm:py-5">
           {!isOnline && (
-            <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+            <div className="mb-4 rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-3 text-sm font-bold text-red-400">
               Sin conexión. Estás viendo datos guardados localmente. Las acciones están deshabilitadas hasta reconectar.
             </div>
           )}
@@ -1133,7 +1133,7 @@ const Runner = () => {
             <button
               type="button"
               onClick={() => void enableSound()}
-              className="mb-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-extrabold text-amber-900"
+              className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg border border-amber-300 bg-amber-950/30 px-4 py-3 text-sm font-semibold text-amber-300"
             >
               <Volume2 size={16} />
               Activar sonido de alertas
@@ -1141,7 +1141,7 @@ const Runner = () => {
           )}
 
           {error && (
-            <div className="mb-4 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            <div className="mb-4 rounded-lg border border-red-300 bg-red-950/30 px-4 py-3 text-sm font-medium text-red-400">
               {error}
             </div>
           )}
@@ -1149,7 +1149,7 @@ const Runner = () => {
           {tab === "orders" && (
             <>
               {readyTasks.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center shadow-sm">
+                <div className="rounded-xl border border-dashed border-slate-300 bg-card px-6 py-10 text-center shadow-sm">
                   <p className="text-base font-semibold text-slate-700">
                     No hay entregas listas
                   </p>
@@ -1168,7 +1168,7 @@ const Runner = () => {
           {tab === "bills" && (
             <>
               {visibleBills.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center shadow-sm">
+                <div className="rounded-xl border border-dashed border-slate-300 bg-card px-6 py-10 text-center shadow-sm">
                   <p className="text-base font-semibold text-slate-700">
                     No hay cuentas activas
                   </p>
@@ -1187,7 +1187,7 @@ const Runner = () => {
           {tab === "calls" && (
             <>
               {assistanceRequests.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center shadow-sm">
+                <div className="rounded-xl border border-dashed border-slate-300 bg-card px-6 py-10 text-center shadow-sm">
                   <p className="text-base font-semibold text-slate-700">
                     No hay llamadas pendientes
                   </p>

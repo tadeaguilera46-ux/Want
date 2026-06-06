@@ -176,29 +176,29 @@ const StaffLogin = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
-      <div className="w-full max-w-md rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
+    <div className="flex min-h-screen items-center justify-center bg-background p-6">
+      <div className="w-full max-w-md rounded-lg border border-border bg-card p-6">
         <div className="mb-6 text-center">
-          <h1 className="text-3xl font-black text-zinc-950">
+          <h1 className="text-2xl font-semibold text-foreground">
             Acceso Staff
           </h1>
 
-          <p className="mt-2 text-sm text-zinc-500">
+          <p className="mt-2 text-sm text-muted-foreground">
             Restaurante activo:{" "}
-            <span className="font-semibold">
+            <span className="font-medium text-foreground">
               {restaurantId || "Sin restaurantId"}
             </span>
           </p>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-3">
           <input
             type="email"
             placeholder="Email"
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="h-14 w-full rounded-2xl border border-zinc-200 bg-white px-4 outline-none transition focus:ring-2 focus:ring-black/10"
+            className="h-11 w-full rounded-md border border-border bg-secondary px-4 text-foreground placeholder:text-muted-foreground outline-none transition focus:ring-2 focus:ring-ring/40"
           />
 
           <input
@@ -212,11 +212,11 @@ const StaffLogin = () => {
                 void handleLogin();
               }
             }}
-            className="h-14 w-full rounded-2xl border border-zinc-200 bg-white px-4 outline-none transition focus:ring-2 focus:ring-black/10"
+            className="h-11 w-full rounded-md border border-border bg-secondary px-4 text-foreground placeholder:text-muted-foreground outline-none transition focus:ring-2 focus:ring-ring/40"
           />
 
           {error && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+            <div className="rounded-md border border-red-800/50 bg-red-950/50 px-4 py-3 text-sm font-medium text-red-400">
               {error}
             </div>
           )}
@@ -224,7 +224,7 @@ const StaffLogin = () => {
           <button
             onClick={() => void handleLogin()}
             disabled={loading}
-            className="h-14 w-full rounded-2xl bg-black text-lg font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="h-11 w-full rounded-md bg-primary text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? "Ingresando..." : "Ingresar"}
           </button>
@@ -236,14 +236,14 @@ const StaffLogin = () => {
               setResetMessage("");
               setResetEmail("");
             }}
-            className="w-full text-center text-sm text-zinc-400 transition hover:text-zinc-700"
+            className="w-full text-center text-sm text-muted-foreground transition hover:text-foreground"
           >
             {showReset ? "Volver al login" : "¿Olvidaste tu contraseña?"}
           </button>
 
           {showReset && (
-            <div className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-              <p className="text-sm font-semibold text-zinc-700">
+            <div className="space-y-3 rounded-md border border-border bg-secondary p-4">
+              <p className="text-sm text-muted-foreground">
                 Ingresá tu email y te mandamos un link para restablecer tu contraseña.
               </p>
               <input
@@ -251,10 +251,10 @@ const StaffLogin = () => {
                 placeholder="tu@email.com"
                 value={resetEmail}
                 onChange={(e) => setResetEmail(e.target.value)}
-                className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none transition focus:ring-2 focus:ring-black/10"
+                className="h-10 w-full rounded-md border border-border bg-background px-4 text-sm text-foreground placeholder:text-muted-foreground outline-none transition focus:ring-2 focus:ring-ring/40"
               />
               {resetMessage && (
-                <p className={`text-xs font-medium ${resetMessage.includes("mandamos") ? "text-emerald-600" : "text-red-500"}`}>
+                <p className={`text-xs font-medium ${resetMessage.includes("mandamos") ? "text-emerald-400" : "text-red-400"}`}>
                   {resetMessage}
                 </p>
               )}
@@ -262,7 +262,7 @@ const StaffLogin = () => {
                 type="button"
                 onClick={() => void handlePasswordReset()}
                 disabled={resetLoading}
-                className="h-11 w-full rounded-2xl bg-zinc-900 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-60"
+                className="h-10 w-full rounded-md border border-border bg-secondary text-sm font-medium text-foreground transition hover:bg-muted disabled:opacity-60"
               >
                 {resetLoading ? "Enviando..." : "Enviar email de recuperación"}
               </button>

@@ -216,38 +216,38 @@ export function MesaManagementPanel({
 
   return (
     <>
-      <section className="mb-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+      <section className="mb-6 rounded-xl border border-border bg-card p-5 shadow-sm">
         <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-zinc-950 text-white">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-zinc-950 text-white">
               <DoorOpen size={20} />
             </div>
 
             <div>
-              <h2 className="text-xl font-black text-zinc-950">
+              <h2 className="text-xl font-bold text-foreground">
                 Gestión de mesas
               </h2>
-              <p className="mt-1 text-sm text-zinc-500">
+              <p className="mt-1 text-sm text-muted-foreground">
                 Creá mesas, activalas/desactivalas y generá el QR real.
               </p>
 
               <div className="mt-3 flex flex-wrap gap-2">
-                <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-zinc-700">
+                <span className="rounded-full border border-border bg-secondary px-3 py-1 text-xs font-bold uppercase tracking-wide text-foreground">
                   Plan {PLAN_LABELS[restaurantPlan]}
                 </span>
 
                 <span
                   className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wide ${
                     reachedTableLimit
-                      ? "border-red-200 bg-red-100 text-red-700"
-                      : "border-emerald-200 bg-emerald-100 text-emerald-700"
+                      ? "border-red-800/50 bg-red-100 text-red-400"
+                      : "border-emerald-800/50 bg-emerald-100 text-emerald-400"
                   }`}
                 >
                   Mesas activas: {activeMesasCount} / {tableLimitLabel}
                 </span>
 
                 {planLimits.maxTables !== null && (
-                  <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">
+                  <span className="rounded-full border border-amber-800/50 bg-amber-950/30 px-3 py-1 text-xs font-bold text-amber-400">
                     Upgrade a Premium para mesas ilimitadas
                   </span>
                 )}
@@ -262,13 +262,13 @@ export function MesaManagementPanel({
               placeholder="N° mesa"
               value={newMesaNumber}
               onChange={(e) => setNewMesaNumber(e.target.value)}
-              className="h-11 w-32 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+              className="h-11 w-32 rounded-lg border border-border px-3 outline-none focus:ring-2 focus:ring-ring/40"
             />
 
             <button
               type="submit"
               disabled={saving || reachedTableLimit}
-              className="flex h-11 items-center gap-2 rounded-2xl bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+              className="flex h-11 items-center gap-2 rounded-lg bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
             >
               <Plus size={16} />
               Crear
@@ -277,25 +277,25 @@ export function MesaManagementPanel({
         </div>
 
         {reachedTableLimit && (
-          <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          <div className="mb-4 rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-3 text-sm font-semibold text-red-400">
             Alcanzaste el límite de mesas activas para el plan{" "}
             {PLAN_LABELS[restaurantPlan]}. Desactivá una mesa o subí de plan.
           </div>
         )}
 
         {loading ? (
-          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">
+          <div className="rounded-lg border border-border bg-secondary p-4 text-sm text-muted-foreground">
             Cargando mesas...
           </div>
         ) : sortedMesas.length === 0 ? (
-          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">
+          <div className="rounded-lg border border-border bg-secondary p-4 text-sm text-muted-foreground">
             Todavía no hay mesas creadas.
           </div>
         ) : (
-          <div className="max-h-[430px] overflow-y-auto rounded-2xl border border-zinc-200">
+          <div className="max-h-[430px] overflow-y-auto rounded-lg border border-border">
             <table className="w-full min-w-[860px] text-left text-sm">
-              <thead className="sticky top-0 z-10 bg-zinc-50">
-                <tr className="border-b border-zinc-200 text-xs uppercase tracking-wide text-zinc-500">
+              <thead className="sticky top-0 z-10 bg-secondary">
+                <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
                   <th className="py-3 pl-4 pr-4">Mesa</th>
                   <th className="py-3 pr-4">Estado operativo</th>
                   <th className="py-3 pr-4">Visible QR</th>
@@ -311,19 +311,19 @@ export function MesaManagementPanel({
                   return (
                     <tr
                       key={mesa.id}
-                      className="border-b border-zinc-100 last:border-0"
+                      className="border-b border-border last:border-0"
                     >
                       <td className="py-4 pl-4 pr-4">
-                        <p className="text-lg font-black text-zinc-950">
+                        <p className="text-lg font-bold text-foreground">
                           Mesa {numero}
                         </p>
-                        <p className="mt-1 text-xs text-zinc-500">
+                        <p className="mt-1 text-xs text-muted-foreground">
                           Documento: {mesa.id}
                         </p>
                       </td>
 
                       <td className="py-4 pr-4">
-                        <span className="rounded-full border border-zinc-200 bg-zinc-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-zinc-700">
+                        <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-bold uppercase tracking-wide text-foreground">
                           {mesa.estado || "available"}
                         </span>
                       </td>
@@ -332,8 +332,8 @@ export function MesaManagementPanel({
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${
                             active
-                              ? "border border-emerald-200 bg-emerald-100 text-emerald-700"
-                              : "border border-red-200 bg-red-100 text-red-700"
+                              ? "border border-emerald-800/50 bg-emerald-100 text-emerald-400"
+                              : "border border-red-800/50 bg-red-100 text-red-400"
                           }`}
                         >
                           {active ? "Activa" : "Inactiva"}
@@ -344,7 +344,7 @@ export function MesaManagementPanel({
                         <div className="flex justify-end gap-2">
                           <button
                             onClick={() => setQrMesa(mesa)}
-                            className="flex h-10 items-center gap-2 rounded-2xl bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90"
+                            className="flex h-10 items-center gap-2 rounded-lg bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90"
                           >
                             <QrCode size={15} />
                             Ver QR
@@ -352,7 +352,7 @@ export function MesaManagementPanel({
 
                           <button
                             onClick={() => copyQrLink(mesa)}
-                            className="flex h-10 items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 font-semibold text-zinc-900 transition hover:bg-zinc-50"
+                            className="flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 font-semibold text-foreground transition hover:bg-secondary"
                           >
                             <Copy size={15} />
                             Copiar link
@@ -361,7 +361,7 @@ export function MesaManagementPanel({
                           <button
                             onClick={() => handleToggleActive(mesa)}
                             disabled={saving}
-                            className={`h-10 rounded-2xl px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60 ${
+                            className={`h-10 rounded-lg px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60 ${
                               active ? "bg-red-600" : "bg-emerald-600"
                             }`}
                           >
@@ -380,26 +380,26 @@ export function MesaManagementPanel({
 
       {qrMesa && qrMesaNumber && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl">
+          <div className="w-full max-w-md rounded-xl bg-card p-5 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <h3 className="text-2xl font-black text-zinc-950">
+                <h3 className="text-2xl font-bold text-foreground">
                   QR Mesa {qrMesaNumber}
                 </h3>
-                <p className="mt-1 text-sm text-zinc-500">
+                <p className="mt-1 text-sm text-muted-foreground">
                   Este QR abre el menú directo para esta mesa.
                 </p>
               </div>
 
               <button
                 onClick={() => setQrMesa(null)}
-                className="flex h-10 w-10 items-center justify-center rounded-2xl border border-zinc-200 text-zinc-700 transition hover:bg-zinc-50"
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-border text-foreground transition hover:bg-secondary"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="flex justify-center rounded-3xl border border-zinc-200 bg-white p-5">
+            <div className="flex justify-center rounded-xl border border-border bg-card p-5">
               <QRCodeCanvas
                 id="mesa-qr-canvas"
                 value={qrUrl}
@@ -409,14 +409,14 @@ export function MesaManagementPanel({
               />
             </div>
 
-            <p className="mt-4 break-all rounded-2xl bg-zinc-50 p-3 text-xs text-zinc-500">
+            <p className="mt-4 break-all rounded-lg bg-secondary p-3 text-xs text-muted-foreground">
               {qrUrl}
             </p>
 
             <div className="mt-4 grid grid-cols-2 gap-3">
               <button
                 onClick={() => copyQrLink(qrMesa)}
-                className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white font-semibold text-zinc-900 transition hover:bg-zinc-50"
+                className="flex h-11 items-center justify-center gap-2 rounded-lg border border-border bg-card font-semibold text-foreground transition hover:bg-secondary"
               >
                 <Copy size={16} />
                 Copiar link
@@ -424,7 +424,7 @@ export function MesaManagementPanel({
 
               <button
                 onClick={downloadQr}
-                className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-zinc-950 font-semibold text-white transition hover:opacity-90"
+                className="flex h-11 items-center justify-center gap-2 rounded-lg bg-zinc-950 font-semibold text-white transition hover:opacity-90"
               >
                 <Download size={16} />
                 Descargar PNG

@@ -362,38 +362,38 @@ export function StaffManagementPanel({ restaurantId }: Props) {
   };
 
   return (
-    <section className="mb-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+    <section className="mb-6 rounded-xl border border-border bg-card p-5 shadow-sm">
       <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-zinc-950 text-white">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-zinc-950 text-white">
             <UserCog size={20} />
           </div>
 
           <div>
-            <h2 className="text-xl font-black text-zinc-950">
+            <h2 className="text-xl font-bold text-foreground">
               Gestión de empleados
             </h2>
-            <p className="mt-1 text-sm text-zinc-500">
+            <p className="mt-1 text-sm text-muted-foreground">
               Creá empleados reales en Firebase Auth y administrá sus accesos.
             </p>
 
             <div className="mt-3 flex flex-wrap gap-2">
-              <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-zinc-700">
+              <span className="rounded-full border border-border bg-secondary px-3 py-1 text-xs font-bold uppercase tracking-wide text-foreground">
                 Plan {PLAN_LABELS[restaurantPlan]}
               </span>
 
               <span
                 className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wide ${
                   reachedStaffLimit
-                    ? "border-red-200 bg-red-100 text-red-700"
-                    : "border-emerald-200 bg-emerald-100 text-emerald-700"
+                    ? "border-red-800/50 bg-red-100 text-red-400"
+                    : "border-emerald-800/50 bg-emerald-100 text-emerald-400"
                 }`}
               >
                 Empleados activos: {activeStaffCount} / {staffLimitLabel}
               </span>
 
               {planLimits.maxStaff !== null && (
-                <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">
+                <span className="rounded-full border border-amber-800/50 bg-amber-950/30 px-3 py-1 text-xs font-bold text-amber-400">
                   Upgrade a Premium para empleados ilimitados
                 </span>
               )}
@@ -401,15 +401,15 @@ export function StaffManagementPanel({ restaurantId }: Props) {
           </div>
         </div>
 
-        <div className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-bold text-zinc-600">
+        <div className="rounded-full border border-border bg-secondary px-3 py-1 text-xs font-bold text-muted-foreground">
           {sortedStaff.length} empleado(s)
         </div>
       </div>
 
-      <div className="mb-5 rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
+      <div className="mb-5 rounded-xl border border-border bg-secondary p-4">
         <div className="mb-3 flex items-center gap-2">
           <Plus size={18} />
-          <h3 className="font-black text-zinc-950">Crear empleado</h3>
+          <h3 className="font-bold text-foreground">Crear empleado</h3>
         </div>
 
         <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px_auto]">
@@ -419,7 +419,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
             type="email"
             placeholder="email@restaurante.com"
             disabled={creating}
-            className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 font-semibold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10 disabled:opacity-60"
+            className="h-12 rounded-lg border border-border bg-card px-4 font-semibold text-foreground outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-60"
           />
 
           <input
@@ -429,14 +429,14 @@ export function StaffManagementPanel({ restaurantId }: Props) {
             placeholder="Contraseña"
             disabled={creating}
             minLength={6}
-            className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 font-semibold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10 disabled:opacity-60"
+            className="h-12 rounded-lg border border-border bg-card px-4 font-semibold text-foreground outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-60"
           />
 
           <select
             value={newRole}
             onChange={(e) => setNewRole(e.target.value as StaffRole)}
             disabled={creating}
-            className="h-12 rounded-2xl border border-zinc-200 bg-white px-3 outline-none focus:ring-2 focus:ring-black/10 disabled:opacity-60"
+            className="h-12 rounded-lg border border-border bg-card px-3 outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-60"
           >
             <option value="cashier">Cajero</option>
             <option value="runner">Runner</option>
@@ -448,7 +448,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
           <button
             onClick={createStaffMember}
             disabled={creating || reachedStaffLimit}
-            className="h-12 rounded-2xl bg-zinc-950 px-5 font-black text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="h-12 rounded-lg bg-zinc-950 px-5 font-bold text-white transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {creating ? "Creando..." : "Crear empleado"}
           </button>
@@ -456,14 +456,14 @@ export function StaffManagementPanel({ restaurantId }: Props) {
       </div>
 
       {loading ? (
-        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">
+        <div className="rounded-lg border border-border bg-secondary p-4 text-sm text-muted-foreground">
           Cargando empleados...
         </div>
       ) : (
-        <div className="max-h-[430px] overflow-y-auto rounded-2xl border border-zinc-200">
+        <div className="max-h-[430px] overflow-y-auto rounded-lg border border-border">
           <table className="w-full min-w-[980px] text-left text-sm">
-            <thead className="sticky top-0 z-10 bg-zinc-50">
-              <tr className="border-b border-zinc-200 text-xs uppercase tracking-wide text-zinc-500">
+            <thead className="sticky top-0 z-10 bg-secondary">
+              <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="py-3 pl-4 pr-4">Empleado</th>
                 <th className="py-3 pr-4">UID</th>
                 <th className="py-3 pr-4">Rol</th>
@@ -484,7 +484,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
                 return (
                   <tr
                     key={member.id}
-                    className="border-b border-zinc-100 last:border-0"
+                    className="border-b border-border last:border-0"
                   >
                     <td className="py-4 pl-4 pr-4">
                       <input
@@ -499,28 +499,28 @@ export function StaffManagementPanel({ restaurantId }: Props) {
                             void updateStaffEmail(member.id, nextEmail);
                           }
                         }}
-                        className="h-10 w-full min-w-[220px] rounded-2xl border border-zinc-200 bg-white px-3 font-semibold text-zinc-950 outline-none focus:ring-2 focus:ring-black/10 disabled:opacity-60"
+                        className="h-10 w-full min-w-[220px] rounded-lg border border-border bg-card px-3 font-semibold text-foreground outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-60"
                       />
 
-                      <p className="mt-1 text-xs text-zinc-500">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         Documento: {member.id}
                       </p>
 
                       {lockedAdmin && (
-                        <p className="mt-1 text-xs font-semibold text-red-600">
+                        <p className="mt-1 text-xs font-semibold text-red-400">
                           Último admin activo
                         </p>
                       )}
 
                       {cannotActivateBecauseLimit && (
-                        <p className="mt-1 text-xs font-semibold text-amber-700">
+                        <p className="mt-1 text-xs font-semibold text-amber-400">
                           Límite del plan alcanzado
                         </p>
                       )}
                     </td>
 
                     <td className="py-4 pr-4">
-                      <span className="font-mono text-xs text-zinc-500">
+                      <span className="font-mono text-xs text-muted-foreground">
                         {member.uid || member.id}
                       </span>
                     </td>
@@ -535,7 +535,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
                             e.target.value as StaffRole
                           )
                         }
-                        className="h-10 rounded-2xl border border-zinc-200 bg-white px-3 outline-none focus:ring-2 focus:ring-black/10 disabled:opacity-60"
+                        className="h-10 rounded-lg border border-border bg-card px-3 outline-none focus:ring-2 focus:ring-ring/40 disabled:opacity-60"
                       >
                         <option value="runner">{roleLabel.runner}</option>
                         <option value="kitchen">{roleLabel.kitchen}</option>
@@ -549,8 +549,8 @@ export function StaffManagementPanel({ restaurantId }: Props) {
                       <span
                         className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wide ${
                           active
-                            ? "border-emerald-200 bg-emerald-100 text-emerald-700"
-                            : "border-red-200 bg-red-100 text-red-700"
+                            ? "border-emerald-800/50 bg-emerald-100 text-emerald-400"
+                            : "border-red-800/50 bg-red-100 text-red-400"
                         }`}
                       >
                         {active ? "Activo" : "Inactivo"}
@@ -561,8 +561,8 @@ export function StaffManagementPanel({ restaurantId }: Props) {
                       <span
                         className={`rounded-full border px-3 py-1 text-xs font-bold uppercase tracking-wide ${
                           isOld
-                            ? "border-zinc-200 bg-zinc-100 text-zinc-600"
-                            : "border-blue-200 bg-blue-100 text-blue-700"
+                            ? "border-border bg-background text-muted-foreground"
+                            : "border-blue-800/50 bg-blue-100 text-blue-400"
                         }`}
                       >
                         {isOld ? "Viejo" : "Nuevo"}
@@ -574,7 +574,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
                         <button
                           onClick={() => void toggleStaffActive(member)}
                           disabled={isUpdating || lockedAdmin}
-                          className={`h-10 rounded-2xl px-4 font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                          className={`h-10 rounded-lg px-4 font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
                             active
                               ? "bg-red-600 text-white hover:opacity-90"
                               : "bg-emerald-600 text-white hover:opacity-90"
@@ -590,7 +590,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
                         <button
                           onClick={() => void deleteStaffAccess(member)}
                           disabled={isUpdating || lockedAdmin}
-                          className="flex h-10 items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-3 font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                          className="flex h-10 items-center gap-2 rounded-lg border border-red-800/50 bg-red-950/30 px-3 font-semibold text-red-400 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <Trash2 size={15} />
                           Eliminar

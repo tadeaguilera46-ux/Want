@@ -183,14 +183,14 @@ const IngredientsEditor = ({
   };
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+    <div className="rounded-lg border border-border bg-secondary p-3">
       <div className="mb-3 flex items-start gap-2">
-        <Boxes size={17} className="mt-0.5 text-zinc-700" />
+        <Boxes size={17} className="mt-0.5 text-foreground" />
         <div>
-          <p className="text-sm font-black text-zinc-950">
+          <p className="text-sm font-bold text-foreground">
             Ingredientes / receta
           </p>
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-muted-foreground">
             Los esenciales ocultan el plato si no hay stock. Los secundarios
             generan aviso al cliente.
           </p>
@@ -198,7 +198,7 @@ const IngredientsEditor = ({
       </div>
 
       {stockItems.length === 0 ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        <div className="rounded-lg border border-amber-800/50 bg-amber-950/30 p-3 text-sm text-amber-400">
           Primero cargá insumos en Control de stock para poder armar recetas.
         </div>
       ) : (
@@ -212,7 +212,7 @@ const IngredientsEditor = ({
                 stockItemId: e.target.value,
               }))
             }
-            className="h-10 rounded-xl border border-zinc-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-black/10"
+            className="h-10 rounded-xl border border-border bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
           >
             <option value="">Seleccionar insumo</option>
             {stockItems.map((stockItem) => (
@@ -235,7 +235,7 @@ const IngredientsEditor = ({
                 quantity: e.target.value,
               }))
             }
-            className="h-10 rounded-xl border border-zinc-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-black/10"
+            className="h-10 rounded-xl border border-border bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
           />
 
           <select
@@ -247,7 +247,7 @@ const IngredientsEditor = ({
                 unit: e.target.value as RecipeUnit,
               }))
             }
-            className="h-10 rounded-xl border border-zinc-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-black/10"
+            className="h-10 rounded-xl border border-border bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
           >
             {units.map((unit) => (
               <option key={unit} value={unit}>
@@ -265,7 +265,7 @@ const IngredientsEditor = ({
                 essential: e.target.value === "essential",
               }))
             }
-            className="h-10 rounded-xl border border-zinc-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-black/10"
+            className="h-10 rounded-xl border border-border bg-card px-3 text-sm outline-none focus:ring-2 focus:ring-ring/40"
           >
             <option value="essential">Esencial</option>
             <option value="optional">Secundario</option>
@@ -283,7 +283,7 @@ const IngredientsEditor = ({
       )}
 
       {ingredients.length === 0 ? (
-        <div className="mt-3 flex items-start gap-2 rounded-2xl border border-dashed border-zinc-300 bg-white p-3 text-xs text-zinc-500">
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-dashed border-zinc-300 bg-card p-3 text-xs text-muted-foreground">
           <AlertTriangle size={15} className="shrink-0" />
           Este producto no tiene receta cargada. En Premium seguirá siendo
           vendible, pero no descontará stock automáticamente.
@@ -293,7 +293,7 @@ const IngredientsEditor = ({
           {ingredients.map((ingredient) => (
             <div
               key={ingredient.stockItemId}
-              className="flex items-center gap-2 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700"
+              className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground"
             >
               <span>
                 {ingredient.stockItemName}: {ingredient.quantity}{" "}
@@ -304,10 +304,10 @@ const IngredientsEditor = ({
                 type="button"
                 disabled={disabled}
                 onClick={() => toggleEssential(ingredient.stockItemId)}
-                className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${
+                className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
                   ingredient.essential
-                    ? "bg-red-100 text-red-700"
-                    : "bg-amber-100 text-amber-700"
+                    ? "bg-red-100 text-red-400"
+                    : "bg-amber-100 text-amber-400"
                 }`}
               >
                 {ingredient.essential ? "Esencial" : "Secundario"}
@@ -317,7 +317,7 @@ const IngredientsEditor = ({
                 type="button"
                 disabled={disabled}
                 onClick={() => removeIngredient(ingredient.stockItemId)}
-                className="text-zinc-400 transition hover:text-red-600 disabled:opacity-50"
+                className="text-muted-foreground transition hover:text-red-400 disabled:opacity-50"
               >
                 <X size={13} />
               </button>
@@ -651,15 +651,15 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
   };
 
   return (
-    <section className="mb-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+    <section className="mb-6 rounded-xl border border-border bg-card p-5 shadow-sm">
       <div className="mb-4 flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-zinc-950 text-white">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-zinc-950 text-white">
           <Utensils size={20} />
         </div>
 
         <div>
-          <h2 className="text-xl font-black text-zinc-950">Menú editable</h2>
-          <p className="mt-1 text-sm text-zinc-500">
+          <h2 className="text-xl font-bold text-foreground">Menú editable</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
             Creá productos y conectalos con stock usando ingredientes
             esenciales o secundarios.
           </p>
@@ -671,7 +671,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
           placeholder="Nombre del producto"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="h-11 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+          className="h-11 rounded-lg border border-border px-3 outline-none focus:ring-2 focus:ring-ring/40"
         />
 
         <input
@@ -680,13 +680,13 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
           min={0}
           value={price}
           onChange={(e) => setPrice(e.target.value)}
-          className="h-11 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+          className="h-11 rounded-lg border border-border px-3 outline-none focus:ring-2 focus:ring-ring/40"
         />
 
         <select
           value={type}
           onChange={(e) => setType(e.target.value as MenuType)}
-          className="h-11 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+          className="h-11 rounded-lg border border-border px-3 outline-none focus:ring-2 focus:ring-ring/40"
         >
           <option value="food">Sale a cocina</option>
           <option value="drinks">Sale a barra</option>
@@ -696,7 +696,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
           placeholder="Categoría: Pizzas"
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="h-11 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+          className="h-11 rounded-lg border border-border px-3 outline-none focus:ring-2 focus:ring-ring/40"
         />
 
         <textarea
@@ -704,11 +704,11 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={3}
-          className="rounded-2xl border border-zinc-200 px-3 py-3 outline-none focus:ring-2 focus:ring-black/10 lg:col-span-3"
+          className="rounded-lg border border-border px-3 py-3 outline-none focus:ring-2 focus:ring-ring/40 lg:col-span-3"
         />
 
         <div className="space-y-2">
-          <label className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100">
+          <label className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-300 bg-secondary px-3 text-sm font-semibold text-foreground transition hover:bg-background">
             <input
               type="file"
               accept="image/*"
@@ -731,7 +731,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
           </label>
 
           {image && (
-            <div className="h-24 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100">
+            <div className="h-24 overflow-hidden rounded-lg border border-border bg-background">
               <img
                 src={image}
                 alt="Preview producto"
@@ -754,7 +754,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
           type="button"
           onClick={handleCreate}
           disabled={uploadingCreateImage}
-          className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60 lg:col-span-4"
+          className="flex h-11 items-center justify-center gap-2 rounded-lg bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60 lg:col-span-4"
         >
           <Plus size={16} />
           Agregar producto
@@ -762,15 +762,15 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       </div>
 
       {loading ? (
-        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">
+        <div className="rounded-lg border border-border bg-secondary p-4 text-sm text-muted-foreground">
           Cargando menú...
         </div>
       ) : sortedItems.length === 0 ? (
-        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">
+        <div className="rounded-lg border border-border bg-secondary p-4 text-sm text-muted-foreground">
           Todavía no hay productos cargados.
         </div>
       ) : (
-        <div className="max-h-[640px] overflow-y-auto rounded-2xl border border-zinc-200 p-3">
+        <div className="max-h-[640px] overflow-y-auto rounded-lg border border-border p-3">
           <div className="grid gap-3">
             {sortedItems.map((item) => {
               const isSaving = savingId === item.id;
@@ -783,9 +783,9 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
               return (
                 <div
                   key={item.id}
-                  className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-3 md:grid-cols-[120px_1fr_auto]"
+                  className="grid gap-3 rounded-lg border border-border bg-card p-3 md:grid-cols-[120px_1fr_auto]"
                 >
-                  <div className="h-28 overflow-hidden rounded-2xl bg-zinc-100">
+                  <div className="h-28 overflow-hidden rounded-lg bg-background">
                     {(isEditing ? draft?.image : item.image) ? (
                       <img
                         src={isEditing ? draft?.image : item.image}
@@ -793,7 +793,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                         className="h-full w-full object-cover"
                       />
                     ) : (
-                      <div className="flex h-full w-full items-center justify-center text-zinc-400">
+                      <div className="flex h-full w-full items-center justify-center text-muted-foreground">
                         <Image size={24} />
                       </div>
                     )}
@@ -804,26 +804,26 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${
                           item.active
-                            ? "border border-emerald-200 bg-emerald-100 text-emerald-700"
-                            : "border border-red-200 bg-red-100 text-red-700"
+                            ? "border border-emerald-800/50 bg-emerald-100 text-emerald-400"
+                            : "border border-red-800/50 bg-red-100 text-red-400"
                         }`}
                       >
                         {item.active ? "Activo" : "Pausado"}
                       </span>
 
-                      <span className="rounded-full border border-zinc-200 bg-zinc-100 px-3 py-1 text-xs font-bold uppercase tracking-wide text-zinc-700">
+                      <span className="rounded-full border border-border bg-background px-3 py-1 text-xs font-bold uppercase tracking-wide text-foreground">
                         {itemType === "food" ? "Cocina" : "Barra"}
                       </span>
 
-                      <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs font-bold uppercase tracking-wide text-zinc-700">
+                      <span className="rounded-full border border-border bg-secondary px-3 py-1 text-xs font-bold uppercase tracking-wide text-foreground">
                         {itemCategory}
                       </span>
 
                       <span
                         className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ${
                           itemIngredients.length > 0
-                            ? "border border-blue-200 bg-blue-100 text-blue-700"
-                            : "border border-amber-200 bg-amber-100 text-amber-800"
+                            ? "border border-blue-800/50 bg-blue-100 text-blue-400"
+                            : "border border-amber-800/50 bg-amber-100 text-amber-400"
                         }`}
                       >
                         {itemIngredients.length > 0
@@ -834,15 +834,15 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
 
                     {!isEditing ? (
                       <>
-                        <h3 className="text-lg font-black text-zinc-950">
+                        <h3 className="text-lg font-bold text-foreground">
                           {item.name}
                         </h3>
 
-                        <p className="mt-1 text-sm text-zinc-500">
+                        <p className="mt-1 text-sm text-muted-foreground">
                           {item.description || "Sin descripción"}
                         </p>
 
-                        <p className="mt-2 text-sm font-bold text-zinc-700">
+                        <p className="mt-2 text-sm font-bold text-foreground">
                           {formatPriceARS(item.price)}
                         </p>
 
@@ -853,8 +853,8 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                                 key={ingredient.stockItemId}
                                 className={`rounded-full px-3 py-1 text-xs font-semibold ${
                                   ingredient.essential
-                                    ? "bg-red-50 text-red-700"
-                                    : "bg-amber-50 text-amber-700"
+                                    ? "bg-red-950/30 text-red-400"
+                                    : "bg-amber-950/30 text-amber-400"
                                 }`}
                               >
                                 {ingredient.stockItemName} ·{" "}
@@ -877,7 +877,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                               prev ? { ...prev, name: e.target.value } : prev
                             )
                           }
-                          className="mb-2 h-10 w-full rounded-xl border border-zinc-200 px-3 font-bold outline-none focus:ring-2 focus:ring-black/10"
+                          className="mb-2 h-10 w-full rounded-xl border border-border px-3 font-bold outline-none focus:ring-2 focus:ring-ring/40"
                         />
 
                         <div className="mb-2 grid gap-2 sm:grid-cols-[130px_160px_1fr]">
@@ -890,7 +890,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                                 prev ? { ...prev, price: e.target.value } : prev
                               )
                             }
-                            className="h-10 rounded-xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+                            className="h-10 rounded-xl border border-border px-3 outline-none focus:ring-2 focus:ring-ring/40"
                           />
 
                           <select
@@ -906,7 +906,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                                   : prev
                               )
                             }
-                            className="h-10 rounded-xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+                            className="h-10 rounded-xl border border-border px-3 outline-none focus:ring-2 focus:ring-ring/40"
                           >
                             <option value="food">Cocina</option>
                             <option value="drinks">Barra</option>
@@ -923,12 +923,12 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                                   : prev
                               )
                             }
-                            className="h-10 rounded-xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+                            className="h-10 rounded-xl border border-border px-3 outline-none focus:ring-2 focus:ring-ring/40"
                           />
                         </div>
 
                         <div className="mb-2 grid gap-2 sm:grid-cols-[180px_1fr]">
-                          <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100">
+                          <label className="flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 bg-secondary px-3 text-sm font-semibold text-foreground transition hover:bg-background">
                             <input
                               type="file"
                               accept="image/*"
@@ -960,7 +960,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                                 prev ? { ...prev, image: "" } : prev
                               )
                             }
-                            className="h-10 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:opacity-60"
+                            className="h-10 rounded-xl border border-border bg-card px-3 text-sm font-semibold text-foreground transition hover:bg-secondary disabled:opacity-60"
                           >
                             Quitar imagen
                           </button>
@@ -978,7 +978,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                                 : prev
                             )
                           }
-                          className="mb-3 w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10"
+                          className="mb-3 w-full rounded-xl border border-border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring/40"
                         />
 
                         {draft && (
@@ -1007,7 +1007,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                       <button
                         onClick={() => startEditing(item)}
                         disabled={isSaving}
-                        className="flex h-10 items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 font-semibold text-zinc-900 transition hover:bg-zinc-50 disabled:opacity-60"
+                        className="flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 font-semibold text-foreground transition hover:bg-secondary disabled:opacity-60"
                       >
                         <Pencil size={15} />
                         Editar
@@ -1017,7 +1017,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                         <button
                           onClick={() => saveEditing(item)}
                           disabled={isSaving || isUploadingEditImage}
-                          className="flex h-10 items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                          className="flex h-10 items-center justify-center gap-2 rounded-lg bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
                         >
                           <Save size={15} />
                           Guardar
@@ -1026,7 +1026,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                         <button
                           onClick={cancelEditing}
                           disabled={isSaving || isUploadingEditImage}
-                          className="flex h-10 items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 font-semibold text-zinc-900 transition hover:bg-zinc-50 disabled:opacity-60"
+                          className="flex h-10 items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 font-semibold text-foreground transition hover:bg-secondary disabled:opacity-60"
                         >
                           <X size={15} />
                           Cancelar
@@ -1037,7 +1037,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                     <button
                       onClick={() => toggleActive(item)}
                       disabled={isSaving}
-                      className={`h-10 rounded-2xl px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60 ${
+                      className={`h-10 rounded-lg px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60 ${
                         item.active ? "bg-orange-500" : "bg-emerald-600"
                       }`}
                     >
@@ -1047,7 +1047,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                     <button
                       onClick={() => handleDelete(item)}
                       disabled={isSaving}
-                      className="flex h-10 items-center justify-center gap-2 rounded-2xl bg-red-600 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                      className="flex h-10 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
                     >
                       <Trash2 size={15} />
                       Eliminar
