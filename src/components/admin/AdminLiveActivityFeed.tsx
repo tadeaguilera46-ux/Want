@@ -66,7 +66,7 @@ const getActionVisual = (action?: string) => {
       icon: CheckCircle2,
       label: "Pedido listo",
       dot: "bg-emerald-500",
-      iconTone: "bg-emerald-100 text-emerald-400",
+      iconTone: "bg-emerald-100 text-emerald-700",
     };
   }
 
@@ -75,7 +75,7 @@ const getActionVisual = (action?: string) => {
       icon: Truck,
       label: "Entregado",
       dot: "bg-blue-500",
-      iconTone: "bg-blue-100 text-blue-400",
+      iconTone: "bg-blue-100 text-blue-700",
     };
   }
 
@@ -97,7 +97,7 @@ const getActionVisual = (action?: string) => {
       icon: Sparkles,
       label: "Mesa",
       dot: "bg-amber-500",
-      iconTone: "bg-amber-100 text-amber-400",
+      iconTone: "bg-amber-100 text-amber-700",
     };
   }
 
@@ -106,7 +106,7 @@ const getActionVisual = (action?: string) => {
       icon: UserCog,
       label: "Equipo",
       dot: "bg-zinc-500",
-      iconTone: "bg-background text-foreground",
+      iconTone: "bg-zinc-100 text-zinc-700",
     };
   }
 
@@ -114,7 +114,7 @@ const getActionVisual = (action?: string) => {
     icon: Activity,
     label: "Actividad",
     dot: "bg-zinc-500",
-    iconTone: "bg-background text-foreground",
+    iconTone: "bg-zinc-100 text-zinc-700",
   };
 };
 
@@ -220,10 +220,10 @@ export function AdminLiveActivityFeed({ restaurantId }: Props) {
     <div ref={containerRef} className="relative">
       <button
         onClick={toggleOpen}
-        className={`flex items-center gap-2 rounded-lg border px-4 py-2 shadow-sm transition hover:-translate-y-0.5 ${
+        className={`flex items-center gap-2 rounded-2xl border px-4 py-2 shadow-sm transition hover:-translate-y-0.5 ${
           hasUnread
-            ? "border-emerald-800/50 bg-emerald-950/30 text-emerald-400"
-            : "border-border bg-card text-foreground"
+            ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            : "border-zinc-200 bg-white text-zinc-700"
         }`}
       >
         <span className="relative">
@@ -233,12 +233,12 @@ export function AdminLiveActivityFeed({ restaurantId }: Props) {
           )}
         </span>
 
-        <span className="hidden text-sm font-bold lg:inline">
+        <span className="hidden text-sm font-black lg:inline">
           Actividad
         </span>
 
         {hasUnread && (
-          <span className="hidden rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white xl:inline">
+          <span className="hidden rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white xl:inline">
             Nuevo
           </span>
         )}
@@ -250,19 +250,19 @@ export function AdminLiveActivityFeed({ restaurantId }: Props) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-[calc(100%+10px)] z-50 w-[360px] overflow-hidden rounded-[1.75rem] border border-border bg-card shadow-2xl">
-          <div className="border-b border-border bg-secondary/80 px-4 py-4">
+        <div className="absolute right-0 top-[calc(100%+10px)] z-50 w-[360px] overflow-hidden rounded-[1.75rem] border border-zinc-200 bg-white shadow-2xl">
+          <div className="border-b border-zinc-100 bg-zinc-50/80 px-4 py-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-bold text-foreground">
+                <p className="text-sm font-black text-zinc-950">
                   Actividad reciente
                 </p>
-                <p className="mt-0.5 text-xs text-muted-foreground">
+                <p className="mt-0.5 text-xs text-zinc-500">
                   Últimos eventos importantes.
                 </p>
               </div>
 
-              <span className="rounded-full border border-emerald-800/50 bg-emerald-950/30 px-2.5 py-1 text-[11px] font-bold text-emerald-400">
+              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-black text-emerald-700">
                 Live
               </span>
             </div>
@@ -270,8 +270,8 @@ export function AdminLiveActivityFeed({ restaurantId }: Props) {
 
           {visibleLogs.length === 0 ? (
             <div className="p-6 text-center">
-              <Clock3 className="mx-auto text-muted-foreground" size={22} />
-              <p className="mt-2 text-sm font-bold text-muted-foreground">
+              <Clock3 className="mx-auto text-zinc-400" size={22} />
+              <p className="mt-2 text-sm font-bold text-zinc-600">
                 Sin actividad reciente
               </p>
             </div>
@@ -284,23 +284,23 @@ export function AdminLiveActivityFeed({ restaurantId }: Props) {
                 return (
                   <div
                     key={log.id}
-                    className="rounded-lg p-3 transition hover:bg-secondary"
+                    className="rounded-2xl p-3 transition hover:bg-zinc-50"
                   >
                     <div className="flex items-start gap-3">
                       <div
-                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${visual.iconTone}`}
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl ${visual.iconTone}`}
                       >
                         <Icon size={17} />
                       </div>
 
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                          <span className="text-xs font-black uppercase tracking-wide text-zinc-500">
                             {visual.label}
                           </span>
 
                           {typeof log.mesa === "number" && log.mesa > 0 && (
-                            <span className="rounded-full bg-background px-2 py-0.5 text-[11px] font-bold text-muted-foreground">
+                            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-black text-zinc-600">
                               Mesa {log.mesa}
                             </span>
                           )}
@@ -310,11 +310,11 @@ export function AdminLiveActivityFeed({ restaurantId }: Props) {
                           />
                         </div>
 
-                        <p className="mt-1 line-clamp-2 text-sm font-semibold leading-snug text-foreground">
+                        <p className="mt-1 line-clamp-2 text-sm font-semibold leading-snug text-zinc-900">
                           {log.description || log.action || "Actividad registrada"}
                         </p>
 
-                        <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                        <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
                           <span>{formatRelativeTime(log.createdAt)}</span>
                           <span>•</span>
                           <span>{getRoleLabel(log.userRole)}</span>

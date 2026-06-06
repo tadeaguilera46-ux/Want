@@ -45,15 +45,15 @@ const MenuSkeleton = () => {
       {[1, 2, 3].map((item) => (
         <div
           key={item}
-          className="overflow-hidden rounded-[30px] border border-border bg-card shadow-[0_12px_30px_-16px_rgba(0,0,0,0.22)]"
+          className="overflow-hidden rounded-[30px] border border-black/5 bg-white shadow-[0_12px_30px_-16px_rgba(0,0,0,0.22)]"
         >
           <div className="aspect-[16/10] w-full bg-zinc-200" />
           <div className="space-y-3 p-4">
             <div className="h-5 w-2/3 rounded-full bg-zinc-200" />
-            <div className="h-4 w-full rounded-full bg-background" />
-            <div className="h-4 w-4/5 rounded-full bg-background" />
+            <div className="h-4 w-full rounded-full bg-zinc-100" />
+            <div className="h-4 w-4/5 rounded-full bg-zinc-100" />
             <div className="flex items-center justify-between pt-3">
-              <div className="h-10 w-28 rounded-lg bg-background" />
+              <div className="h-10 w-28 rounded-2xl bg-zinc-100" />
               <div className="h-11 w-11 rounded-full bg-zinc-200" />
             </div>
           </div>
@@ -369,7 +369,7 @@ const Menu = () => {
         className="flex min-h-screen items-center justify-center px-6"
         style={{ backgroundColor: pageBackground }}
       >
-        <p className="text-sm font-semibold text-muted-foreground">
+        <p className="text-sm font-semibold text-zinc-500">
           Inicializando mesa...
         </p>
       </div>
@@ -382,11 +382,11 @@ const Menu = () => {
         className="flex min-h-screen items-center justify-center px-6"
         style={{ backgroundColor: pageBackground }}
       >
-        <div className="w-full max-w-md rounded-xl border border-red-800/50 bg-card p-6 text-center shadow-sm">
-          <h1 className="text-lg font-bold text-foreground">
+        <div className="w-full max-w-md rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm">
+          <h1 className="text-lg font-black text-zinc-950">
             No se pudo abrir la mesa
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">{sessionError}</p>
+          <p className="mt-2 text-sm text-zinc-600">{sessionError}</p>
         </div>
       </div>
     );
@@ -399,7 +399,7 @@ const Menu = () => {
     >
       <div className="mx-auto w-full max-w-lg">
         <header
-          className="sticky top-0 z-40 border-b border-border backdrop-blur"
+          className="sticky top-0 z-40 border-b border-black/5 backdrop-blur"
           style={{ backgroundColor: `${pageBackground}F2` }}
         >
           <div className="px-4 pb-2 pt-[max(12px,env(safe-area-inset-top))]">
@@ -414,7 +414,7 @@ const Menu = () => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => { setAssistOpen(true); setAssistSent(null); }}
-                  className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition-all hover:opacity-80 active:scale-[0.97]"
+                  className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-extrabold shadow-sm transition-all hover:opacity-80 active:scale-[0.97]"
                   style={{ color: primaryColor, borderColor: primaryColor, backgroundColor: `${primaryColor}12` }}
                 >
                   <Bell size={14} />
@@ -428,7 +428,7 @@ const Menu = () => {
                       { state: { table, restaurantId } }
                     )
                   }
-                  className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white shadow-want transition-all hover:scale-[1.03] active:scale-[0.98]"
+                  className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-extrabold text-white shadow-want transition-all hover:scale-[1.03] active:scale-[0.98]"
                   style={{ backgroundColor: primaryColor }}
                 >
                   <Receipt size={16} />
@@ -437,9 +437,9 @@ const Menu = () => {
               </div>
             </div>
 
-            <div className="mt-3 overflow-hidden rounded-[24px] border border-border bg-card shadow-[0_8px_24px_-14px_rgba(0,0,0,0.18)]">
+            <div className="mt-3 overflow-hidden rounded-[24px] border border-black/5 bg-white shadow-[0_8px_24px_-14px_rgba(0,0,0,0.18)]">
               {coverUrl && !coverError ? (
-                <div className="h-[150px] w-full overflow-hidden bg-background sm:h-[184px]">
+                <div className="h-[150px] w-full overflow-hidden bg-zinc-100 sm:h-[184px]">
                   <img
                     src={coverUrl}
                     alt={restaurantName}
@@ -458,7 +458,7 @@ const Menu = () => {
 
               <div className="flex items-center gap-3 px-4 py-2.5">
                 {logoUrl && !logoError && (
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
                     <img
                       src={logoUrl}
                       alt={restaurantName}
@@ -471,16 +471,16 @@ const Menu = () => {
                 )}
 
                 <div className="min-w-0 flex-1">
-                  <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+                  <p className="text-[9px] font-extrabold uppercase tracking-[0.22em] text-zinc-500">
                     Menú digital
                   </p>
 
-                  <h1 className="mt-0.5 truncate text-xl font-bold leading-tight tracking-tight text-foreground">
+                  <h1 className="mt-0.5 truncate text-xl font-black leading-tight tracking-tight text-zinc-950">
                     {restaurantName}
                   </h1>
 
                   {welcomeMessage && (
-                    <p className="mt-0.5 truncate text-sm leading-tight text-muted-foreground">
+                    <p className="mt-0.5 truncate text-sm leading-tight text-zinc-500">
                       {welcomeMessage}
                     </p>
                   )}
@@ -497,7 +497,7 @@ const Menu = () => {
                 className={`relative inline-flex h-9 shrink-0 items-center rounded-full px-4 text-sm font-semibold transition-colors ${
                   activeCategory === category.key
                     ? "text-white"
-                    : "border border-border bg-card text-foreground shadow-sm"
+                    : "border border-black/10 bg-white text-zinc-700 shadow-sm"
                 }`}
               >
                 {activeCategory === category.key && (
@@ -518,11 +518,11 @@ const Menu = () => {
           {loading ? (
             <MenuSkeleton />
           ) : filteredItems.length === 0 ? (
-            <div className="rounded-xl border border-border bg-card p-6 text-center shadow-sm">
-              <p className="font-bold text-foreground">
+            <div className="rounded-3xl border border-black/5 bg-white p-6 text-center shadow-sm">
+              <p className="font-bold text-zinc-950">
                 No hay productos disponibles
               </p>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-sm text-zinc-500">
                 Probá otra categoría o consultá al staff.
               </p>
             </div>
@@ -576,19 +576,19 @@ const Menu = () => {
                   state: { table, restaurantId },
                 })
               }
-              className="pointer-events-auto flex h-14 w-full items-center justify-between rounded-lg px-4 text-white shadow-[0_14px_34px_-12px_rgba(0,0,0,0.45)]"
+              className="pointer-events-auto flex h-14 w-full items-center justify-between rounded-2xl px-4 text-white shadow-[0_14px_34px_-12px_rgba(0,0,0,0.45)]"
               style={{ backgroundColor: primaryColor }}
             >
               <div className="flex items-center gap-3">
                 <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
                   <ShoppingCart size={20} />
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-card px-1 text-[11px] font-semibold text-foreground">
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white px-1 text-[11px] font-extrabold text-zinc-950">
                     {totalItems}
                   </span>
                 </div>
 
                 <div className="text-left">
-                  <p className="text-sm font-semibold">Ver pedido</p>
+                  <p className="text-sm font-extrabold">Ver pedido</p>
                   <p className="text-xs text-white/70">
                     Total: {formatPriceARS(total)}
                   </p>
@@ -610,7 +610,7 @@ const Menu = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 16 }}
               transition={{ duration: 0.18 }}
-              className="w-full max-w-lg rounded-t-3xl bg-card p-5 shadow-2xl sm:rounded-xl"
+              className="w-full max-w-lg rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl"
             >
               {assistSent ? (
                 <motion.div
@@ -619,13 +619,13 @@ const Menu = () => {
                   transition={{ duration: 0.15 }}
                   className="flex flex-col items-center py-8 text-center"
                 >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full border border-border bg-secondary">
-                    <Check size={20} className="text-foreground" />
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full border border-zinc-200 bg-zinc-50">
+                    <Check size={20} className="text-zinc-700" />
                   </div>
-                  <p className="mt-3 text-base font-bold text-foreground">
+                  <p className="mt-3 text-base font-black text-zinc-950">
                     Solicitud enviada
                   </p>
-                  <p className="mt-1 text-sm text-muted-foreground">
+                  <p className="mt-1 text-sm text-zinc-500">
                     En un momento viene el mozo.
                   </p>
                 </motion.div>
@@ -633,16 +633,16 @@ const Menu = () => {
                 <>
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                      <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-zinc-400">
                         Mesa {table}
                       </p>
-                      <h2 className="mt-0.5 text-xl font-bold tracking-tight text-foreground">
+                      <h2 className="mt-0.5 text-xl font-black tracking-tight text-zinc-950">
                         ¿Necesitás algo?
                       </h2>
                     </div>
                     <button
                       onClick={() => setAssistOpen(false)}
-                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-background text-muted-foreground"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-600"
                     >
                       <X size={16} />
                     </button>
@@ -654,12 +654,12 @@ const Menu = () => {
                         key={opt.key}
                         disabled={sendingAssist}
                         onClick={() => void sendAssistance(opt.key)}
-                        className="flex w-full items-center justify-between rounded-lg border border-border bg-card px-5 py-4 text-left transition hover:bg-secondary active:bg-background disabled:opacity-50"
+                        className="flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-left transition hover:bg-zinc-50 active:bg-zinc-100 disabled:opacity-50"
                       >
                         <span className="text-sm font-semibold text-zinc-800">
                           {opt.label}
                         </span>
-                        <ChevronRight size={15} className="shrink-0 text-muted-foreground" />
+                        <ChevronRight size={15} className="shrink-0 text-zinc-400" />
                       </button>
                     ))}
                   </div>
@@ -683,17 +683,17 @@ const Menu = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 24 }}
               transition={{ duration: 0.18 }}
-              className="w-full max-w-lg rounded-t-3xl bg-card p-5 shadow-2xl sm:rounded-xl"
+              className="w-full max-w-lg rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl"
             >
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-zinc-500">
                     Observación
                   </p>
-                  <h2 className="mt-1 text-2xl font-bold tracking-tight text-foreground">
+                  <h2 className="mt-1 text-2xl font-black tracking-tight text-zinc-950">
                     {selectedItem.name}
                   </h2>
-                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  <p className="mt-2 text-sm leading-relaxed text-zinc-500">
                     Escribí detalles como ingredientes a quitar, punto de cocción
                     o preferencias del pedido.
                   </p>
@@ -701,7 +701,7 @@ const Menu = () => {
 
                 <button
                   onClick={closeNoteModal}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-background text-foreground"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-700"
                 >
                   <X size={18} />
                 </button>
@@ -713,24 +713,24 @@ const Menu = () => {
                 rows={4}
                 maxLength={140}
                 placeholder="Escribí una observación para este producto..."
-                className="w-full rounded-lg border border-border p-3 text-sm outline-none transition focus:ring-2 focus:ring-ring/40"
+                className="w-full rounded-2xl border border-zinc-200 p-3 text-sm outline-none transition focus:ring-2 focus:ring-black/10"
               />
 
-              <div className="mt-2 text-right text-xs text-muted-foreground">
+              <div className="mt-2 text-right text-xs text-zinc-400">
                 {note.length}/140
               </div>
 
               <div className="mt-5 grid grid-cols-2 gap-3">
                 <button
                   onClick={closeNoteModal}
-                  className="h-12 rounded-lg border border-border bg-card font-semibold text-foreground"
+                  className="h-12 rounded-2xl border border-zinc-200 bg-white font-semibold text-zinc-700"
                 >
                   Cancelar
                 </button>
 
                 <button
                   onClick={handleAddWithNote}
-                  className="h-12 rounded-lg font-semibold text-white"
+                  className="h-12 rounded-2xl font-semibold text-white"
                   style={{ backgroundColor: primaryColor }}
                 >
                   Agregar al pedido

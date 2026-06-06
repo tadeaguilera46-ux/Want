@@ -143,8 +143,8 @@ const SubscriptionGuard = ({ children }: Props) => {
 
   if (loading || !claimChecked) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-sm font-semibold text-muted-foreground">
+      <div className="flex min-h-screen items-center justify-center bg-[#f6f4ef]">
+        <p className="text-sm font-semibold text-zinc-500">
           Verificando suscripción...
         </p>
       </div>

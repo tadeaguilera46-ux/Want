@@ -32,8 +32,8 @@ const SuperAdminGuard = ({ children }: Props) => {
 
   if (loading || !claimChecked) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-sm font-semibold text-muted-foreground">
+      <div className="flex min-h-screen items-center justify-center bg-zinc-100">
+        <p className="text-sm font-semibold text-zinc-500">
           Verificando acceso...
         </p>
       </div>
@@ -43,10 +43,10 @@ const SuperAdminGuard = ({ children }: Props) => {
   // Authenticated but without the superAdmin claim → block.
   if (user && !hasClaim) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-6">
-        <div className="rounded-xl border border-red-800/50 bg-card p-6 text-center shadow-sm">
-          <p className="text-lg font-bold text-foreground">Acceso denegado</p>
-          <p className="mt-2 text-sm text-muted-foreground">
+      <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
+        <div className="rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm">
+          <p className="text-lg font-black text-zinc-950">Acceso denegado</p>
+          <p className="mt-2 text-sm text-zinc-500">
             No tenés permisos para acceder a esta sección.
           </p>
         </div>

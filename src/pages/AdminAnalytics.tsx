@@ -199,13 +199,13 @@ const navItems: { id: AnalyticsSection; label: string; description: string; icon
 
 function DayFilter({ value, onChange }: { value: DayOption; onChange: (v: DayOption) => void }) {
   return (
-    <div className="flex gap-1 rounded-lg border border-border bg-secondary p-1">
+    <div className="flex gap-1 rounded-2xl border border-zinc-200 bg-zinc-50 p-1">
       {([1, 7, 30] as DayOption[]).map((d) => (
         <button
           key={d}
           onClick={() => onChange(d)}
-          className={`rounded-xl px-3 py-1.5 text-xs font-bold transition ${
-            value === d ? "bg-zinc-950 text-white shadow-sm" : "text-muted-foreground hover:text-foreground"
+          className={`rounded-xl px-3 py-1.5 text-xs font-black transition ${
+            value === d ? "bg-zinc-950 text-white shadow-sm" : "text-zinc-500 hover:text-zinc-700"
           }`}
         >
           {d === 1 ? "Hoy" : `${d}d`}
@@ -222,13 +222,13 @@ function StatCard({ icon: Icon, label, value, sub }: {
   sub?: string;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
-      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-background">
-        <Icon size={16} className="text-muted-foreground" />
+    <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-zinc-100">
+        <Icon size={16} className="text-zinc-500" />
       </div>
-      <p className="mt-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</p>
-      <p className="mt-0.5 text-2xl font-bold tracking-tight text-foreground">{value}</p>
-      {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
+      <p className="mt-3 text-[10px] font-bold uppercase tracking-widest text-zinc-400">{label}</p>
+      <p className="mt-0.5 text-2xl font-black tracking-tight text-zinc-950">{value}</p>
+      {sub && <p className="mt-1 text-xs text-zinc-400">{sub}</p>}
     </div>
   );
 }
@@ -239,12 +239,12 @@ function AccentCard({ icon: Icon, label, value }: {
   value: string;
 }) {
   return (
-    <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-5 shadow-sm">
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-sm">
       <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/10">
         <Icon size={16} className="text-white" />
       </div>
       <p className="mt-3 text-[10px] font-bold uppercase tracking-widest text-white/50">{label}</p>
-      <p className="mt-0.5 text-2xl font-bold tracking-tight text-white">{value}</p>
+      <p className="mt-0.5 text-2xl font-black tracking-tight text-white">{value}</p>
     </div>
   );
 }
@@ -255,10 +255,10 @@ function ChartCard({ title, subtitle, children }: {
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-5 shadow-sm">
+    <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
       <div className="mb-4">
-        <h3 className="font-bold text-foreground">{title}</h3>
-        {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
+        <h3 className="font-black text-zinc-950">{title}</h3>
+        {subtitle && <p className="mt-0.5 text-xs text-zinc-400">{subtitle}</p>}
       </div>
       {children}
     </div>
@@ -267,7 +267,7 @@ function ChartCard({ title, subtitle, children }: {
 
 function EmptyState({ text }: { text: string }) {
   return (
-    <div className="flex items-center justify-center rounded-xl border border-dashed border-border py-10 text-sm text-muted-foreground">
+    <div className="flex items-center justify-center rounded-xl border border-dashed border-zinc-200 py-10 text-sm text-zinc-400">
       {text}
     </div>
   );
@@ -280,17 +280,17 @@ function RankingItem({ rank, label, sub, value }: {
   value: string;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-secondary px-4 py-3">
+    <div className="flex items-center justify-between gap-4 rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3">
       <div className="flex min-w-0 items-center gap-3">
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-zinc-200 text-xs font-bold text-muted-foreground">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-zinc-200 text-xs font-black text-zinc-600">
           {rank}
         </span>
         <div className="min-w-0">
-          <p className="truncate text-sm font-bold text-foreground">{label}</p>
-          {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+          <p className="truncate text-sm font-black text-zinc-950">{label}</p>
+          {sub && <p className="text-xs text-zinc-400">{sub}</p>}
         </div>
       </div>
-      <p className="shrink-0 text-sm font-bold text-foreground">{value}</p>
+      <p className="shrink-0 text-sm font-black text-zinc-950">{value}</p>
     </div>
   );
 }
@@ -304,8 +304,8 @@ function SectionHeader({ title, description, filter, onFilterChange }: {
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-foreground">{title}</h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
+        <h2 className="text-2xl font-black tracking-tight text-zinc-950">{title}</h2>
+        <p className="mt-0.5 text-sm text-zinc-500">{description}</p>
       </div>
       <DayFilter value={filter} onChange={onFilterChange} />
     </div>
@@ -543,20 +543,20 @@ function OperacionesSection({ pedidos, days, onDaysChange }: {
             {pedidosMasLentos.map((p) => (
               <div
                 key={`${p.id}-${p.tipo}`}
-                className="flex items-center justify-between gap-3 rounded-xl border border-border bg-secondary px-4 py-3"
+                className="flex items-center justify-between gap-3 rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3"
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
-                    p.tipo === "Cocina" ? "bg-amber-100 text-amber-400" : "bg-blue-100 text-blue-400"
+                  <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg text-xs font-black ${
+                    p.tipo === "Cocina" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"
                   }`}>
                     {p.tipo === "Cocina" ? "C" : "B"}
                   </span>
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-foreground">Mesa {p.mesa}</p>
-                    <p className="truncate text-xs text-muted-foreground">{p.items}</p>
+                    <p className="text-sm font-black text-zinc-950">Mesa {p.mesa}</p>
+                    <p className="truncate text-xs text-zinc-400">{p.items}</p>
                   </div>
                 </div>
-                <p className="shrink-0 text-sm font-bold text-foreground">{formatMinutes(p.minutos)}</p>
+                <p className="shrink-0 text-sm font-black text-zinc-950">{formatMinutes(p.minutos)}</p>
               </div>
             ))}
           </div>
@@ -766,13 +766,13 @@ function PagosSection({ cuentasCobradas, days, onDaysChange }: {
                   return (
                     <div key={m.metodo}>
                       <div className="mb-1.5 flex items-center justify-between">
-                        <span className="text-sm font-bold text-foreground">{m.metodo}</span>
-                        <span className="text-sm font-bold text-muted-foreground">{formatPrice(m.total)}</span>
+                        <span className="text-sm font-black text-zinc-950">{m.metodo}</span>
+                        <span className="text-sm font-bold text-zinc-500">{formatPrice(m.total)}</span>
                       </div>
-                      <div className="h-1.5 rounded-full bg-background">
+                      <div className="h-1.5 rounded-full bg-zinc-100">
                         <div className="h-1.5 rounded-full bg-zinc-950 transition-all" style={{ width: `${pct}%` }} />
                       </div>
-                      <p className="mt-1 text-xs text-muted-foreground">{m.cantidad} cuenta(s) · {pct}%</p>
+                      <p className="mt-1 text-xs text-zinc-400">{m.cantidad} cuenta(s) · {pct}%</p>
                     </div>
                   );
                 })}
@@ -790,15 +790,15 @@ function PagosSection({ cuentasCobradas, days, onDaysChange }: {
                 {ultimasCuentas.map((c) => (
                   <div
                     key={c.id}
-                    className="flex items-center justify-between gap-4 rounded-xl border border-border bg-secondary px-4 py-3"
+                    className="flex items-center justify-between gap-4 rounded-xl border border-zinc-100 bg-zinc-50 px-4 py-3"
                   >
                     <div className="min-w-0">
-                      <p className="text-sm font-bold text-foreground">Mesa {c.mesa}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-sm font-black text-zinc-950">Mesa {c.mesa}</p>
+                      <p className="text-xs text-zinc-400">
                         {toDateSafe(c.createdAt)?.toLocaleString("es-AR") || "—"} · {getMetodoLabel(c.metodo)}
                       </p>
                     </div>
-                    <p className="shrink-0 text-sm font-bold text-foreground">{formatPrice(c.total)}</p>
+                    <p className="shrink-0 text-sm font-black text-zinc-950">{formatPrice(c.total)}</p>
                   </div>
                 ))}
               </div>
@@ -863,10 +863,10 @@ const AdminAnalytics = () => {
 
   if (!restaurantId) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-6">
-        <div className="rounded-xl border border-border bg-card px-6 py-5 text-center shadow-sm">
-          <h1 className="text-lg font-bold text-foreground">Falta restaurante activo</h1>
-          <p className="mt-2 text-sm text-muted-foreground">Seleccioná un restaurante antes de entrar a analytics.</p>
+      <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
+        <div className="rounded-3xl border border-zinc-200 bg-white px-6 py-5 text-center shadow-sm">
+          <h1 className="text-lg font-black text-zinc-950">Falta restaurante activo</h1>
+          <p className="mt-2 text-sm text-zinc-500">Seleccioná un restaurante antes de entrar a analytics.</p>
         </div>
       </div>
     );
@@ -874,8 +874,8 @@ const AdminAnalytics = () => {
 
   if (planLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="rounded-xl border border-border bg-card px-6 py-5 shadow-sm text-sm text-muted-foreground">
+      <div className="flex min-h-screen items-center justify-center bg-zinc-100">
+        <div className="rounded-3xl border border-zinc-200 bg-white px-6 py-5 shadow-sm text-sm text-zinc-500">
           Verificando plan...
         </div>
       </div>
@@ -884,21 +884,21 @@ const AdminAnalytics = () => {
 
   if (!analyticsEnabled) {
     return (
-      <div className="min-h-screen bg-background p-6">
-        <div className="mx-auto max-w-2xl rounded-xl border border-border bg-card p-8 shadow-sm">
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-zinc-950 text-white">
+      <div className="min-h-screen bg-zinc-100 p-6">
+        <div className="mx-auto max-w-2xl rounded-3xl border border-zinc-200 bg-white p-8 shadow-sm">
+          <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-zinc-950 text-white">
             <ShieldCheck size={24} />
           </div>
-          <h1 className="mt-5 text-3xl font-bold text-foreground">Analytics no disponible</h1>
-          <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+          <h1 className="mt-5 text-3xl font-black text-zinc-950">Analytics no disponible</h1>
+          <p className="mt-3 text-sm leading-relaxed text-zinc-500">
             Tu plan actual no incluye analytics avanzados. Pasate a Pro o Premium para desbloquear métricas, productos más vendidos, facturación y reportes operativos.
           </p>
-          <div className="mt-6 rounded-lg border border-amber-800/50 bg-amber-950/30 px-4 py-3 text-sm font-bold text-amber-400">
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
             Plan actual: {currentPlan.toUpperCase()}
           </div>
           <button
             onClick={() => navigate("/staff/admin")}
-            className="mt-6 flex h-11 items-center gap-2 rounded-lg bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90"
+            className="mt-6 flex h-11 items-center gap-2 rounded-2xl bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90"
           >
             <ArrowLeft size={16} />
             Volver a Admin
@@ -910,8 +910,8 @@ const AdminAnalytics = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="rounded-xl border border-border bg-card px-6 py-5 shadow-sm text-sm text-muted-foreground">
+      <div className="flex min-h-screen items-center justify-center bg-zinc-100">
+        <div className="rounded-3xl border border-zinc-200 bg-white px-6 py-5 shadow-sm text-sm text-zinc-500">
           Cargando analytics...
         </div>
       </div>
@@ -919,14 +919,14 @@ const AdminAnalytics = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background lg:flex">
+    <div className="min-h-screen bg-zinc-100 lg:flex">
       {/* Sidebar — desktop */}
       <aside className="sticky top-0 hidden h-screen w-[280px] shrink-0 overflow-hidden border-r border-white/60 bg-zinc-950 p-4 text-white shadow-2xl lg:flex lg:flex-col">
         <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-4 shadow-inner">
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-card text-foreground shadow-sm">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-zinc-950 shadow-sm">
             <ChartLine size={22} />
           </div>
-          <h2 className="mt-4 text-2xl font-bold tracking-tight">Analytics</h2>
+          <h2 className="mt-4 text-2xl font-black tracking-tight">Analytics</h2>
           <p className="mt-1 text-xs font-medium leading-relaxed text-white/50">
             Métricas y reportes de tu restaurante.
           </p>
@@ -940,8 +940,8 @@ const AdminAnalytics = () => {
               <button
                 key={item.id}
                 onClick={() => setActiveSection(item.id)}
-                className={`group flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left transition-all duration-200 ${
-                  active ? "bg-card text-foreground shadow-lg shadow-black/20" : "text-white/70 hover:bg-white/[0.08] hover:text-white"
+                className={`group flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-all duration-200 ${
+                  active ? "bg-white text-zinc-950 shadow-lg shadow-black/20" : "text-white/70 hover:bg-white/[0.08] hover:text-white"
                 }`}
               >
                 <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition ${
@@ -950,8 +950,8 @@ const AdminAnalytics = () => {
                   <Icon size={18} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-bold">{item.label}</p>
-                  <p className={`text-xs ${active ? "text-muted-foreground" : "text-white/40"}`}>{item.description}</p>
+                  <p className="text-sm font-black">{item.label}</p>
+                  <p className={`text-xs ${active ? "text-zinc-500" : "text-white/40"}`}>{item.description}</p>
                 </div>
               </button>
             );
@@ -961,10 +961,10 @@ const AdminAnalytics = () => {
         <div className="mt-auto border-t border-white/10 pt-4">
           <button
             onClick={() => navigate("/staff/admin")}
-            className="flex w-full items-center gap-3 rounded-lg border border-red-400/20 bg-red-500/10 px-3 py-3 text-left text-red-200 transition hover:bg-red-500/20"
+            className="flex w-full items-center gap-3 rounded-2xl border border-red-400/20 bg-red-500/10 px-3 py-3 text-left text-red-200 transition hover:bg-red-500/20"
           >
             <ArrowLeft size={18} />
-            <span className="text-sm font-bold">Volver a Admin</span>
+            <span className="text-sm font-black">Volver a Admin</span>
           </button>
         </div>
       </aside>
@@ -972,7 +972,7 @@ const AdminAnalytics = () => {
       {/* Content */}
       <div className="min-w-0 flex-1">
         {/* Tabs — mobile */}
-        <div className="sticky top-0 z-10 border-b border-border bg-card px-4 lg:hidden">
+        <div className="sticky top-0 z-10 border-b border-zinc-200 bg-white px-4 lg:hidden">
           <div className="flex gap-1 overflow-x-auto py-3 [scrollbar-width:none]">
             {navItems.map((item) => {
               const Icon = item.icon;
@@ -981,8 +981,8 @@ const AdminAnalytics = () => {
                 <button
                   key={item.id}
                   onClick={() => setActiveSection(item.id)}
-                  className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold transition ${
-                    active ? "bg-zinc-950 text-white" : "text-muted-foreground hover:bg-background"
+                  className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm font-black transition ${
+                    active ? "bg-zinc-950 text-white" : "text-zinc-500 hover:bg-zinc-100"
                   }`}
                 >
                   <Icon size={15} />

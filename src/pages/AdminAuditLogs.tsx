@@ -218,22 +218,22 @@ const AdminAuditLogs = () => {
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="mx-auto w-full max-w-5xl px-4 py-6">
-        <header className="mb-6 rounded-xl border border-slate-200 bg-card p-5 shadow-sm">
+        <header className="mb-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
               <button
                 onClick={() => navigate("/staff/admin")}
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-card text-slate-700 shadow-sm"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-sm"
               >
                 <ArrowLeft size={18} />
               </button>
 
               <div className="flex items-center gap-2">
-                <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-950 text-white">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-950 text-white">
                   <Activity size={20} />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold tracking-tight text-slate-950">
+                  <h1 className="text-2xl font-black tracking-tight text-slate-950">
                     Actividad del restaurante
                   </h1>
                   <p className="mt-0.5 text-sm text-slate-500">
@@ -244,7 +244,7 @@ const AdminAuditLogs = () => {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold text-slate-700">
+              <span className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm font-bold text-slate-700">
                 {filteredLogs.length} evento(s)
               </span>
 
@@ -253,7 +253,7 @@ const AdminAuditLogs = () => {
                   <button
                     onClick={() => setSelectMode(true)}
                     disabled={filteredLogs.length === 0 || deleting}
-                    className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-card px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+                    className="flex h-10 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
                   >
                     <CheckSquare2 size={15} />
                     Seleccionar
@@ -262,7 +262,7 @@ const AdminAuditLogs = () => {
                   <button
                     onClick={deleteAll}
                     disabled={filteredLogs.length === 0 || deleting}
-                    className="flex h-10 items-center gap-2 rounded-lg border border-red-800/50 bg-red-950/30 px-4 text-sm font-bold text-red-400 transition hover:bg-red-100 disabled:opacity-40"
+                    className="flex h-10 items-center gap-2 rounded-2xl border border-red-200 bg-red-50 px-4 text-sm font-black text-red-700 transition hover:bg-red-100 disabled:opacity-40"
                   >
                     <Trash2 size={15} />
                     Borrar todo
@@ -277,7 +277,7 @@ const AdminAuditLogs = () => {
                   <button
                     onClick={deleteSelected}
                     disabled={selectedIds.size === 0 || deleting}
-                    className="flex h-10 items-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-bold text-white transition hover:bg-red-700 disabled:opacity-40"
+                    className="flex h-10 items-center gap-2 rounded-2xl bg-red-600 px-4 text-sm font-black text-white transition hover:bg-red-700 disabled:opacity-40"
                   >
                     <Trash2 size={15} />
                     {deleting ? "Borrando..." : "Borrar seleccionadas"}
@@ -286,7 +286,7 @@ const AdminAuditLogs = () => {
                   <button
                     onClick={exitSelectMode}
                     disabled={deleting}
-                    className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-card px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+                    className="flex h-10 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
                   >
                     <X size={15} />
                     Cancelar
@@ -300,7 +300,7 @@ const AdminAuditLogs = () => {
             <select
               value={actionFilter}
               onChange={(event) => setActionFilter(event.target.value)}
-              className="h-11 w-full rounded-lg border border-slate-200 bg-card px-4 text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-ring/40 sm:w-72"
+              className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-black/10 sm:w-72"
             >
               <option value="all">Todas las acciones</option>
               {actions.map((action) => (
@@ -313,21 +313,21 @@ const AdminAuditLogs = () => {
         </header>
 
         {error && (
-          <div className="mb-4 rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-3 text-sm font-semibold text-red-400">
+          <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
             {error}
           </div>
         )}
 
         {loading ? (
-          <div className="rounded-xl border border-slate-200 bg-card p-6 text-center text-sm font-semibold text-slate-500 shadow-sm">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 text-center text-sm font-semibold text-slate-500 shadow-sm">
             Cargando actividad...
           </div>
         ) : filteredLogs.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-card px-6 py-12 text-center shadow-sm">
+          <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center shadow-sm">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-slate-500">
               <Activity size={24} />
             </div>
-            <h2 className="mt-4 text-lg font-bold text-slate-950">
+            <h2 className="mt-4 text-lg font-black text-slate-950">
               Todavía no hay actividad
             </h2>
             <p className="mt-2 text-sm text-slate-500">
@@ -343,33 +343,33 @@ const AdminAuditLogs = () => {
                 <article
                   key={log.id}
                   onClick={() => selectMode && toggleSelect(log.id)}
-                  className={`rounded-xl border p-4 shadow-sm transition ${
+                  className={`rounded-3xl border p-4 shadow-sm transition ${
                     selectMode ? "cursor-pointer" : ""
                   } ${
                     isSelected
-                      ? "border-red-300 bg-red-950/30 ring-2 ring-red-200"
-                      : "border-slate-200 bg-card"
+                      ? "border-red-300 bg-red-50 ring-2 ring-red-200"
+                      : "border-slate-200 bg-white"
                   }`}
                 >
                   <div className="flex items-start gap-3">
                     {selectMode && (
                       <div className="mt-0.5 shrink-0">
                         {isSelected ? (
-                          <CheckSquare2 size={20} className="text-red-400" />
+                          <CheckSquare2 size={20} className="text-red-600" />
                         ) : (
                           <Square size={20} className="text-slate-400" />
                         )}
                       </div>
                     )}
 
-                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white ${isSelected ? "bg-red-500" : "bg-slate-950"}`}>
+                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-white ${isSelected ? "bg-red-500" : "bg-slate-950"}`}>
                       {actionIcon(log.action)}
                     </div>
 
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                         <div>
-                          <h3 className="text-base font-bold text-slate-950">
+                          <h3 className="text-base font-black text-slate-950">
                             {actionLabel(log.action)}
                           </h3>
                           <p className="mt-1 text-sm leading-relaxed text-slate-600">
@@ -389,23 +389,23 @@ const AdminAuditLogs = () => {
                           </span>
                         )}
                         {log.userEmail && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-950/30 px-3 py-1 text-xs font-bold text-blue-400">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
                             <User size={12} />
                             {log.userEmail}
                           </span>
                         )}
                         {log.userRole && (
-                          <span className="rounded-full bg-emerald-950/30 px-3 py-1 text-xs font-bold uppercase text-emerald-400">
+                          <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold uppercase text-emerald-700">
                             {log.userRole}
                           </span>
                         )}
                         {log.pedidoId && (
-                          <span className="rounded-full bg-background px-3 py-1 text-xs font-mono font-bold text-muted-foreground">
+                          <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-mono font-bold text-zinc-600">
                             Pedido {log.pedidoId.slice(0, 8)}
                           </span>
                         )}
                         {log.cuentaId && (
-                          <span className="rounded-full bg-background px-3 py-1 text-xs font-mono font-bold text-muted-foreground">
+                          <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-mono font-bold text-zinc-600">
                             Cuenta {log.cuentaId.slice(0, 8)}
                           </span>
                         )}

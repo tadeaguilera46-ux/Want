@@ -168,25 +168,25 @@ const getBarStatus = (pedido: Pedido): EstadoCocinaBarra =>
 const statusBadge = (estado?: string | null) => {
   switch (estado) {
     case "pendiente":
-      return "bg-amber-100 text-amber-400 border border-amber-800/50";
+      return "bg-amber-100 text-amber-800 border border-amber-200";
     case "preparando":
-      return "bg-blue-100 text-blue-400 border border-blue-800/50";
+      return "bg-blue-100 text-blue-800 border border-blue-200";
     case "listo":
-      return "bg-emerald-100 text-emerald-400 border border-emerald-800/50";
+      return "bg-emerald-100 text-emerald-800 border border-emerald-200";
     case "entregado":
-      return "bg-zinc-200 text-foreground border border-zinc-300";
+      return "bg-zinc-200 text-zinc-700 border border-zinc-300";
     case "en_camino":
       return "bg-violet-100 text-violet-800 border border-violet-200";
     case "pagada":
-      return "bg-emerald-100 text-emerald-400 border border-emerald-800/50";
+      return "bg-emerald-100 text-emerald-800 border border-emerald-200";
     case "available":
-      return "bg-emerald-100 text-emerald-400 border border-emerald-800/50";
+      return "bg-emerald-100 text-emerald-700 border border-emerald-200";
     case "occupied":
-      return "bg-red-100 text-red-400 border border-red-800/50";
+      return "bg-red-100 text-red-700 border border-red-200";
     case "needs_cleaning":
       return "bg-orange-100 text-orange-700 border border-orange-200";
     default:
-      return "bg-background text-foreground border border-border";
+      return "bg-zinc-100 text-zinc-700 border border-zinc-200";
   }
 };
 
@@ -208,7 +208,7 @@ const metodoLabel = (metodo: MetodoPago | null | undefined) => {
 const getPriorityStyles = (mesa: MesaAdminData) => {
   if (mesa.cuentaActual?.estado === "pendiente") {
     return {
-      card: "border-red-800/50 bg-red-950/30/50",
+      card: "border-red-200 bg-red-50/50",
       badge: "bg-red-500 text-white",
     };
   }
@@ -222,21 +222,21 @@ const getPriorityStyles = (mesa: MesaAdminData) => {
 
   if (mesa.pedidosListos.length > 0) {
     return {
-      card: "border-emerald-800/50 bg-emerald-950/30/50",
+      card: "border-emerald-200 bg-emerald-50/50",
       badge: "bg-emerald-500 text-white",
     };
   }
 
   if (mesa.pedidosActivos.length > 0) {
     return {
-      card: "border-amber-800/50 bg-amber-950/30/50",
+      card: "border-amber-200 bg-amber-50/50",
       badge: "bg-amber-400 text-black",
     };
   }
 
   return {
-    card: "border-border bg-card",
-    badge: "bg-zinc-200 text-foreground",
+    card: "border-zinc-200 bg-white",
+    badge: "bg-zinc-200 text-zinc-700",
   };
 };
 
@@ -268,12 +268,12 @@ const renderPedidoItems = (pedido: Pedido) => {
         return (
           <div
             key={`${item.nombre}-${observation || "sin-observacion"}-${i}`}
-            className="rounded-lg border border-border bg-card p-3"
+            className="rounded-2xl border border-zinc-200 bg-white p-3"
           >
             <div className="flex items-start justify-between gap-3 text-sm">
-              <p className="font-semibold text-foreground">
+              <p className="font-semibold text-zinc-900">
                 {item.nombre} x {item.cantidad}
-                <span className="ml-1 text-muted-foreground">({item.category})</span>
+                <span className="ml-1 text-zinc-500">({item.category})</span>
               </p>
             </div>
 
@@ -282,10 +282,10 @@ const renderPedidoItems = (pedido: Pedido) => {
                 <div className="flex items-start gap-2">
                   <MessageSquareText
                     size={14}
-                    className="mt-0.5 shrink-0 text-amber-300"
+                    className="mt-0.5 shrink-0 text-amber-900"
                   />
                   <div className="min-w-0">
-                    <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-300">
+                    <p className="mb-1 text-[11px] font-extrabold uppercase tracking-wide text-amber-900">
                       OBS
                     </p>
                     <p className="text-sm font-semibold leading-snug text-amber-950 break-words">
@@ -703,12 +703,12 @@ const Admin = () => {
 
   if (!restaurantId) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-6">
-        <div className="rounded-xl border border-border bg-card px-6 py-5 shadow-sm text-center">
-          <h1 className="text-lg font-bold text-foreground">
+      <div className="min-h-screen flex items-center justify-center bg-zinc-100 p-6">
+        <div className="rounded-3xl border border-zinc-200 bg-white px-6 py-5 shadow-sm text-center">
+          <h1 className="text-lg font-black text-zinc-950">
             Falta restaurante activo
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm text-zinc-600">
             Seleccioná un restaurante antes de entrar al panel admin.
           </p>
         </div>
@@ -718,8 +718,8 @@ const Admin = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-6">
-        <div className="rounded-xl border border-border bg-card px-6 py-5 shadow-sm">
+      <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
+        <div className="rounded-3xl border border-zinc-200 bg-white px-6 py-5 shadow-sm">
           Cargando panel admin...
         </div>
       </div>
@@ -770,26 +770,26 @@ return (
           <div className="sticky top-0 z-30 border-b border-white/60 bg-white/70 backdrop-blur-2xl">
             <div className="mx-auto flex w-full max-w-[1800px] items-center justify-between px-4 py-4 md:px-6 lg:px-8">
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-zinc-950 text-white shadow-lg shadow-black/10">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-950 text-white shadow-lg shadow-black/10">
                   <Sparkles size={18} />
                 </div>
 
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-[0.24em] text-muted-foreground">
+                  <p className="text-[11px] font-black uppercase tracking-[0.24em] text-zinc-400">
                     WANT OS
                   </p>
 
-                  <h1 className="text-lg font-bold tracking-tight text-foreground">
+                  <h1 className="text-lg font-black tracking-tight text-zinc-950">
                     {restaurantName}
                   </h1>
                 </div>
               </div>
               <AdminLiveActivityFeed restaurantId={restaurantId} />
               <div className="flex items-center gap-3">
-                <div className={`hidden items-center gap-2 rounded-lg border px-4 py-2 lg:flex ${
+                <div className={`hidden items-center gap-2 rounded-2xl border px-4 py-2 lg:flex ${
                     isOnline
-                      ? "border-emerald-800/50 bg-emerald-950/30"
-                      : "border-red-800/50 bg-red-950/30"
+                      ? "border-emerald-200 bg-emerald-50"
+                      : "border-red-200 bg-red-50"
                   }`}
                 >
                   <span
@@ -801,45 +801,45 @@ return (
                   />
 
                   <span
-                    className={`text-sm font-bold ${
-                      isOnline ? "text-emerald-400" : "text-red-400"
+                    className={`text-sm font-black ${
+                      isOnline ? "text-emerald-700" : "text-red-700"
                     }`}
                   >
                     {isOnline ? "Online" : "Sin conexión"}
                   </span>
                 </div>
 
-                <div className="hidden items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 xl:flex">
-                  <Wifi size={15} className="text-muted-foreground" />
+                <div className="hidden items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-2 xl:flex">
+                  <Wifi size={15} className="text-zinc-500" />
 
-                  <span className="text-sm font-bold text-foreground">
+                  <span className="text-sm font-bold text-zinc-700">
                     Tiempo real conectado
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 shadow-sm">
-                  <Clock3 size={15} className="text-muted-foreground" />
+                <div className="flex items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 py-2 shadow-sm">
+                  <Clock3 size={15} className="text-zinc-500" />
 
-                  <span className="min-w-[74px] text-sm font-bold tracking-wide text-foreground">
+                  <span className="min-w-[74px] text-sm font-black tracking-wide text-zinc-900">
                     {formattedLiveTime}
                   </span>
                 </div>
 
-                <div className="hidden rounded-lg border border-border bg-zinc-950 px-4 py-2 lg:block">
-                  <span className="text-sm font-bold uppercase tracking-wide text-white">
+                <div className="hidden rounded-2xl border border-zinc-200 bg-zinc-950 px-4 py-2 lg:block">
+                  <span className="text-sm font-black uppercase tracking-wide text-white">
                     PLAN {restaurantPlan}
                   </span>
                 </div>
               </div>
             </div>
           </div>
-        <div className="sticky top-0 z-30 border-b border-border/70 bg-white/85 px-4 py-3 backdrop-blur lg:hidden">
+        <div className="sticky top-0 z-30 border-b border-zinc-200/70 bg-white/85 px-4 py-3 backdrop-blur lg:hidden">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.25em] text-muted-foreground">
+              <p className="text-xs font-black uppercase tracking-[0.25em] text-zinc-400">
                 WANT Admin
               </p>
-              <p className="text-lg font-bold text-foreground">
+              <p className="text-lg font-black text-zinc-950">
                 Panel
               </p>
             </div>
@@ -847,7 +847,7 @@ return (
             <button
               onClick={handleLogout}
               disabled={loggingOut}
-              className="rounded-lg border border-red-800/50 bg-red-950/30 px-3 py-2 text-xs font-bold text-red-400 disabled:opacity-50"
+              className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-black text-red-700 disabled:opacity-50"
             >
               {loggingOut ? "..." : "Salir"}
             </button>
@@ -865,10 +865,10 @@ return (
               <button
                 key={item.id}
                 onClick={() => setAdminSection(item.id as AdminSection)}
-                className={`shrink-0 rounded-lg px-4 py-2 text-sm font-bold transition ${
+                className={`shrink-0 rounded-2xl px-4 py-2 text-sm font-black transition ${
                   adminSection === item.id
                     ? "bg-zinc-950 text-white shadow-sm"
-                    : "border border-border bg-card text-muted-foreground"
+                    : "border border-zinc-200 bg-white text-zinc-600"
                 }`}
               >
                 {item.label}
@@ -888,12 +888,12 @@ return (
 
                 <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
                   <div>
-                    <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.22em] text-white/70">
+                    <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-black uppercase tracking-[0.22em] text-white/70">
                       <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_0_4px_rgba(52,211,153,0.16)]" />
                       Operación en vivo
                     </div>
 
-                    <h2 className="max-w-3xl text-4xl font-bold tracking-tight md:text-6xl">
+                    <h2 className="max-w-3xl text-4xl font-black tracking-tight md:text-6xl">
                       {restaurantName}
                     </h2>
 
@@ -906,51 +906,51 @@ return (
               </section>
               <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
                 <div className="rounded-[2rem] border border-white/70 bg-white/85 p-5 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md">
-                  <div className="flex items-center gap-2 text-muted-foreground">
+                  <div className="flex items-center gap-2 text-zinc-500">
                     <Users size={16} />
                     <p className="text-sm font-semibold">Mesas ocupadas</p>
                   </div>
-                  <p className="mt-3 text-4xl font-bold tracking-tight text-foreground">
+                  <p className="mt-3 text-4xl font-black tracking-tight text-zinc-950">
                     {stats.ocupadas}
                   </p>
                 </div>
 
                 <div className="rounded-[2rem] border border-white/70 bg-white/85 p-5 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md">
-                  <div className="flex items-center gap-2 text-muted-foreground">
+                  <div className="flex items-center gap-2 text-zinc-500">
                     <DoorOpen size={16} />
                     <p className="text-sm font-semibold">Mesas libres</p>
                   </div>
-                  <p className="mt-3 text-4xl font-bold tracking-tight text-foreground">
+                  <p className="mt-3 text-4xl font-black tracking-tight text-zinc-950">
                     {stats.libres}
                   </p>
                 </div>
 
-                <div className="rounded-[2rem] border border-emerald-800/50/70 bg-emerald-950/30/80 p-5 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md">
-                  <div className="flex items-center gap-2 text-emerald-400">
+                <div className="rounded-[2rem] border border-emerald-200/70 bg-emerald-50/80 p-5 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md">
+                  <div className="flex items-center gap-2 text-emerald-700">
                     <ChefHat size={16} />
                     <p className="text-sm font-semibold">Pedidos listos</p>
                   </div>
-                  <p className="mt-3 text-4xl font-bold tracking-tight text-emerald-300">
+                  <p className="mt-3 text-4xl font-black tracking-tight text-emerald-900">
                     {stats.pedidosListos}
                   </p>
                 </div>
 
-                <div className="rounded-[2rem] border border-amber-800/50/70 bg-amber-950/30/80 p-5 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md">
-                  <div className="flex items-center gap-2 text-amber-400">
+                <div className="rounded-[2rem] border border-amber-200/70 bg-amber-50/80 p-5 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md">
+                  <div className="flex items-center gap-2 text-amber-700">
                     <Receipt size={16} />
                     <p className="text-sm font-semibold">Cuentas</p>
                   </div>
-                  <p className="mt-3 text-4xl font-bold tracking-tight text-amber-300">
+                  <p className="mt-3 text-4xl font-black tracking-tight text-amber-900">
                     {stats.cuentasPendientes}
                   </p>
                 </div>
 
                 <div className="rounded-[2rem] border border-white/70 bg-white/85 p-5 shadow-sm backdrop-blur transition hover:-translate-y-0.5 hover:shadow-md">
-                  <div className="flex items-center gap-2 text-muted-foreground">
+                  <div className="flex items-center gap-2 text-zinc-500">
                     <CircleDollarSign size={16} />
                     <p className="text-sm font-semibold">Ventas hoy</p>
                   </div>
-                  <p className="mt-3 text-2xl font-bold tracking-tight text-foreground">
+                  <p className="mt-3 text-2xl font-black tracking-tight text-zinc-950">
                     {formatPrice(stats.ventasHoy)}
                   </p>
                 </div>
@@ -960,7 +960,7 @@ return (
                     <CircleDollarSign size={16} />
                     <p className="text-sm font-semibold">Consumo activo</p>
                   </div>
-                  <p className="mt-3 text-2xl font-bold tracking-tight">
+                  <p className="mt-3 text-2xl font-black tracking-tight">
                     {formatPrice(stats.consumoActivo)}
                   </p>
                 </div>
@@ -970,7 +970,7 @@ return (
                     <div className="relative">
                       <Search
                         size={16}
-                        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground"
+                        className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400"
                       />
 
                       <input
@@ -978,7 +978,7 @@ return (
                         placeholder="Buscar mesa..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="h-12 w-full rounded-lg border border-border bg-card pl-11 pr-4 text-sm font-semibold outline-none transition focus:border-zinc-400 focus:ring-4 focus:ring-zinc-200/70"
+                        className="h-12 w-full rounded-2xl border border-zinc-200 bg-white pl-11 pr-4 text-sm font-semibold outline-none transition focus:border-zinc-400 focus:ring-4 focus:ring-zinc-200/70"
                       />
                     </div>
 
@@ -993,7 +993,7 @@ return (
                             | "needs_cleaning"
                         )
                       }
-                      className="h-12 rounded-lg border border-border bg-card px-4 text-sm font-semibold outline-none transition focus:border-zinc-400 focus:ring-4 focus:ring-zinc-200/70"
+                      className="h-12 rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-semibold outline-none transition focus:border-zinc-400 focus:ring-4 focus:ring-zinc-200/70"
                     >
                       <option value="todas">Todas las mesas</option>
                       <option value="occupied">Solo ocupadas</option>
@@ -1001,11 +1001,11 @@ return (
                       <option value="available">Solo libres</option>
                     </select>
 
-                    <div className="flex h-12 items-center justify-center rounded-lg border border-border bg-secondary px-4 text-sm font-bold text-muted-foreground">
+                    <div className="flex h-12 items-center justify-center rounded-2xl border border-zinc-200 bg-zinc-50 px-4 text-sm font-bold text-zinc-600">
                       {mesasFiltradas.length} mesa(s)
                     </div>
 
-                    <div className="flex h-12 items-center justify-center gap-2 rounded-lg border border-emerald-800/50 bg-emerald-950/30 px-4 text-sm font-bold text-emerald-400">
+                    <div className="flex h-12 items-center justify-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-black text-emerald-700">
                       <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.12)]" />
                       Prioridad live
                     </div>
@@ -1039,7 +1039,7 @@ return (
                             "group relative overflow-hidden rounded-[2rem] border p-5 shadow-sm backdrop-blur transition-all duration-300",
                             "hover:-translate-y-1 hover:shadow-xl",
                             needsAttention
-                              ? "border-zinc-300 bg-card ring-1 ring-zinc-950/5"
+                              ? "border-zinc-300 bg-white ring-1 ring-zinc-950/5"
                               : priorityStyles.card,
                           ].join(" ")}
                         >
@@ -1061,16 +1061,16 @@ return (
                                   ].join(" ")}
                                 />
 
-                                <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">
+                                <p className="text-xs font-black uppercase tracking-[0.18em] text-zinc-400">
                                   {statusLabel}
                                 </p>
                               </div>
 
-                              <h2 className="mt-2 text-4xl font-bold tracking-tight text-foreground">
+                              <h2 className="mt-2 text-4xl font-black tracking-tight text-zinc-950">
                                 Mesa {mesa.numero}
                               </h2>
 
-                              <p className="mt-1 truncate text-xs font-semibold text-muted-foreground">
+                              <p className="mt-1 truncate text-xs font-semibold text-zinc-500">
                                 {mesa.activeSessionId
                                   ? `Sesión ${String(mesa.activeSessionId).slice(0, 8)}`
                                   : "Sin sesión activa"}
@@ -1080,7 +1080,7 @@ return (
                             <div className="flex flex-col items-end gap-2">
                               <span
                                 className={[
-                                  "rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wide",
+                                  "rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-wide",
                                   needsAttention
                                     ? "bg-zinc-950 text-white"
                                     : priorityStyles.badge,
@@ -1092,39 +1092,39 @@ return (
                           </div>
 
                           <div className="relative mb-5 grid grid-cols-2 gap-3">
-                            <div className="rounded-lg border border-border/70 bg-white/90 p-4">
-                              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                            <div className="rounded-2xl border border-zinc-200/70 bg-white/90 p-4">
+                              <p className="text-[11px] font-black uppercase tracking-wide text-zinc-400">
                                 Total actual
                               </p>
-                              <p className="mt-1 text-lg font-bold text-foreground">
+                              <p className="mt-1 text-lg font-black text-zinc-950">
                                 {formatPrice(mesa.totalActual)}
                               </p>
                             </div>
 
-                            <div className="rounded-lg border border-border/70 bg-white/90 p-4">
-                              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                            <div className="rounded-2xl border border-zinc-200/70 bg-white/90 p-4">
+                              <p className="text-[11px] font-black uppercase tracking-wide text-zinc-400">
                                 Pedidos
                               </p>
-                              <p className="mt-1 text-lg font-bold text-foreground">
+                              <p className="mt-1 text-lg font-black text-zinc-950">
                                 {mesa.pedidosActivos.length}
-                                <span className="ml-1 text-sm text-muted-foreground">activos</span>
+                                <span className="ml-1 text-sm text-zinc-400">activos</span>
                               </p>
                             </div>
 
-                            <div className="rounded-lg border border-border/70 bg-white/90 p-4">
-                              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                            <div className="rounded-2xl border border-zinc-200/70 bg-white/90 p-4">
+                              <p className="text-[11px] font-black uppercase tracking-wide text-zinc-400">
                                 Listos
                               </p>
-                              <p className="mt-1 text-lg font-bold text-emerald-400">
+                              <p className="mt-1 text-lg font-black text-emerald-700">
                                 {mesa.pedidosListos.length}
                               </p>
                             </div>
 
-                            <div className="rounded-lg border border-border/70 bg-white/90 p-4">
-                              <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                            <div className="rounded-2xl border border-zinc-200/70 bg-white/90 p-4">
+                              <p className="text-[11px] font-black uppercase tracking-wide text-zinc-400">
                                 Estado
                               </p>
-                              <p className="mt-1 text-sm font-bold text-foreground">
+                              <p className="mt-1 text-sm font-black text-zinc-950">
                                 {isAvailable ? "Libre" : isCleaning ? "Limpieza" : "Ocupada"}
                               </p>
                             </div>
@@ -1133,7 +1133,7 @@ return (
                           {mesa.cuentaActual && (
                             <button
                               onClick={() => avanzarCuenta(mesa.cuentaActual)}
-                              className="relative mb-4 h-12 w-full rounded-lg bg-emerald-600 font-bold text-white shadow-sm transition hover:scale-[1.01] hover:bg-emerald-700"
+                              className="relative mb-4 h-12 w-full rounded-2xl bg-emerald-600 font-black text-white shadow-sm transition hover:scale-[1.01] hover:bg-emerald-700"
                             >
                               {mesa.cuentaActual.estado === "pendiente"
                                 ? "Marcar cuenta en camino"
@@ -1145,17 +1145,17 @@ return (
 
                           <div className="relative mb-5">
                             <div className="mb-3 flex items-center justify-between">
-                              <h3 className="text-sm font-bold text-foreground">
+                              <h3 className="text-sm font-black text-zinc-950">
                                 Actividad de la mesa
                               </h3>
 
-                              <span className="rounded-full bg-background px-2.5 py-1 text-xs font-bold text-muted-foreground">
+                              <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-black text-zinc-600">
                                 {mesa.pedidosActivos.length}
                               </span>
                             </div>
 
                             {mesa.pedidosActivos.length === 0 ? (
-                              <div className="rounded-lg border border-dashed border-zinc-300 bg-white/70 p-4 text-sm font-semibold text-muted-foreground">
+                              <div className="rounded-2xl border border-dashed border-zinc-300 bg-white/70 p-4 text-sm font-semibold text-zinc-500">
                                 Sin pedidos activos.
                               </div>
                             ) : (
@@ -1163,14 +1163,14 @@ return (
                                 {mesa.pedidosActivos.slice(0, 2).map((pedido) => (
                                   <div
                                     key={pedido.id}
-                                    className="rounded-lg border border-border/70 bg-white/90 p-3"
+                                    className="rounded-2xl border border-zinc-200/70 bg-white/90 p-3"
                                   >
                                     <div className="mb-2 flex items-center justify-between gap-2">
-                                      <span className="text-sm font-bold text-foreground">
+                                      <span className="text-sm font-black text-zinc-950">
                                         Pedido #{pedido.id.slice(0, 6)}
                                       </span>
 
-                                      <span className="text-sm font-bold text-foreground">
+                                      <span className="text-sm font-black text-zinc-700">
                                         {formatPrice(pedido.total)}
                                       </span>
                                     </div>
@@ -1178,7 +1178,7 @@ return (
                                     <div className="flex flex-wrap gap-2">
                                       {pedido.items?.some((item) => item.category === "food") && (
                                         <span
-                                          className={`rounded-full px-2 py-1 text-[11px] font-bold uppercase tracking-wide ${statusBadge(
+                                          className={`rounded-full px-2 py-1 text-[11px] font-black uppercase tracking-wide ${statusBadge(
                                             getKitchenStatus(pedido)
                                           )}`}
                                         >
@@ -1188,7 +1188,7 @@ return (
 
                                       {pedido.items?.some((item) => item.category === "drinks") && (
                                         <span
-                                          className={`rounded-full px-2 py-1 text-[11px] font-bold uppercase tracking-wide ${statusBadge(
+                                          className={`rounded-full px-2 py-1 text-[11px] font-black uppercase tracking-wide ${statusBadge(
                                             getBarStatus(pedido)
                                           )}`}
                                         >
@@ -1197,7 +1197,7 @@ return (
                                       )}
 
                                       {pedidoTieneObservaciones(pedido) && (
-                                        <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-amber-300">
+                                        <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-black uppercase tracking-wide text-amber-900">
                                           Con obs
                                         </span>
                                       )}
@@ -1206,7 +1206,7 @@ return (
                                 ))}
 
                                 {mesa.pedidosActivos.length > 2 && (
-                                  <p className="pl-1 text-xs font-bold text-muted-foreground">
+                                  <p className="pl-1 text-xs font-bold text-zinc-500">
                                     + {mesa.pedidosActivos.length - 2} pedido(s) más
                                   </p>
                                 )}
@@ -1217,7 +1217,7 @@ return (
                           <div className="relative grid grid-cols-2 gap-2">
                             <button
                               onClick={() => setMesaDetalle(mesa)}
-                              className="h-11 rounded-lg border border-border bg-card font-bold text-foreground transition hover:bg-secondary"
+                              className="h-11 rounded-2xl border border-zinc-200 bg-white font-black text-zinc-900 transition hover:bg-zinc-50"
                             >
                               Ver detalle
                             </button>
@@ -1225,21 +1225,21 @@ return (
                             {mesa.estado === "needs_cleaning" ? (
                               <button
                                 onClick={() => marcarMesaLista(Number(mesa.numero))}
-                                className="h-11 rounded-lg bg-zinc-950 font-bold text-white transition hover:scale-[1.01]"
+                                className="h-11 rounded-2xl bg-zinc-950 font-black text-white transition hover:scale-[1.01]"
                               >
                                 Marcar lista
                               </button>
                             ) : mesa.estado === "occupied" ? (
                               <button
                                 onClick={() => marcarMesaParaLimpieza(Number(mesa.numero))}
-                                className="h-11 rounded-lg bg-zinc-950 font-bold text-white transition hover:scale-[1.01]"
+                                className="h-11 rounded-2xl bg-zinc-950 font-black text-white transition hover:scale-[1.01]"
                               >
                                 A limpieza
                               </button>
                             ) : (
                               <button
                                 onClick={() => marcarMesaLista(Number(mesa.numero))}
-                                className="h-11 rounded-lg bg-zinc-950 font-bold text-white transition hover:scale-[1.01]"
+                                className="h-11 rounded-2xl bg-zinc-950 font-black text-white transition hover:scale-[1.01]"
                               >
                                 Disponible
                               </button>
@@ -1251,7 +1251,7 @@ return (
                   </section>
               
               {mesasFiltradas.length === 0 && (
-                <div className="rounded-[2rem] border border-dashed border-zinc-300 bg-white/80 p-10 text-center text-muted-foreground shadow-sm">
+                <div className="rounded-[2rem] border border-dashed border-zinc-300 bg-white/80 p-10 text-center text-zinc-500 shadow-sm">
                   No se encontraron mesas con ese filtro.
                 </div>
               )}
@@ -1312,20 +1312,20 @@ return (
         <div className="fixed inset-0 z-50 flex bg-black/40">
           <div className="flex-1" onClick={() => setMesaDetalle(null)} />
 
-          <aside className="h-full w-full max-w-3xl overflow-y-auto border-l border-border bg-card shadow-2xl">
-            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-border bg-card p-5">
+          <aside className="h-full w-full max-w-3xl overflow-y-auto border-l border-zinc-200 bg-white shadow-2xl">
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-zinc-200 bg-white p-5">
               <div>
-                <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                <h2 className="text-2xl font-black tracking-tight text-zinc-950">
                   Mesa {mesaDetalleLive.numero}
                 </h2>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-zinc-500">
                   Session actual: {mesaDetalleLive.activeSessionId ?? "sin sesión"}
                 </p>
               </div>
 
               <button
                 onClick={() => setMesaDetalle(null)}
-                className="flex h-11 w-11 items-center justify-center rounded-lg border border-border text-foreground transition hover:bg-secondary"
+                className="flex h-11 w-11 items-center justify-center rounded-2xl border border-zinc-200 text-zinc-700 transition hover:bg-zinc-50"
               >
                 <X size={18} />
               </button>
@@ -1333,30 +1333,30 @@ return (
             
             <div className="space-y-6 p-5">
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-lg border border-border bg-secondary p-4">
-                  <p className="text-sm text-muted-foreground">Estado mesa</p>
-                  <p className="mt-1 font-bold text-foreground">
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                  <p className="text-sm text-zinc-500">Estado mesa</p>
+                  <p className="mt-1 font-bold text-zinc-950">
                     {mesaDetalleLive.estado}
                   </p>
                 </div>
 
-                <div className="rounded-lg border border-border bg-secondary p-4">
-                  <p className="text-sm text-muted-foreground">Total sesión</p>
-                  <p className="mt-1 font-bold text-foreground">
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                  <p className="text-sm text-zinc-500">Total sesión</p>
+                  <p className="mt-1 font-bold text-zinc-950">
                     {formatPrice(mesaDetalleLive.totalActual)}
                   </p>
                 </div>
 
-                <div className="rounded-lg border border-border bg-secondary p-4">
-                  <p className="text-sm text-muted-foreground">Pedidos sesión</p>
-                  <p className="mt-1 font-bold text-foreground">
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                  <p className="text-sm text-zinc-500">Pedidos sesión</p>
+                  <p className="mt-1 font-bold text-zinc-950">
                     {mesaDetalleLive.pedidosSesion.length}
                   </p>
                 </div>
 
-                <div className="rounded-lg border border-border bg-secondary p-4">
-                  <p className="text-sm text-muted-foreground">Cuenta actual</p>
-                  <p className="mt-1 font-bold text-foreground">
+                <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
+                  <p className="text-sm text-zinc-500">Cuenta actual</p>
+                  <p className="mt-1 font-bold text-zinc-950">
                     {mesaDetalleLive.cuentaActual
                       ? mesaDetalleLive.cuentaActual.estado
                       : "sin pedir"}
@@ -1365,13 +1365,13 @@ return (
               </div>
 
               {mesaDetalleLive.cuentaActual && (
-                <div className="rounded-xl border border-border bg-secondary p-4">
-                  <h3 className="mb-3 font-bold text-foreground">
+                <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
+                  <h3 className="mb-3 font-bold text-zinc-950">
                     Acción rápida de cuenta
                   </h3>
                   <button
                     onClick={() => avanzarCuenta(mesaDetalleLive.cuentaActual!)}
-                    className="h-11 w-full rounded-lg bg-emerald-600 font-semibold text-white transition hover:opacity-90"
+                    className="h-11 w-full rounded-2xl bg-emerald-600 font-semibold text-white transition hover:opacity-90"
                   >
                     {mesaDetalleLive.cuentaActual.estado === "pendiente"
                       ? "Marcar cuenta en camino"
@@ -1383,12 +1383,12 @@ return (
               )}
 
               <section>
-                <h3 className="mb-3 text-lg font-bold text-foreground">
+                <h3 className="mb-3 text-lg font-black text-zinc-950">
                   Pedidos de la sesión
                 </h3>
 
                 {mesaDetalleLive.pedidosSesion.length === 0 ? (
-                  <div className="rounded-xl border border-border p-4 text-muted-foreground">
+                  <div className="rounded-3xl border border-zinc-200 p-4 text-zinc-500">
                     No hay pedidos en esta sesión
                   </div>
                 ) : (
@@ -1396,28 +1396,28 @@ return (
                     {mesaDetalleLive.pedidosSesion.map((pedido) => (
                       <div
                         key={pedido.id}
-                        className="rounded-xl border border-border bg-card p-4"
+                        className="rounded-3xl border border-zinc-200 bg-white p-4"
                       >
                         <div className="mb-3 flex items-start justify-between gap-2">
                           <div>
                             <div className="flex items-center gap-2">
-                              <p className="font-bold text-foreground">
+                              <p className="font-bold text-zinc-950">
                                 Pedido #{pedido.id.slice(0, 6)}
                               </p>
 
                               {pedidoTieneObservaciones(pedido) && (
-                                <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-300">
+                                <span className="rounded-full bg-amber-100 px-2 py-1 text-[11px] font-extrabold uppercase tracking-wide text-amber-900">
                                   CON OBS
                                 </span>
                               )}
                             </div>
 
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs text-zinc-500">
                               {formatDate(pedido.createdAt)}
                             </p>
                           </div>
 
-                          <p className="font-bold text-foreground">
+                          <p className="font-bold text-zinc-950">
                             {formatPrice(pedido.total)}
                           </p>
                         </div>
@@ -1453,7 +1453,7 @@ return (
                             className={`rounded-full px-2 py-1 text-xs font-bold uppercase tracking-wide ${
                               isPedidoActivo(pedido)
                                 ? "bg-orange-100 text-orange-700 border border-orange-200"
-                                : "bg-zinc-200 text-foreground border border-zinc-300"
+                                : "bg-zinc-200 text-zinc-700 border border-zinc-300"
                             }`}
                           >
                             {isPedidoActivo(pedido) ? "Activo" : "Cerrado"}
@@ -1466,12 +1466,12 @@ return (
               </section>
 
               <section>
-                <h3 className="mb-3 text-lg font-bold text-foreground">
+                <h3 className="mb-3 text-lg font-black text-zinc-950">
                   Cuentas de esta mesa
                 </h3>
 
                 {cuentasMesaDetalle.length === 0 ? (
-                  <div className="rounded-xl border border-border p-4 text-muted-foreground">
+                  <div className="rounded-3xl border border-zinc-200 p-4 text-zinc-500">
                     No hay cuentas registradas
                   </div>
                 ) : (
@@ -1479,14 +1479,14 @@ return (
                     {cuentasMesaDetalle.map((cuenta) => (
                       <div
                         key={cuenta.id}
-                        className="rounded-xl border border-border bg-card p-4"
+                        className="rounded-3xl border border-zinc-200 bg-white p-4"
                       >
                         <div className="mb-3 flex items-center justify-between gap-2">
                           <div>
-                            <p className="font-bold text-foreground">
+                            <p className="font-bold text-zinc-950">
                               Cuenta #{cuenta.id.slice(0, 6)}
                             </p>
-                            <p className="text-xs text-muted-foreground">
+                            <p className="text-xs text-zinc-500">
                               {formatDate(cuenta.createdAt)}
                             </p>
                           </div>
@@ -1500,7 +1500,7 @@ return (
                           </span>
                         </div>
 
-                        <div className="mb-3 grid grid-cols-2 gap-3 text-sm text-foreground">
+                        <div className="mb-3 grid grid-cols-2 gap-3 text-sm text-zinc-700">
                           <p>
                             <b>Total:</b> {formatPrice(cuenta.total)}
                           </p>
@@ -1519,7 +1519,7 @@ return (
                           cuenta.estado === "en_camino") && (
                           <button
                             onClick={() => avanzarCuenta(cuenta)}
-                            className="h-10 w-full rounded-lg bg-emerald-600 font-semibold text-white transition hover:opacity-90"
+                            className="h-10 w-full rounded-2xl bg-emerald-600 font-semibold text-white transition hover:opacity-90"
                           >
                             {cuenta.estado === "pendiente"
                               ? "Marcar en camino"

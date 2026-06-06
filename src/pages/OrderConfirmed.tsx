@@ -56,7 +56,7 @@ const OrderConfirmed = () => {
                 state: { table, restaurantId },
               })
             }
-            className="h-11 w-full rounded-xl border bg-card font-semibold text-accent"
+            className="h-11 w-full rounded-xl border bg-white font-semibold text-accent"
           >
             Pedir cuenta
           </button>

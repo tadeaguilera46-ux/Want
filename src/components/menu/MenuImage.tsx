@@ -9,11 +9,11 @@ const MenuImageFallback = ({ name }: { name: string }) => {
   return (
     <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-zinc-100 to-zinc-200 px-6 text-center">
       <div>
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-muted-foreground">
+        <p className="text-xs font-black uppercase tracking-[0.2em] text-zinc-400">
           WANT
         </p>
 
-        <p className="mt-2 text-sm font-bold text-muted-foreground">
+        <p className="mt-2 text-sm font-black text-zinc-600">
           {name}
         </p>
       </div>

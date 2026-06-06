@@ -256,8 +256,8 @@ const SuperAdmin = () => {
 
   if (!authReady) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-6">
-        <div className="rounded-xl border border-border bg-card px-6 py-5 shadow-sm">
+      <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
+        <div className="rounded-3xl border border-zinc-200 bg-white px-6 py-5 shadow-sm">
           Cargando super admin...
         </div>
       </div>
@@ -266,24 +266,24 @@ const SuperAdmin = () => {
 
   if (!user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-6">
+      <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
         <form
           onSubmit={handleLogin}
-          className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-sm"
+          className="w-full max-w-md rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm"
         >
           <div className="mb-5 text-center">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-zinc-950 text-white">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-950 text-white">
               <ShieldCheck size={22} />
             </div>
 
-            <h1 className="text-2xl font-bold text-foreground">Super Admin</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <h1 className="text-2xl font-black text-zinc-950">Super Admin</h1>
+            <p className="mt-1 text-sm text-zinc-500">
               Acceso interno para crear restaurantes.
             </p>
           </div>
 
           {message && (
-            <div className="mb-4 rounded-lg border border-red-800/50 bg-red-950/30 px-4 py-3 text-sm font-medium text-red-400">
+            <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
               {message}
             </div>
           )}
@@ -294,7 +294,7 @@ const SuperAdmin = () => {
               placeholder="Email super admin"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-12 w-full rounded-lg border border-border px-4 outline-none focus:ring-2 focus:ring-ring/40"
+              className="h-12 w-full rounded-2xl border border-zinc-200 px-4 outline-none focus:ring-2 focus:ring-black/10"
               required
             />
 
@@ -303,14 +303,14 @@ const SuperAdmin = () => {
               placeholder="Contraseña"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-12 w-full rounded-lg border border-border px-4 outline-none focus:ring-2 focus:ring-ring/40"
+              className="h-12 w-full rounded-2xl border border-zinc-200 px-4 outline-none focus:ring-2 focus:ring-black/10"
               required
             />
 
             <button
               type="submit"
               disabled={loading}
-              className="h-12 w-full rounded-lg bg-zinc-950 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+              className="h-12 w-full rounded-2xl bg-zinc-950 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
             >
               {loading ? "Ingresando..." : "Ingresar"}
             </button>
@@ -322,24 +322,24 @@ const SuperAdmin = () => {
 
   if (!isSuperAdmin) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background p-6">
-        <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 text-center shadow-sm">
-          <h1 className="text-xl font-bold text-foreground">
+      <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
+        <div className="w-full max-w-md rounded-3xl border border-zinc-200 bg-white p-6 text-center shadow-sm">
+          <h1 className="text-xl font-black text-zinc-950">
             Sin permiso de super admin
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
+          <p className="mt-2 text-sm text-zinc-500">
             Tu usuario no está habilitado para administrar la plataforma.
           </p>
 
           {user.email && (
-            <p className="mt-3 rounded-lg bg-background px-4 py-3 text-sm font-semibold text-foreground">
+            <p className="mt-3 rounded-2xl bg-zinc-100 px-4 py-3 text-sm font-semibold text-zinc-700">
               {user.email}
             </p>
           )}
 
           <button
             onClick={handleLogout}
-            className="mt-5 h-11 rounded-lg bg-zinc-950 px-5 font-semibold text-white"
+            className="mt-5 h-11 rounded-2xl bg-zinc-950 px-5 font-semibold text-white"
           >
             Cerrar sesión
           </button>
@@ -349,23 +349,23 @@ const SuperAdmin = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-zinc-100">
       <div className="mx-auto max-w-[1400px] px-4 py-4 md:px-6 lg:px-8">
-        <header className="mb-6 rounded-xl border border-border bg-card p-5 shadow-sm">
+        <header className="mb-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div className="flex items-start gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-zinc-950 text-white">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-zinc-950 text-white">
                 <ShieldCheck size={22} />
               </div>
 
               <div>
-                <h1 className="text-3xl font-bold tracking-tight text-foreground">
+                <h1 className="text-3xl font-black tracking-tight text-zinc-950">
                   Super Admin
                 </h1>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-1 text-sm text-zinc-500">
                   Crear restaurantes y primer dueño/admin.
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="mt-1 text-xs text-zinc-400">
                   Sesión: {user.email}
                 </p>
               </div>
@@ -373,7 +373,7 @@ const SuperAdmin = () => {
 
             <button
               onClick={handleLogout}
-              className="flex h-11 items-center justify-center gap-2 rounded-lg border border-border bg-card px-4 font-semibold text-foreground transition hover:bg-secondary"
+              className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 font-semibold text-zinc-900 transition hover:bg-zinc-50"
             >
               <LogOut size={16} />
               Cerrar sesión
@@ -382,7 +382,7 @@ const SuperAdmin = () => {
         </header>
 
         {message && (
-          <div className="mb-6 rounded-xl border border-border bg-card px-5 py-4 text-sm font-semibold text-foreground shadow-sm">
+          <div className="mb-6 rounded-3xl border border-zinc-200 bg-white px-5 py-4 text-sm font-semibold text-zinc-700 shadow-sm">
             {message}
           </div>
         )}
@@ -391,17 +391,17 @@ const SuperAdmin = () => {
           onMessage={setMessage}
         />
 
-        <section className="mb-6 rounded-xl border border-border bg-card p-5 shadow-sm">
+        <section className="mb-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-start gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-zinc-950 text-white">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-950 text-white">
               <Plus size={20} />
             </div>
 
             <div>
-              <h2 className="text-xl font-bold text-foreground">
+              <h2 className="text-xl font-black text-zinc-950">
                 Crear restaurante
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-sm text-zinc-500">
                 Esto crea el restaurante y el primer usuario admin del dueño.
               </p>
             </div>
@@ -413,7 +413,7 @@ const SuperAdmin = () => {
                 placeholder="Nombre del restaurante"
                 value={restaurantName}
                 onChange={(e) => handleRestaurantNameChange(e.target.value)}
-                className="h-11 rounded-lg border border-border px-3 outline-none focus:ring-2 focus:ring-ring/40"
+                className="h-11 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
                 required
               />
 
@@ -423,7 +423,7 @@ const SuperAdmin = () => {
                 onChange={(e) =>
                   setRestaurantId(normalizeRestaurantId(e.target.value))
                 }
-                className="h-11 rounded-lg border border-border px-3 outline-none focus:ring-2 focus:ring-ring/40"
+                className="h-11 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
                 required
               />
             </div>
@@ -434,7 +434,7 @@ const SuperAdmin = () => {
                 placeholder="Email del dueño"
                 value={ownerEmail}
                 onChange={(e) => setOwnerEmail(e.target.value)}
-                className="h-11 rounded-lg border border-border px-3 outline-none focus:ring-2 focus:ring-ring/40"
+                className="h-11 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
                 required
               />
 
@@ -443,7 +443,7 @@ const SuperAdmin = () => {
                 placeholder="Contraseña temporal"
                 value={ownerPassword}
                 onChange={(e) => setOwnerPassword(e.target.value)}
-                className="h-11 rounded-lg border border-border px-3 outline-none focus:ring-2 focus:ring-ring/40"
+                className="h-11 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
                 required
                 minLength={6}
               />
@@ -451,7 +451,7 @@ const SuperAdmin = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="flex h-11 items-center justify-center gap-2 rounded-lg bg-zinc-950 px-5 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-5 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
               >
                 <Plus size={16} />
                 {loading ? "Creando..." : "Crear"}
@@ -460,24 +460,24 @@ const SuperAdmin = () => {
           </form>
         </section>
 
-        <section className="rounded-xl border border-border bg-card p-5 shadow-sm">
+        <section className="rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-start gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-zinc-950 text-white">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-zinc-950 text-white">
               <Building2 size={20} />
             </div>
 
             <div>
-              <h2 className="text-xl font-bold text-foreground">
+              <h2 className="text-xl font-black text-zinc-950">
                 Restaurantes creados
               </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-sm text-zinc-500">
                 Links de acceso para cada cliente.
               </p>
             </div>
           </div>
 
           {restaurants.length === 0 ? (
-            <div className="rounded-lg border border-border bg-secondary p-5 text-sm text-muted-foreground">
+            <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5 text-sm text-zinc-500">
               Todavía no hay restaurantes creados.
             </div>
           ) : (
@@ -491,17 +491,17 @@ const SuperAdmin = () => {
                   return (
                     <div
                       key={restaurant.id}
-                      className="rounded-lg border border-border bg-secondary p-4"
+                      className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4"
                     >
                       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                         <div>
-                          <p className="text-lg font-bold text-foreground">
+                          <p className="text-lg font-black text-zinc-950">
                             {restaurant.name || restaurant.id}
                           </p>
-                          <p className="mt-1 text-sm text-muted-foreground">
+                          <p className="mt-1 text-sm text-zinc-500">
                             ID: {restaurant.id}
                           </p>
-                          <p className="mt-1 text-xs font-semibold text-muted-foreground">
+                          <p className="mt-1 text-xs font-semibold text-zinc-500">
                             Estado:{" "}
                             {restaurant.active === false ? "Inactivo" : "Activo"}
                           </p>
@@ -512,7 +512,7 @@ const SuperAdmin = () => {
                             href={staffUrl}
                             target="_blank"
                             rel="noreferrer"
-                            className="flex h-10 items-center gap-2 rounded-lg bg-zinc-950 px-4 text-sm font-semibold text-white"
+                            className="flex h-10 items-center gap-2 rounded-2xl bg-zinc-950 px-4 text-sm font-semibold text-white"
                           >
                             Staff
                             <ExternalLink size={14} />
@@ -523,7 +523,7 @@ const SuperAdmin = () => {
                             onClick={() =>
                               copyToClipboard(staffUrl, "Link Staff")
                             }
-                            className="flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-foreground"
+                            className="flex h-10 items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900"
                           >
                             <Copy size={14} />
                             Copiar Staff
@@ -533,7 +533,7 @@ const SuperAdmin = () => {
                             href={mesa1Url}
                             target="_blank"
                             rel="noreferrer"
-                            className="flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-foreground"
+                            className="flex h-10 items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900"
                           >
                             Mesa 1
                             <ExternalLink size={14} />
@@ -544,7 +544,7 @@ const SuperAdmin = () => {
                             onClick={() =>
                               copyToClipboard(mesa1Url, "Link Mesa 1")
                             }
-                            className="flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-foreground"
+                            className="flex h-10 items-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 text-sm font-semibold text-zinc-900"
                           >
                             <Copy size={14} />
                             Copiar Mesa 1

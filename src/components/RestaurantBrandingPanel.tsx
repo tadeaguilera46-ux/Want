@@ -215,17 +215,17 @@ export function RestaurantBrandingPanel({
   };
 
   return (
-    <section className="mb-6 rounded-xl border border-border bg-card p-5 shadow-sm">
+    <section className="mb-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-zinc-950 text-white">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-zinc-950 text-white">
           <Paintbrush size={20} />
         </div>
 
         <div>
-          <h2 className="text-xl font-bold text-foreground">
+          <h2 className="text-xl font-black text-zinc-950">
             Branding del restaurante
           </h2>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 text-sm text-zinc-500">
             Personalizá cómo se ve el menú del cliente.
           </p>
         </div>
@@ -237,11 +237,11 @@ export function RestaurantBrandingPanel({
             placeholder="Nombre del restaurante"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="h-11 rounded-lg border border-border px-3 outline-none focus:ring-2 focus:ring-ring/40"
+            className="h-11 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
           />
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="cursor-pointer rounded-lg border border-dashed border-zinc-300 bg-secondary p-4 transition hover:bg-background">
+            <label className="cursor-pointer rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-4 transition hover:bg-zinc-100">
               <input
                 type="file"
                 accept="image/*"
@@ -251,7 +251,7 @@ export function RestaurantBrandingPanel({
               />
 
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-card text-foreground shadow-sm">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-zinc-700 shadow-sm">
                   {uploadingLogo ? (
                     <Loader2 size={18} className="animate-spin" />
                   ) : (
@@ -260,23 +260,23 @@ export function RestaurantBrandingPanel({
                 </div>
 
                 <div>
-                  <p className="text-sm font-bold text-foreground">
+                  <p className="text-sm font-bold text-zinc-950">
                     Subir logo
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-zinc-500">
                     PNG, JPG o WEBP · máx. {MAX_LOGO_SIZE_MB}MB
                   </p>
                 </div>
               </div>
 
               {uploadingLogo && (
-                <p className="mt-3 text-xs font-semibold text-muted-foreground">
+                <p className="mt-3 text-xs font-semibold text-zinc-600">
                   Subiendo {logoProgress}%
                 </p>
               )}
             </label>
 
-            <label className="cursor-pointer rounded-lg border border-dashed border-zinc-300 bg-secondary p-4 transition hover:bg-background">
+            <label className="cursor-pointer rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 p-4 transition hover:bg-zinc-100">
               <input
                 type="file"
                 accept="image/*"
@@ -286,7 +286,7 @@ export function RestaurantBrandingPanel({
               />
 
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-card text-foreground shadow-sm">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white text-zinc-700 shadow-sm">
                   {uploadingCover ? (
                     <Loader2 size={18} className="animate-spin" />
                   ) : (
@@ -295,17 +295,17 @@ export function RestaurantBrandingPanel({
                 </div>
 
                 <div>
-                  <p className="text-sm font-bold text-foreground">
+                  <p className="text-sm font-bold text-zinc-950">
                     Subir portada
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-zinc-500">
                     PNG, JPG o WEBP · máx. {MAX_COVER_SIZE_MB}MB
                   </p>
                 </div>
               </div>
 
               {uploadingCover && (
-                <p className="mt-3 text-xs font-semibold text-muted-foreground">
+                <p className="mt-3 text-xs font-semibold text-zinc-600">
                   Subiendo {coverProgress}%
                 </p>
               )}
@@ -317,12 +317,12 @@ export function RestaurantBrandingPanel({
             value={welcomeMessage}
             onChange={(e) => setWelcomeMessage(e.target.value)}
             rows={3}
-            className="rounded-lg border border-border px-3 py-3 outline-none focus:ring-2 focus:ring-ring/40"
+            className="rounded-2xl border border-zinc-200 px-3 py-3 outline-none focus:ring-2 focus:ring-black/10"
           />
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="rounded-lg border border-border p-3">
-              <p className="mb-2 text-sm font-semibold text-foreground">
+            <label className="rounded-2xl border border-zinc-200 p-3">
+              <p className="mb-2 text-sm font-semibold text-zinc-700">
                 Color principal
               </p>
               <div className="flex gap-2">
@@ -335,7 +335,7 @@ export function RestaurantBrandingPanel({
                 <input
                   value={primaryColor}
                   onChange={(e) => setPrimaryColor(e.target.value)}
-                  className="h-10 flex-1 rounded-xl border border-border px-3"
+                  className="h-10 flex-1 rounded-xl border border-zinc-200 px-3"
                 />
               </div>
               {!/^#[0-9A-Fa-f]{6}$/.test(primaryColor) && (
@@ -345,8 +345,8 @@ export function RestaurantBrandingPanel({
               )}
             </label>
 
-            <label className="rounded-lg border border-border p-3">
-              <p className="mb-2 text-sm font-semibold text-foreground">
+            <label className="rounded-2xl border border-zinc-200 p-3">
+              <p className="mb-2 text-sm font-semibold text-zinc-700">
                 Color fondo
               </p>
               <div className="flex gap-2">
@@ -359,7 +359,7 @@ export function RestaurantBrandingPanel({
                 <input
                   value={secondaryColor}
                   onChange={(e) => setSecondaryColor(e.target.value)}
-                  className="h-10 flex-1 rounded-xl border border-border px-3"
+                  className="h-10 flex-1 rounded-xl border border-zinc-200 px-3"
                 />
               </div>
               {!/^#[0-9A-Fa-f]{6}$/.test(secondaryColor) && (
@@ -374,23 +374,23 @@ export function RestaurantBrandingPanel({
             type="button"
             onClick={handleSave}
             disabled={saving || uploadingLogo || uploadingCover}
-            className="flex h-11 items-center justify-center gap-2 rounded-lg bg-zinc-950 px-5 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+            className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-5 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
           >
             <Save size={16} />
             {saving ? "Guardando..." : "Guardar branding"}
           </button>
 
           {message && (
-            <p className="text-sm font-medium text-foreground">{message}</p>
+            <p className="text-sm font-medium text-zinc-700">{message}</p>
           )}
         </div>
 
         <div
-          className="overflow-hidden rounded-xl border border-border shadow-sm"
+          className="overflow-hidden rounded-3xl border border-zinc-200 shadow-sm"
           style={{ backgroundColor: secondaryColor }}
         >
           {coverUrl ? (
-            <div className="aspect-[16/6] overflow-hidden bg-background">
+            <div className="aspect-[16/6] overflow-hidden bg-zinc-100">
               <img
                 src={coverUrl}
                 alt={name || "Portada del restaurante"}
@@ -398,7 +398,7 @@ export function RestaurantBrandingPanel({
               />
             </div>
           ) : (
-            <div className="flex aspect-[16/6] items-center justify-center bg-background text-muted-foreground">
+            <div className="flex aspect-[16/6] items-center justify-center bg-zinc-100 text-zinc-400">
               <Image size={24} />
             </div>
           )}
@@ -406,7 +406,7 @@ export function RestaurantBrandingPanel({
           <div className="p-4">
             <div className="mb-4 flex items-center gap-3">
               {logoUrl ? (
-                <div className="h-14 w-14 overflow-hidden rounded-lg bg-card">
+                <div className="h-14 w-14 overflow-hidden rounded-2xl bg-white">
                   <img
                     src={logoUrl}
                     alt={name || "Logo del restaurante"}
@@ -414,27 +414,27 @@ export function RestaurantBrandingPanel({
                   />
                 </div>
               ) : (
-                <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-card text-muted-foreground">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-zinc-400">
                   <Image size={20} />
                 </div>
               )}
 
               <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-zinc-500">
                   Menú digital
                 </p>
-                <h3 className="truncate text-xl font-bold text-foreground">
+                <h3 className="truncate text-xl font-black text-zinc-950">
                   {name || config.name || "Restaurante"}
                 </h3>
               </div>
             </div>
 
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-zinc-600">
               {welcomeMessage || "Elegí productos y agregalos a tu pedido."}
             </p>
 
             <button
-              className="mt-4 h-10 rounded-lg px-4 text-sm font-bold text-white"
+              className="mt-4 h-10 rounded-2xl px-4 text-sm font-bold text-white"
               style={{ backgroundColor: primaryColor }}
             >
               Vista previa
