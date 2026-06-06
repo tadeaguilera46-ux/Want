@@ -249,6 +249,7 @@ export const mpWebhook = onRequest(
 
       const restaurantDoc = restaurantsSnap.docs[0];
       const restaurantId = restaurantDoc.id;
+      const restaurantData = restaurantDoc.data();
 
       // Determinar plan por planId de MP
       const planEntry = Object.entries(MP_PLANS).find(
@@ -307,6 +308,26 @@ export const mpWebhook = onRequest(
           billingStatus,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
+
+      // Registrar pago en payments para que aparezca en el Super Admin
+      if (billingStatus === "active") {
+        const monthlyPrice = Number(restaurantData?.monthlyPrice ?? 0);
+        await admin
+          .firestore()
+          .collection("restaurants")
+          .doc(restaurantId)
+          .collection("payments")
+          .add({
+            restaurantId,
+            type: "monthly",
+            amount: monthlyPrice,
+            plan,
+            notes: "Pago automático vía Mercado Pago",
+            subscriptionId: subscription.id,
+            paidAt: admin.firestore.FieldValue.serverTimestamp(),
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          });
+      }
 
       res.status(200).send("OK");
     } catch (error) {
