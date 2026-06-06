@@ -40,7 +40,7 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
   const [cuit, setCuit] = useState("");
   const [puntoVenta, setPuntoVenta] = useState("1");
   const [fiscalCondition, setFiscalCondition] = useState<"monotributista" | "responsable_inscripto">("responsable_inscripto");
-  const [env, setEnv] = useState<"homologacion" | "produccion">("produccion");
+  const [env, setEnv] = useState<"homologacion" | "produccion" | "simulacion">("produccion");
 
   // Step 2 state
   const [csrPem, setCsrPem] = useState("");
@@ -210,43 +210,56 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
           {/* Toggle ambiente */}
           <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
             <p className="mb-2 text-xs font-bold text-zinc-600">Ambiente ARCA</p>
-            <div className="flex gap-2">
-              {(["produccion", "homologacion"] as const).map((v) => (
+            <div className="flex flex-col gap-2">
+              {([
+                { value: "produccion", label: "Producción", desc: "Facturas legalmente válidas ante ARCA. Necesitás CUIT y clave fiscal." },
+                { value: "homologacion", label: "Homologación (test con ARCA)", desc: "Conecta con el servidor de pruebas de ARCA. Las facturas no tienen validez. Necesitás CUIT y clave fiscal." },
+                { value: "simulacion", label: "Simulación (sin ARCA)", desc: "No necesitás CUIT ni clave fiscal. Ideal para ver cómo funciona el flujo completo antes de conectar con ARCA." },
+              ] as const).map(({ value, label, desc }) => (
                 <button
-                  key={v}
+                  key={value}
                   type="button"
-                  onClick={() => setEnv(v)}
-                  className={`flex-1 rounded-lg border py-2 text-sm font-semibold transition ${
-                    env === v
-                      ? v === "produccion"
+                  onClick={() => setEnv(value)}
+                  className={`w-full rounded-lg border px-4 py-3 text-left transition ${
+                    env === value
+                      ? value === "produccion"
                         ? "border-zinc-900 bg-zinc-900 text-white"
-                        : "border-amber-500 bg-amber-500 text-white"
-                      : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-400"
+                        : value === "homologacion"
+                          ? "border-amber-500 bg-amber-50 text-amber-900"
+                          : "border-blue-500 bg-blue-50 text-blue-900"
+                      : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300"
                   }`}
                 >
-                  {v === "produccion" ? "Producción" : "Homologación (test)"}
+                  <div className="flex items-center gap-2">
+                    <div className={`h-3 w-3 shrink-0 rounded-full border-2 ${
+                      env === value ? "border-current bg-current" : "border-zinc-400"
+                    }`} />
+                    <p className="text-sm font-bold">{label}</p>
+                  </div>
+                  <p className={`mt-1 ml-5 text-xs ${env === value ? "opacity-80" : "text-zinc-400"}`}>{desc}</p>
                 </button>
               ))}
             </div>
-            {env === "homologacion" && (
-              <p className="mt-2 text-xs text-amber-700 font-semibold">
-                Modo test — las facturas emitidas NO tienen validez fiscal. Ideal para probar antes de activar en producción.
-              </p>
-            )}
-            {env === "produccion" && (
-              <p className="mt-2 text-xs text-zinc-500">
-                Las facturas emitidas son legalmente válidas ante ARCA.
-              </p>
-            )}
           </div>
 
           <button
             onClick={handleGenerateCsr}
-            disabled={saving || cuit.length < 11}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-zinc-950 font-bold text-white disabled:opacity-50"
+            disabled={saving || (env !== "simulacion" && cuit.length < 11)}
+            className={`flex h-11 w-full items-center justify-center gap-2 rounded-lg font-bold text-white disabled:opacity-50 ${
+              env === "simulacion" ? "bg-blue-600 hover:bg-blue-700" : "bg-zinc-950"
+            }`}
           >
-            {saving ? "Generando certificado..." : "Generar certificado →"}
+            {saving
+              ? "Configurando..."
+              : env === "simulacion"
+                ? "Activar simulación →"
+                : "Generar certificado →"}
           </button>
+          {env === "simulacion" && (
+            <p className="text-center text-xs text-zinc-400">
+              No necesitás CUIT real ni clave fiscal. Want va a simular las respuestas de ARCA.
+            </p>
+          )}
         </div>
       )}
 
@@ -342,27 +355,47 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
 
       {/* ── PASO 3: Activo ────────────────────────────────────────────────── */}
       {currentStep === 2 && (
-        <div className={`rounded-xl border p-6 ${config?.env === "homologacion" ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+        <div className={`rounded-xl border p-6 ${
+          config?.env === "simulacion" ? "border-blue-200 bg-blue-50"
+          : config?.env === "homologacion" ? "border-amber-200 bg-amber-50"
+          : "border-emerald-200 bg-emerald-50"
+        }`}>
           <div className="flex items-start justify-between gap-3 mb-4">
             <div className="flex items-center gap-3">
-              <ShieldCheck size={32} className={config?.env === "homologacion" ? "text-amber-500 shrink-0" : "text-emerald-600 shrink-0"} />
+              <ShieldCheck size={32} className={
+                config?.env === "simulacion" ? "text-blue-500 shrink-0"
+                : config?.env === "homologacion" ? "text-amber-500 shrink-0"
+                : "text-emerald-600 shrink-0"
+              } />
               <div>
                 <div className="flex items-center gap-2">
-                  <h3 className={`font-bold text-lg ${config?.env === "homologacion" ? "text-amber-900" : "text-emerald-900"}`}>
+                  <h3 className={`font-bold text-lg ${
+                    config?.env === "simulacion" ? "text-blue-900"
+                    : config?.env === "homologacion" ? "text-amber-900"
+                    : "text-emerald-900"
+                  }`}>
                     Facturación electrónica activa
                   </h3>
                   <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
-                    config?.env === "homologacion"
-                      ? "bg-amber-200 text-amber-800"
-                      : "bg-emerald-200 text-emerald-800"
+                    config?.env === "simulacion" ? "bg-blue-200 text-blue-800"
+                    : config?.env === "homologacion" ? "bg-amber-200 text-amber-800"
+                    : "bg-emerald-200 text-emerald-800"
                   }`}>
-                    {config?.env === "homologacion" ? "HOMOLOGACIÓN" : "PRODUCCIÓN"}
+                    {config?.env === "simulacion" ? "SIMULACIÓN"
+                    : config?.env === "homologacion" ? "HOMOLOGACIÓN"
+                    : "PRODUCCIÓN"}
                   </span>
                 </div>
-                <p className={`text-sm mt-0.5 ${config?.env === "homologacion" ? "text-amber-700" : "text-emerald-700"}`}>
-                  {config?.env === "homologacion"
-                    ? "Modo test — las facturas NO son válidas fiscalmente."
-                    : "Want está conectado a ARCA con el certificado del restaurante."}
+                <p className={`text-sm mt-0.5 ${
+                  config?.env === "simulacion" ? "text-blue-700"
+                  : config?.env === "homologacion" ? "text-amber-700"
+                  : "text-emerald-700"
+                }`}>
+                  {config?.env === "simulacion"
+                    ? "Modo simulación — las respuestas de ARCA son ficticias, no se conecta con ningún servidor."
+                    : config?.env === "homologacion"
+                      ? "Modo test — las facturas NO son válidas fiscalmente."
+                      : "Want está conectado a ARCA con el certificado del restaurante."}
                 </p>
               </div>
             </div>

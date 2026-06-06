@@ -678,9 +678,10 @@ export const afipGenerateCsr = onCall(
       throw new HttpsError("invalid-argument", "Faltan datos fiscales");
     }
 
-    // El admin puede elegir el ambiente; si no viene, usa el default del servidor
-    const resolvedEnv: "homologacion" | "produccion" =
-      reqEnv === "homologacion" ? "homologacion" : (AFIP_ENV ?? "produccion");
+    const resolvedEnv: "homologacion" | "produccion" | "simulacion" =
+      reqEnv === "homologacion" ? "homologacion"
+      : reqEnv === "simulacion" ? "simulacion"
+      : (AFIP_ENV ?? "produccion");
 
     const staffDoc = await admin.firestore()
       .collection("restaurants").doc(restaurantId)
@@ -689,6 +690,27 @@ export const afipGenerateCsr = onCall(
       throw new HttpsError("permission-denied", "No tenés permisos");
     }
 
+    // ── Modo simulación: activa directamente sin claves ni certificado real ──
+    if (resolvedEnv === "simulacion") {
+      await admin.firestore()
+        .collection("restaurants").doc(restaurantId)
+        .collection("afipConfig").doc("main")
+        .set({
+          cuit: cuit.replace(/\D/g, "").replace(/^(\d{2})(\d{8})(\d)$/, "$1-$2-$3"),
+          puntoVenta,
+          fiscalCondition,
+          privateKeyEncrypted: "",
+          privateKeyIv: "",
+          csrPem: "",
+          certificate: "SIMULACION",
+          status: "active",
+          env: "simulacion",
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      return { csrPem: "" };
+    }
+
+    // ── Entorno real: generar par de claves + CSR ────────────────────────────
     const restaurantDoc = await admin.firestore()
       .collection("restaurants").doc(restaurantId).get();
     const restaurantName = restaurantDoc.data()?.name ?? "Restaurante";
@@ -789,10 +811,45 @@ export const afipIssueInvoice = onCall(
 
     const config = configSnap.data() as AfipConfig & { env?: string };
     if (config.status !== "active") {
-      throw new HttpsError("failed-precondition", "La configuración AFIP no está activa. Completá el wizard de configuración.");
+      throw new HttpsError("failed-precondition", "La configuración ARCA no está activa. Completá el wizard de configuración.");
     }
 
-    const env = (config.env ?? AFIP_ENV) as "homologacion" | "produccion";
+    const env = (config.env ?? AFIP_ENV) as "homologacion" | "produccion" | "simulacion";
+
+    // ── Modo simulación: devuelve datos fake sin llamar a ARCA ───────────────
+    if (env === "simulacion") {
+      const fakeInvoiceType: "A" | "B" | "C" =
+        invoiceReq.invoiceType ?? (config.fiscalCondition === "monotributista" ? "C" : "B");
+      const fakeCae = Array.from({ length: 14 }, () => Math.floor(Math.random() * 10)).join("");
+      const today = new Date();
+      const expDate = new Date(today.getTime() + 10 * 24 * 60 * 60 * 1000);
+      const fmtDate = (d: Date) =>
+        `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+      const fakeResult = {
+        cae: fakeCae,
+        caeExpiry: fmtDate(expDate),
+        invoiceNumber: Math.floor(Math.random() * 900) + 1,
+        invoiceType: fakeInvoiceType,
+        puntoVenta: config.puntoVenta,
+        cuit: config.cuit?.replace(/-/g, "") ?? "0",
+      };
+      await admin.firestore()
+        .collection("restaurants").doc(invoiceReq.restaurantId)
+        .collection("cuentas").doc(invoiceReq.cuentaId)
+        .update({
+          "invoice.status": "issued",
+          "invoice.cae": fakeResult.cae,
+          "invoice.caeExpiry": fakeResult.caeExpiry,
+          "invoice.invoiceNumber": fakeResult.invoiceNumber,
+          "invoice.invoiceType": fakeResult.invoiceType,
+          "invoice.puntoVenta": fakeResult.puntoVenta,
+          "invoice.issuedAt": admin.firestore.FieldValue.serverTimestamp(),
+          "invoice.simulation": true,
+        });
+      return fakeResult;
+    }
+
+    // ── Entorno real: autenticación y emisión en ARCA ────────────────────────
     const masterKey = AFIP_MASTER_KEY.value();
     const privateKeyPem = decryptPrivateKey(
       config.privateKeyEncrypted,
@@ -804,7 +861,7 @@ export const afipIssueInvoice = onCall(
       invoiceReq.restaurantId,
       privateKeyPem,
       config.certificate,
-      env
+      env as "homologacion" | "produccion"
     );
 
     const invoiceType: "A" | "B" | "C" = invoiceReq.invoiceType ??
