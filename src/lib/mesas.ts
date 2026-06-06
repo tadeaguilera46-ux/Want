@@ -29,6 +29,7 @@ export interface Mesa {
   activeSessionId: string | null;
   lastSessionId?: string | null;
   active?: boolean;
+  zona?: string;
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
   cleanedAt?: Timestamp | null;
@@ -648,7 +649,8 @@ export const closeMesaSessionManually = async (
 
 export const createMesaIfNotExists = async (
   restaurantId: string,
-  numero: number
+  numero: number,
+  zona?: string
 ) => {
   const normalizedRestaurantId = normalizeRestaurantId(restaurantId);
   assertValidMesaNumber(numero);
@@ -665,10 +667,23 @@ export const createMesaIfNotExists = async (
     activeSessionId: null,
     lastSessionId: null,
     active: true,
+    ...(zona?.trim() ? { zona: zona.trim() } : {}),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     cleanedAt: null,
   });
+};
+
+export const setMesaZona = async (
+  restaurantId: string,
+  numero: number,
+  zona: string
+) => {
+  const normalizedRestaurantId = normalizeRestaurantId(restaurantId);
+  assertValidMesaNumber(numero);
+  const { updateDoc } = await import("firebase/firestore");
+  const ref = mesaDocRef(normalizedRestaurantId, numero);
+  await updateDoc(ref, { zona: zona.trim(), updatedAt: serverTimestamp() });
 };
 
 export const setMesaActive = async (

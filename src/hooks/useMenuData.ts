@@ -15,7 +15,9 @@ import { getMenuItemAvailability } from "@/lib/stock-availability";
 
 const db = getDb();
 
-export type MenuType = "food" | "drinks";
+import { isPromotionActive, type Promotion } from "@/components/PromotionsPanel";
+
+export type MenuType = "food" | "drinks" | "combo";
 
 export type MenuItem = {
   id: string;
@@ -27,10 +29,15 @@ export type MenuItem = {
   active: boolean;
   image?: string;
   ingredients?: MenuIngredient[];
+  availableFrom?: string;
+  availableTo?: string;
+  availableDays?: number[];
+  allergens?: string[];
+  modifierGroups?: { name: string; required: boolean; options: { name: string; priceAdd: number }[] }[];
 };
 
 export const getItemType = (item: MenuItem): MenuType => {
-  if (item.type === "food" || item.type === "drinks") return item.type;
+  if (item.type === "food" || item.type === "drinks" || item.type === "combo") return item.type;
   if (item.category === "drinks") return "drinks";
   return "food";
 };
@@ -55,6 +62,7 @@ export const useMenuData = (restaurantId: string) => {
   const [activeCategory, setActiveCategory] = useState("");
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
+  const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [loadingMenu, setLoadingMenu] = useState(true);
   const [loadingStock, setLoadingStock] = useState(true);
   // Stock solo se carga para usuarios autenticados (staff).
@@ -146,20 +154,60 @@ export const useMenuData = (restaurantId: string) => {
     return () => unsubscribe();
   }, [restaurantId, isAuthenticated]);
 
+  useEffect(() => {
+    if (!restaurantId) return;
+    return onSnapshot(
+      collection(db, "restaurants", restaurantId, "promotions"),
+      (snap) => setPromotions(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Promotion))
+    );
+  }, [restaurantId]);
+
+  const isItemAvailableNow = (item: MenuItem): boolean => {
+    const now = new Date();
+    const day = now.getDay();
+    if (item.availableDays && item.availableDays.length > 0) {
+      if (!item.availableDays.includes(day)) return false;
+    }
+    if (item.availableFrom && item.availableTo) {
+      const [fh, fm] = item.availableFrom.split(":").map(Number);
+      const [th, tm] = item.availableTo.split(":").map(Number);
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      const fromMin = fh * 60 + fm;
+      const toMin = th * 60 + tm;
+      if (fromMin <= toMin) return nowMin >= fromMin && nowMin <= toMin;
+      return nowMin >= fromMin || nowMin <= toMin;
+    }
+    return true;
+  };
+
+  const applyPromotion = (item: MenuItem): MenuItem => {
+    const activePromos = promotions.filter(isPromotionActive);
+    const promo = activePromos.find(
+      (p) => !p.category || p.category === getDisplayCategory(item)
+    );
+    if (!promo) return item;
+    const discount = promo.discountType === "percentage"
+      ? item.price * (promo.discountValue / 100)
+      : promo.discountValue;
+    return { ...item, price: Math.max(0, Math.round(item.price - discount)) };
+  };
+
   const availableMenuItems = useMemo(() => {
     // Anónimos: mostrar todos los items activos sin filtrar por stock.
     // La validación real de stock ocurre server-side en create-order.ts.
-    if (!isAuthenticated) return menuItems;
+    if (!isAuthenticated) {
+      return menuItems.filter(isItemAvailableNow).map(applyPromotion);
+    }
 
     return menuItems.filter((item) => {
+      if (!isItemAvailableNow(item)) return false;
       const availability = getMenuItemAvailability({
         ingredients: item.ingredients,
         stockItems,
       });
-
       return availability.visible;
-    });
-  }, [menuItems, stockItems, isAuthenticated]);
+    }).map(applyPromotion);
+  }, [menuItems, stockItems, isAuthenticated, promotions]);
 
   const categories = useMemo(() => {
     const unique = Array.from(

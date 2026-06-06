@@ -42,6 +42,11 @@ import { MesaManagementPanel } from "../components/MesaManagementPanel.tsx";
 import { MenuManagementPanel } from "../components/MenuManagementPanel";
 import { StockPanel } from "../components/StockPanel";
 import { AdminBilling } from "../components/AdminBilling";
+import { WaitlistPanel } from "../components/WaitlistPanel";
+import { ReservationsPanel } from "../components/ReservationsPanel";
+import { ShiftsPanel } from "../components/ShiftsPanel";
+import { StaffMetricsPanel } from "../components/StaffMetricsPanel";
+import { PromotionsPanel } from "../components/PromotionsPanel";
 import { canUseAnalytics, canUseAuditLogs, canUseInvoices, canUseStock } from "../lib/plan";
 import { ReceiptText, Activity } from "lucide-react";
 import type {
@@ -860,6 +865,11 @@ return (
               { id: "staff", label: "Empleados" },
               { id: "menu", label: "Menú" },
               { id: "stock", label: "Stock" },
+              { id: "waitlist", label: "Waitlist" },
+              { id: "reservations", label: "Reservas" },
+              { id: "shifts", label: "Turnos" },
+              { id: "staff-metrics", label: "Performance" },
+              { id: "promotions", label: "Promociones" },
               { id: "billing", label: "Plan" },
             ].map((item) => (
               <button
@@ -1293,6 +1303,51 @@ return (
               description="Gestioná inventario e ingredientes."
             >
               <StockPanel restaurantId={restaurantId} plan={restaurant?.plan} />
+            </AdminSectionShell>
+          )}
+
+          {adminSection === "waitlist" && (
+            <AdminSectionShell
+              title="Lista de espera"
+              description="Registrá clientes que esperan mesa y avisales cuando esté lista."
+            >
+              <WaitlistPanel restaurantId={restaurantId} />
+            </AdminSectionShell>
+          )}
+
+          {adminSection === "reservations" && (
+            <AdminSectionShell
+              title="Reservas"
+              description="Gestioná las reservas del día: nombre, hora, cantidad de personas y mesa asignada."
+            >
+              <ReservationsPanel restaurantId={restaurantId} />
+            </AdminSectionShell>
+          )}
+
+          {adminSection === "shifts" && (
+            <AdminSectionShell
+              title="Turnos del personal"
+              description="Registrá entradas y salidas. Cada empleado inicia y termina su propio turno."
+            >
+              <ShiftsPanel restaurantId={restaurantId} />
+            </AdminSectionShell>
+          )}
+
+          {adminSection === "staff-metrics" && (
+            <AdminSectionShell
+              title="Performance por empleado"
+              description="Acciones registradas en el audit log agrupadas por empleado."
+            >
+              <StaffMetricsPanel restaurantId={restaurantId} />
+            </AdminSectionShell>
+          )}
+
+          {adminSection === "promotions" && (
+            <AdminSectionShell
+              title="Promociones y Happy Hour"
+              description="Configurá descuentos automáticos por horario, categoría y día de la semana."
+            >
+              <PromotionsPanel restaurantId={restaurantId} />
             </AdminSectionShell>
           )}
 

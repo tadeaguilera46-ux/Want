@@ -4,4 +4,9 @@ export type AdminSection =
   | "staff"
   | "menu"
   | "stock"
-  | "billing";
+  | "billing"
+  | "waitlist"
+  | "reservations"
+  | "shifts"
+  | "staff-metrics"
+  | "promotions";

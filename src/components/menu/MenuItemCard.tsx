@@ -16,6 +16,8 @@ type MenuCardItem = {
   active: boolean;
   image?: string;
   ingredients?: MenuIngredient[];
+  allergens?: string[];
+  modifierGroups?: { name: string; required: boolean; options: { name: string; priceAdd: number }[] }[];
 };
 
 type MenuItemAvailability = {
@@ -93,6 +95,26 @@ function MenuItemCard({
         <p className="text-sm leading-relaxed text-zinc-600">
           {item.description || "Sin descripción"}
         </p>
+
+        {item.allergens && item.allergens.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {item.allergens.map((a) => (
+              <span key={a} className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                {a}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {item.modifierGroups && item.modifierGroups.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {item.modifierGroups.map((g) => (
+              <span key={g.name} className={`rounded-full px-2 py-0.5 text-xs font-semibold ${g.required ? "border border-zinc-300 bg-zinc-100 text-zinc-700" : "border border-zinc-200 bg-white text-zinc-500"}`}>
+                {g.name}{g.required ? " *" : ""}
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="mt-4 flex items-center justify-between gap-3">
           <button

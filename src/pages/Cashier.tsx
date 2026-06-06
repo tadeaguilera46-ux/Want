@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   addDoc,
+  arrayUnion,
   collection,
+  doc,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  updateDoc,
   where,
 } from "firebase/firestore";
 import { toast } from "sonner";
@@ -32,6 +35,7 @@ import {
   createOrRefreshCashierBill,
   markCashierBillPrinted,
   registerCashierPayment,
+  reopenCashierBill,
   requestCashierInvoice,
   updateCashierBillAdjustments,
 } from "../lib/cashier";
@@ -77,8 +81,10 @@ type Cuenta = {
   manualExtraAmount?: number;
   manualExtraReason?: string;
   paidAmount?: number;
+  tip?: number;
   unpaid?: boolean;
   unpaidReason?: string;
+  internalNote?: string;
   payments?: {
     id: string;
     method: CashierPaymentMethod;
@@ -105,6 +111,13 @@ type Cuenta = {
   };
 };
 
+type CancelledItem = {
+  itemIndex: number;
+  name: string;
+  reason: string;
+  cancelledAt: number;
+};
+
 type Pedido = {
   id: string;
   restaurantId: string;
@@ -112,6 +125,7 @@ type Pedido = {
   sessionId?: string;
   total: number;
   items: CashierOrderItem[];
+  cancelledItems?: CancelledItem[];
   createdAt?: {
     seconds?: number;
     toMillis?: () => number;
@@ -230,10 +244,13 @@ const Cashier = () => {
   const [discountReason, setDiscountReason] = useState("");
   const [manualExtraAmount, setManualExtraAmount] = useState("");
   const [manualExtraReason, setManualExtraReason] = useState("");
+  const [internalNote, setInternalNote] = useState("");
 
   const [paymentMethod, setPaymentMethod] =
     useState<CashierPaymentMethod>("cash");
   const [paymentAmount, setPaymentAmount] = useState("");
+  const [cashReceived, setCashReceived] = useState("");
+  const [tipAmount, setTipAmount] = useState("");
 
   const [manualMesa, setManualMesa] = useState("");
   const [manualSelectedMenuId, setManualSelectedMenuId] = useState("");
@@ -256,6 +273,16 @@ const Cashier = () => {
   const [invoicePostalCode, setInvoicePostalCode] = useState("");
   const [invoiceProvince, setInvoiceProvince] = useState("");
   const [invoiceCity, setInvoiceCity] = useState("");
+
+  const [reopenReason, setReopenReason] = useState("");
+  const [showReopenModal, setShowReopenModal] = useState(false);
+  const [showInvoiceInline, setShowInvoiceInline] = useState(false);
+  const [showSplitBill, setShowSplitBill] = useState(false);
+  const [splitParts, setSplitParts] = useState("2");
+  const [cancelItemTarget, setCancelItemTarget] = useState<{ pedidoId: string; itemIndex: number; name: string } | null>(null);
+  const [cancelItemReason, setCancelItemReason] = useState("");
+
+  const [compactMode, setCompactMode] = useState(false);
 
   const [showOpeningDialog, setShowOpeningDialog] = useState(true);
   const [openingCashInput, setOpeningCashInput] = useState("");
@@ -420,8 +447,12 @@ const Cashier = () => {
     setDiscountReason(selectedCuenta.discountReason || "");
     setManualExtraAmount(String(selectedCuenta.manualExtraAmount || ""));
     setManualExtraReason(selectedCuenta.manualExtraReason || "");
+    setInternalNote(selectedCuenta.internalNote || "");
 
     setPaymentAmount(String(Number(selectedCuenta.total || 0)));
+    setCashReceived("");
+    setTipAmount("");
+    setShowInvoiceInline(false);
 
     setInvoiceType(selectedCuenta.invoice?.type || "B");
     setInvoiceCustomerName(selectedCuenta.invoice?.customerName || "");
@@ -452,11 +483,33 @@ const Cashier = () => {
   }, [orders, selectedCuenta]);
 
   const selectedItems = useMemo(() => {
-    return selectedOrders.flatMap((order) => order.items || []);
+    return selectedOrders.flatMap((order) =>
+      (order.items || []).map((item, idx) => ({
+        ...item,
+        _pedidoId: order.id,
+        _itemIndex: idx,
+        _cancelled: order.cancelledItems?.some((c) => c.itemIndex === idx) ?? false,
+      }))
+    );
   }, [selectedOrders]);
 
   const realSubtotal = useMemo(() => {
     if (!selectedCuenta) return 0;
+
+    const hasCancelledItems = selectedOrders.some((o) => (o.cancelledItems?.length ?? 0) > 0);
+    if (hasCancelledItems) {
+      return selectedOrders.reduce((sum, order) => {
+        const items = order.items || [];
+        return (
+          sum +
+          items.reduce((s, item, idx) => {
+            const cancelled = order.cancelledItems?.some((c) => c.itemIndex === idx) ?? false;
+            if (cancelled) return s;
+            return s + getItemSubtotal(item as CashierOrderItem);
+          }, 0)
+        );
+      }, 0);
+    }
 
     const ordersTotal = selectedOrders.reduce((sum, order) => {
       return sum + Number(order.total || 0);
@@ -556,6 +609,7 @@ const Cashier = () => {
   );
 
   const totalEfectivo = paymentBreakdown.cash?.total ?? 0;
+  const totalTips = paidCuentasToday.reduce((s, c) => s + Number(c.tip || 0), 0);
   const totalAjustesAdd = cashSession?.adjustments
     ?.filter((a) => a.type === "add")
     .reduce((s, a) => s + a.amount, 0) ?? 0;
@@ -806,6 +860,7 @@ const Cashier = () => {
         );
       }
 
+      const tip = Number(tipAmount || 0);
       await registerCashierPayment({
         restaurantId,
         cuentaId: selectedCuenta.id,
@@ -813,6 +868,7 @@ const Cashier = () => {
         metodo: cashierMethodToMetodoPago(paymentMethod),
         actorUid: user.uid,
         actorEmail: user.email,
+        tip: tip > 0 ? tip : undefined,
         payments: [
           {
             id: crypto.randomUUID(),
@@ -820,7 +876,6 @@ const Cashier = () => {
             amount,
           },
         ],
-
       });
 
     } catch (err) {
@@ -828,6 +883,71 @@ const Cashier = () => {
       setError(
         err instanceof Error ? err.message : "No se pudo registrar el pago."
       );
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleReopenBill = async () => {
+    if (!selectedCuenta || !user) return;
+    if (!reopenReason.trim() || reopenReason.trim().length < 4) {
+      toast.error("Ingresá un motivo claro (mínimo 4 caracteres).");
+      return;
+    }
+    try {
+      setProcessing(true);
+      await reopenCashierBill({
+        restaurantId,
+        cuentaId: selectedCuenta.id,
+        reason: reopenReason,
+        actorUid: user.uid,
+        actorEmail: user.email,
+      });
+      setShowReopenModal(false);
+      setReopenReason("");
+      toast.success("Cuenta reabierta.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo reabrir.");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleSaveInternalNote = async () => {
+    if (!selectedCuenta || !restaurantId) return;
+    try {
+      const ref = doc(db, "restaurants", restaurantId, "cuentas", selectedCuenta.id);
+      await updateDoc(ref, { internalNote: internalNote.trim(), updatedAt: serverTimestamp() });
+      toast.success("Nota guardada.");
+    } catch {
+      toast.error("No se pudo guardar la nota.");
+    }
+  };
+
+  const handleCancelItem = async () => {
+    if (!cancelItemTarget || !user || !restaurantId) return;
+    if (!cancelItemReason.trim() || cancelItemReason.trim().length < 3) {
+      toast.error("Ingresá un motivo para la cancelación.");
+      return;
+    }
+    try {
+      setProcessing(true);
+      const pedidoRef = doc(db, "restaurants", restaurantId, "pedidos", cancelItemTarget.pedidoId);
+      const entry: CancelledItem = {
+        itemIndex: cancelItemTarget.itemIndex,
+        name: cancelItemTarget.name,
+        reason: cancelItemReason.trim(),
+        cancelledAt: Date.now(),
+      };
+      await updateDoc(pedidoRef, {
+        cancelledItems: arrayUnion(entry),
+        updatedAt: serverTimestamp(),
+      });
+      setCancelItemTarget(null);
+      setCancelItemReason("");
+      toast.success(`"${cancelItemTarget.name}" cancelado.`);
+    } catch {
+      toast.error("No se pudo cancelar el ítem.");
     } finally {
       setProcessing(false);
     }
@@ -961,6 +1081,68 @@ const Cashier = () => {
     }
   };
 
+  const handleExportCierre = () => {
+    if (!cashSession) return;
+    const fmt = (v: number) =>
+      new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(v);
+    const fmtDate = (d: Date) =>
+      new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" }).format(d);
+
+    const rows = (Object.entries(paymentBreakdown) as [CashierPaymentMethod, { count: number; total: number }][])
+      .sort((a, b) => b[1].total - a[1].total)
+      .map(([method, data]) => `<tr><td>${paymentLabels[method] || method}</td><td>${data.count}</td><td>${fmt(data.total)}</td></tr>`)
+      .join("");
+
+    const adjRows = (cashSession.adjustments ?? [])
+      .map((a) => `<tr><td>${a.type === "add" ? "+" : "−"} ${fmt(a.amount)}</td><td>${a.reason}</td><td>${fmtDate(new Date(a.createdAt))}</td></tr>`)
+      .join("");
+
+    const cuentaRows = paidCuentasToday
+      .map((c) => {
+        const method = c.payments?.[0]?.method ?? (c.metodo as CashierPaymentMethod) ?? "other";
+        const paid = c.paidAmount != null && c.paidAmount > 0 ? c.paidAmount : Number(c.total || 0);
+        return `<tr><td>Mesa ${c.mesa}</td><td>${paymentLabels[method] || method}</td><td>${fmt(paid)}</td>${c.tip ? `<td>${fmt(c.tip)}</td>` : "<td>—</td>"}</tr>`;
+      })
+      .join("");
+
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Cierre de caja · ${fmtDate(new Date())}</title>
+<style>
+  body{font-family:Arial,sans-serif;font-size:13px;color:#111;padding:24px;max-width:700px;margin:0 auto}
+  h1{font-size:18px;margin-bottom:4px}p.sub{color:#666;font-size:12px;margin-bottom:20px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+  .card{border:1px solid #ddd;border-radius:6px;padding:12px}
+  .card .label{font-size:11px;text-transform:uppercase;color:#666;font-weight:700}
+  .card .value{font-size:20px;font-weight:700;margin-top:4px}
+  table{width:100%;border-collapse:collapse;margin-bottom:20px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;color:#666;border-bottom:2px solid #ddd;padding:6px 4px}
+  td{padding:6px 4px;border-bottom:1px solid #eee}
+  h2{font-size:14px;margin:16px 0 6px}
+  .total-row td{font-weight:700}
+  @media print{body{padding:0}}
+</style></head><body>
+<h1>Cierre de caja</h1>
+<p class="sub">Apertura: ${fmtDate(new Date(cashSession.openedAt))} · Cierre: ${fmtDate(new Date())}</p>
+<div class="grid">
+  <div class="card"><div class="label">Monto inicial</div><div class="value">${fmt(cashSession.openingCash)}</div></div>
+  <div class="card"><div class="label">Efectivo en caja</div><div class="value">${fmt(totalCajaActual)}</div></div>
+  <div class="card"><div class="label">Total recaudado</div><div class="value">${fmt(totalRecaudado)}</div></div>
+</div>
+${totalTips > 0 ? `<p style="color:#059669;font-weight:700;margin-bottom:16px">Propinas totales: ${fmt(totalTips)}</p>` : ""}
+<h2>Por forma de pago</h2>
+<table><thead><tr><th>Método</th><th>Cuentas</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table>
+${adjRows ? `<h2>Ajustes de caja</h2><table><thead><tr><th>Monto</th><th>Motivo</th><th>Hora</th></tr></thead><tbody>${adjRows}</tbody></table>` : ""}
+<h2>Cuentas cobradas (${paidCuentasToday.length})</h2>
+<table><thead><tr><th>Mesa</th><th>Método</th><th>Total</th><th>Propina</th></tr></thead><tbody>${cuentaRows}</tbody></table>
+<script>window.onload=()=>{window.print()}</script>
+</body></html>`;
+
+    const win = window.open("", "_blank", "width=800,height=600");
+    if (!win) { toast.error("Bloqueado por el navegador. Permitir popups."); return; }
+    win.document.write(html);
+    win.document.close();
+  };
+
   const saveAdjustment = () => {
     if (!sessionKey || !cashSession || !adjustForm) return;
     const amount = Math.max(0, Number(adjustForm.amount) || 0);
@@ -1076,6 +1258,15 @@ const Cashier = () => {
                 Cierre de caja
               </button>
 
+              {/* FC-009: Toggle modo compacto */}
+              <button
+                onClick={() => setCompactMode((v) => !v)}
+                className={`hidden md:flex h-12 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-bold shadow-sm transition ${compactMode ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50"}`}
+                title="Vista compacta"
+              >
+                Compacto
+              </button>
+
               <button
                 onClick={handleLogout}
                 disabled={loggingOut}
@@ -1099,7 +1290,7 @@ const Cashier = () => {
           </div>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-[390px_1fr]">
+        <div className={`grid gap-6 lg:grid-cols-[390px_1fr] ${compactMode ? "text-sm [&_h3]:text-sm [&_.rounded-xl]:rounded-lg [&_p-4]:p-3 [&_p-6]:p-4" : ""}`}>
           <div className="space-y-6">
             <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
               <div className="mb-4 flex items-center gap-2">
@@ -1126,50 +1317,47 @@ const Cashier = () => {
                     const selected = selectedCuenta?.id === cuenta.id;
 
                     return (
-                      <button
-                        key={cuenta.id}
-                        onClick={() => setSelectedCuentaId(cuenta.id)}
-                        className={`w-full rounded-xl border p-4 text-left transition ${
-                          selected
-                            ? "border-zinc-950 bg-zinc-950 text-white"
-                            : "border-zinc-200 bg-white hover:border-zinc-300"
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p
-                              className={`text-xs font-bold uppercase tracking-wide ${
-                                selected ? "text-white/70" : "text-zinc-500"
-                              }`}
-                            >
-                              Mesa
-                            </p>
-                            <h3 className="text-3xl font-bold">
-                              {cuenta.mesa}
-                            </h3>
-                            <p
-                              className={`mt-1 text-xs font-semibold ${
-                                selected ? "text-white/70" : "text-zinc-500"
-                              }`}
-                            >
-                              {cuenta.estado}
-                            </p>
+                      <div key={cuenta.id} className="relative">
+                        <button
+                          onClick={() => setSelectedCuentaId(cuenta.id)}
+                          className={`w-full rounded-xl border p-4 text-left transition ${
+                            selected
+                              ? "border-zinc-950 bg-zinc-950 text-white"
+                              : "border-zinc-200 bg-white hover:border-zinc-300"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className={`text-xs font-bold uppercase tracking-wide ${selected ? "text-white/70" : "text-zinc-500"}`}>
+                                Mesa
+                              </p>
+                              <h3 className="text-3xl font-bold">{cuenta.mesa}</h3>
+                              <p className={`mt-1 text-xs font-semibold ${selected ? "text-white/70" : "text-zinc-500"}`}>
+                                {cuenta.estado}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <p className={`text-xs font-bold uppercase tracking-wide ${selected ? "text-white/70" : "text-zinc-500"}`}>
+                                Total
+                              </p>
+                              <p className="text-xl font-bold">{formatPriceARS(cuenta.total)}</p>
+                            </div>
                           </div>
-
-                          <div className="text-right">
-                            <p
-                              className={`text-xs font-bold uppercase tracking-wide ${
-                                selected ? "text-white/70" : "text-zinc-500"
-                              }`}
-                            >
-                              Total
-                            </p>
-                            <p className="text-xl font-bold">
-                              {formatPriceARS(cuenta.total)}
-                            </p>
-                          </div>
-                        </div>
-                      </button>
+                        </button>
+                        {/* FC-007: Imprimir pre-cuenta sin abrir el detalle */}
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setSelectedCuentaId(cuenta.id);
+                            await new Promise((r) => setTimeout(r, 80));
+                            window.print();
+                          }}
+                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 shadow-sm hover:bg-zinc-50"
+                          title="Imprimir pre-cuenta"
+                        >
+                          <Printer size={13} />
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
@@ -1330,30 +1518,58 @@ const Cashier = () => {
                         const quantity = getItemQuantity(item);
                         const price = getItemPrice(item);
                         const subtotal = getItemSubtotal(item);
+                        const cancelled = item._cancelled;
+                        const canCancel =
+                          !cancelled &&
+                          selectedCuenta.estado !== "pagada" &&
+                          selectedCuenta.estado !== "cerrada";
 
                         return (
                           <div
                             key={`${name}-${index}`}
-                            className="rounded-lg border border-zinc-200 bg-white px-4 py-3"
+                            className={`rounded-lg border px-4 py-3 ${cancelled ? "border-zinc-100 bg-zinc-50 opacity-60" : "border-zinc-200 bg-white"}`}
                           >
                             <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <p className="font-bold text-zinc-950">
+                              <div className="flex-1 min-w-0">
+                                <p className={`font-bold ${cancelled ? "line-through text-zinc-400" : "text-zinc-950"}`}>
                                   {name}
                                 </p>
-                                <p className="mt-1 text-xs font-semibold text-zinc-500">
+                                <p className={`mt-1 text-xs font-semibold ${cancelled ? "text-zinc-400" : "text-zinc-500"}`}>
                                   {quantity} x {formatPriceARS(price)}
                                 </p>
-                                {item.observacion && (
+                                {item.observacion && !cancelled && (
                                   <p className="mt-1 text-xs text-amber-700">
                                     Obs: {item.observacion}
                                   </p>
                                 )}
+                                {cancelled && (
+                                  <p className="mt-1 text-xs font-semibold text-red-500">
+                                    Cancelado
+                                  </p>
+                                )}
                               </div>
 
-                              <p className="font-bold text-zinc-950">
-                                {formatPriceARS(subtotal)}
-                              </p>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <p className={`font-bold ${cancelled ? "line-through text-zinc-400" : "text-zinc-950"}`}>
+                                  {formatPriceARS(subtotal)}
+                                </p>
+                                {canCancel && (
+                                  <button
+                                    onClick={() => {
+                                      setCancelItemTarget({
+                                        pedidoId: item._pedidoId,
+                                        itemIndex: item._itemIndex,
+                                        name,
+                                      });
+                                      setCancelItemReason("");
+                                    }}
+                                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600"
+                                    title="Cancelar ítem"
+                                  >
+                                    <X size={13} />
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         );
@@ -1464,6 +1680,33 @@ const Cashier = () => {
                     </div>
                   </div>
 
+                  {/* FC-008: Nota interna */}
+                  <div className="rounded-xl border border-zinc-200 bg-white p-4">
+                    <h3 className="mb-3 text-sm font-bold text-zinc-700">
+                      Nota interna (solo visible para el staff)
+                    </h3>
+                    <div className="flex gap-2">
+                      <input
+                        value={internalNote}
+                        onChange={(e) => setInternalNote(e.target.value)}
+                        placeholder="Ej: cliente VIP, no cobrar cubierto, paga con factura A..."
+                        className="h-10 flex-1 rounded-lg border border-zinc-200 px-3 text-sm"
+                      />
+                      <button
+                        onClick={handleSaveInternalNote}
+                        disabled={processing}
+                        className="h-10 rounded-lg border border-zinc-200 bg-zinc-50 px-4 text-xs font-bold text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
+                      >
+                        Guardar
+                      </button>
+                    </div>
+                    {selectedCuenta.internalNote && (
+                      <p className="mt-2 text-xs text-zinc-500">
+                        Nota actual: <span className="font-semibold text-zinc-700">{selectedCuenta.internalNote}</span>
+                      </p>
+                    )}
+                  </div>
+
                   <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                     <h3 className="mb-3 text-lg font-bold text-zinc-950">
                       Resumen
@@ -1505,6 +1748,46 @@ const Cashier = () => {
                   </div>
                 </div>
 
+                {/* F-002/FC-002: División de cuenta */}
+                <div className="rounded-xl border border-zinc-200 bg-white p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-zinc-700">Dividir cuenta</h3>
+                    <button
+                      onClick={() => setShowSplitBill((v) => !v)}
+                      className="text-xs font-semibold text-zinc-500 hover:text-zinc-900"
+                    >
+                      {showSplitBill ? "Ocultar" : "Mostrar"}
+                    </button>
+                  </div>
+                  {showSplitBill && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <label className="text-sm text-zinc-600">Dividir entre</label>
+                        <input
+                          type="number"
+                          min={2}
+                          max={20}
+                          value={splitParts}
+                          onChange={(e) => setSplitParts(e.target.value)}
+                          className="h-9 w-20 rounded-lg border border-zinc-200 px-3 text-center text-sm font-bold"
+                        />
+                        <span className="text-sm text-zinc-600">personas</span>
+                      </div>
+                      {Number(splitParts) >= 2 && (
+                        <div className="rounded-lg bg-zinc-50 px-4 py-3">
+                          <p className="text-xs text-zinc-500">Cada persona paga</p>
+                          <p className="text-2xl font-bold text-zinc-950">
+                            {formatPriceARS(finalTotal / Number(splitParts))}
+                          </p>
+                          <p className="mt-1 text-xs text-zinc-400">
+                            {splitParts} partes de {formatPriceARS(finalTotal)} = {formatPriceARS(finalTotal / Number(splitParts))} c/u
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
                 <div className="rounded-xl border border-zinc-200 bg-white p-4">
                   <h3 className="mb-4 text-lg font-bold text-zinc-950">
                     Registrar pago
@@ -1513,9 +1796,10 @@ const Cashier = () => {
                   <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
                     <select
                       value={paymentMethod}
-                      onChange={(e) =>
-                        setPaymentMethod(e.target.value as CashierPaymentMethod)
-                      }
+                      onChange={(e) => {
+                        setPaymentMethod(e.target.value as CashierPaymentMethod);
+                        setCashReceived("");
+                      }}
                       className="h-12 rounded-lg border border-zinc-200 px-3"
                     >
                       <option value="cash">Efectivo</option>
@@ -1527,18 +1811,32 @@ const Cashier = () => {
                       <option value="other">Otro</option>
                     </select>
 
-                    <input
-                      value={paymentAmount}
-                      onChange={(e) => setPaymentAmount(e.target.value)}
-                      type="number"
-                      min={remainingAmount}
-                      placeholder="Monto"
-                      className={`h-12 rounded-lg border px-4 ${
-                        isPaymentAmountInvalid
-                          ? "border-red-300 bg-red-50"
-                          : "border-zinc-200"
-                      }`}
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        value={paymentAmount}
+                        onChange={(e) => setPaymentAmount(e.target.value)}
+                        type="number"
+                        min={remainingAmount}
+                        placeholder="Monto a cobrar"
+                        className={`h-12 flex-1 rounded-lg border px-4 ${
+                          isPaymentAmountInvalid
+                            ? "border-red-300 bg-red-50"
+                            : "border-zinc-200"
+                        }`}
+                      />
+                      {/* FC-003: Botón cobro exacto */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPaymentAmount(String(remainingAmount));
+                          setCashReceived("");
+                        }}
+                        className="h-12 rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-xs font-bold text-zinc-600 hover:bg-zinc-100"
+                        title="Cobro exacto"
+                      >
+                        Exacto
+                      </button>
+                    </div>
 
                     <button
                       onClick={handleMarkPaid}
@@ -1554,6 +1852,70 @@ const Cashier = () => {
                       Cobrar
                     </button>
                   </div>
+
+                  {/* FC-001: Calculadora de vuelto — solo visible con efectivo */}
+                  {paymentMethod === "cash" && Number(paymentAmount) >= remainingAmount && remainingAmount > 0 && (
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-xs font-semibold text-zinc-500">
+                          Efectivo recibido del cliente
+                        </label>
+                        <input
+                          value={cashReceived}
+                          onChange={(e) => setCashReceived(e.target.value)}
+                          type="number"
+                          min={Number(paymentAmount)}
+                          placeholder={formatPriceARS(Number(paymentAmount))}
+                          className="h-11 w-full rounded-lg border border-zinc-200 px-4 text-sm"
+                        />
+                      </div>
+                      <div
+                        className={`flex flex-col justify-center rounded-lg border px-4 py-2 ${
+                          Number(cashReceived) >= Number(paymentAmount)
+                            ? "border-emerald-200 bg-emerald-50"
+                            : "border-zinc-200 bg-zinc-50"
+                        }`}
+                      >
+                        <p className="text-xs font-semibold text-zinc-500">Dar de vuelto</p>
+                        <p className={`text-2xl font-bold ${
+                          Number(cashReceived) >= Number(paymentAmount)
+                            ? "text-emerald-700"
+                            : "text-zinc-400"
+                        }`}>
+                          {Number(cashReceived) >= Number(paymentAmount)
+                            ? formatPriceARS(Number(cashReceived) - Number(paymentAmount))
+                            : "—"}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* F-012: Propina */}
+                  {selectedCuenta.estado !== "pagada" && (
+                    <div className="mt-3 flex items-center gap-3">
+                      <label className="text-xs font-semibold text-zinc-500 shrink-0">
+                        Propina (opcional)
+                      </label>
+                      <input
+                        value={tipAmount}
+                        onChange={(e) => setTipAmount(e.target.value)}
+                        type="number"
+                        min={0}
+                        placeholder="$ 0"
+                        className="h-9 w-32 rounded-lg border border-zinc-200 px-3 text-sm"
+                      />
+                      {Number(tipAmount) > 0 && (
+                        <span className="text-xs font-semibold text-emerald-600">
+                          +{formatPriceARS(Number(tipAmount))} propina
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {selectedCuenta.tip != null && selectedCuenta.tip > 0 && (
+                    <p className="mt-2 text-xs font-semibold text-emerald-600">
+                      Propina registrada: {formatPriceARS(selectedCuenta.tip)}
+                    </p>
+                  )}
 
                   {isPaymentAmountInvalid && selectedCuenta.estado !== "pagada" && (
                     <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
@@ -1578,6 +1940,102 @@ const Cashier = () => {
                         ))}
                       </div>
                     )}
+
+                  {/* FC-010: Toggle factura inline en el flujo de cobro */}
+                  {selectedCuenta.estado !== "pagada" && !selectedCuenta.invoice?.status && (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        onClick={() => setShowInvoiceInline((v) => !v)}
+                        className="flex items-center gap-2 text-sm font-semibold text-zinc-600 hover:text-zinc-900"
+                      >
+                        <span className={`flex h-5 w-5 items-center justify-center rounded border-2 text-xs ${showInvoiceInline ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300"}`}>
+                          {showInvoiceInline ? "✓" : ""}
+                        </span>
+                        ¿El cliente necesita factura?
+                      </button>
+                      {showInvoiceInline && (
+                        <div className="mt-3 grid gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 sm:grid-cols-2">
+                          <select
+                            value={invoiceType}
+                            onChange={(e) => setInvoiceType(e.target.value as "A" | "B" | "C" | "ticket")}
+                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
+                          >
+                            <option value="ticket">Ticket</option>
+                            <option value="A">Factura A</option>
+                            <option value="B">Factura B</option>
+                            <option value="C">Factura C</option>
+                          </select>
+                          <input
+                            value={invoiceCustomerName}
+                            onChange={(e) => setInvoiceCustomerName(e.target.value)}
+                            placeholder="Nombre / Razón social"
+                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
+                          />
+                          <input
+                            value={invoiceDocumentNumber}
+                            onChange={(e) => setInvoiceDocumentNumber(e.target.value)}
+                            placeholder="DNI / CUIT"
+                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
+                          />
+                          <input
+                            value={invoiceEmail}
+                            onChange={(e) => setInvoiceEmail(e.target.value)}
+                            placeholder="Email (opcional)"
+                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
+                          />
+                          <button
+                            onClick={handleRequestInvoice}
+                            disabled={processing || !isOnline}
+                            className="col-span-full h-10 rounded-lg bg-zinc-900 text-sm font-bold text-white disabled:opacity-50"
+                          >
+                            Guardar solicitud de factura
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* FC-005: Reabrir cuenta pagada */}
+                  {selectedCuenta.estado === "pagada" && (
+                    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                      {!showReopenModal ? (
+                        <button
+                          onClick={() => setShowReopenModal(true)}
+                          className="text-sm font-semibold text-amber-700 hover:underline"
+                        >
+                          ¿Error de cobro? Reabrir cuenta
+                        </button>
+                      ) : (
+                        <div className="space-y-2">
+                          <p className="text-xs font-semibold text-amber-800">
+                            Motivo de reapertura (obligatorio)
+                          </p>
+                          <input
+                            value={reopenReason}
+                            onChange={(e) => setReopenReason(e.target.value)}
+                            placeholder="Ej: error en método de pago, monto incorrecto..."
+                            className="h-10 w-full rounded-lg border border-amber-300 bg-white px-3 text-sm"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleReopenBill}
+                              disabled={processing}
+                              className="rounded-lg bg-amber-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+                            >
+                              Reabrir
+                            </button>
+                            <button
+                              onClick={() => { setShowReopenModal(false); setReopenReason(""); }}
+                              className="rounded-lg border border-amber-300 px-4 py-2 text-xs font-semibold text-amber-700"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 <div className="rounded-xl border border-zinc-200 bg-white p-4">
@@ -1760,12 +2218,20 @@ const Cashier = () => {
                 </p>
               )}
             </div>
-            <button
-              onClick={() => setShowCierreModal(false)}
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700 transition hover:bg-zinc-50"
-            >
-              <X size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleExportCierre}
+                className="flex h-9 items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-xs font-bold text-zinc-700 hover:bg-zinc-100"
+              >
+                <Printer size={13} /> Exportar PDF
+              </button>
+              <button
+                onClick={() => setShowCierreModal(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-200 text-zinc-700 transition hover:bg-zinc-50"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
 
           <div className="space-y-6 p-6">
@@ -1796,6 +2262,14 @@ const Cashier = () => {
                 </p>
               </div>
             </div>
+
+            {/* F-012: Total propinas */}
+            {totalTips > 0 && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-wide text-emerald-700">Propinas totales</p>
+                <p className="mt-1 text-xl font-bold text-emerald-900">{formatPriceARS(totalTips)}</p>
+              </div>
+            )}
 
             {/* Breakdown by payment method */}
             <div>
@@ -2002,6 +2476,44 @@ const Cashier = () => {
                 {closingCaja ? "Registrando cierre..." : "Cerrar caja y registrar auditoría"}
               </button>
             </div>
+          </div>
+        </div>
+      </div>
+    )}
+    {/* F-008/FC-004: Modal confirmación cancelación de ítem */}
+    {cancelItemTarget && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+          <h3 className="mb-1 text-base font-bold text-zinc-950">
+            Cancelar ítem
+          </h3>
+          <p className="mb-4 text-sm text-zinc-500">
+            Vas a cancelar <span className="font-semibold text-zinc-800">"{cancelItemTarget.name}"</span>. Esta acción se registra en el audit log.
+          </p>
+          <label className="mb-1 block text-xs font-semibold text-zinc-600">
+            Motivo (obligatorio)
+          </label>
+          <input
+            value={cancelItemReason}
+            onChange={(e) => setCancelItemReason(e.target.value)}
+            placeholder="Ej: error de pedido, cliente cambió de opinión..."
+            className="mb-4 h-10 w-full rounded-lg border border-zinc-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300"
+            autoFocus
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={handleCancelItem}
+              disabled={processing || cancelItemReason.trim().length < 3}
+              className="flex-1 rounded-lg bg-red-600 py-2.5 text-sm font-bold text-white disabled:opacity-40 hover:bg-red-700"
+            >
+              {processing ? "Cancelando..." : "Confirmar cancelación"}
+            </button>
+            <button
+              onClick={() => { setCancelItemTarget(null); setCancelItemReason(""); }}
+              className="rounded-lg border border-zinc-200 px-4 py-2.5 text-sm font-semibold text-zinc-600 hover:bg-zinc-50"
+            >
+              Cancelar
+            </button>
           </div>
         </div>
       </div>

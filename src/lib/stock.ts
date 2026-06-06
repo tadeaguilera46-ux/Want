@@ -17,6 +17,7 @@ export type CreateStockInput = {
   unit: StockUnit;
   currentQuantity: number;
   minimumQuantity: number;
+  costPerUnit?: number;
   supplier?: string;
   notes?: string;
 };
@@ -38,6 +39,7 @@ export const createStockItem = async (
     unit: input.unit,
     currentQuantity: Number(input.currentQuantity || 0),
     minimumQuantity: Number(input.minimumQuantity || 0),
+    ...(input.costPerUnit != null && input.costPerUnit > 0 ? { costPerUnit: input.costPerUnit } : {}),
     supplier: input.supplier?.trim() || "",
     notes: input.notes?.trim() || "",
     active: true,

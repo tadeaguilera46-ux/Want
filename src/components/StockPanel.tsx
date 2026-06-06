@@ -46,6 +46,7 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
   const [unit, setUnit] = useState<StockUnit>("unit");
   const [quantity, setQuantity] = useState(0);
   const [minimumQuantity, setMinimumQuantity] = useState(0);
+  const [costPerUnit, setCostPerUnit] = useState("");
   const [supplier, setSupplier] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
@@ -93,6 +94,7 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
         unit,
         currentQuantity: quantity,
         minimumQuantity,
+        costPerUnit: costPerUnit ? Number(costPerUnit) : undefined,
         supplier,
         notes,
       });
@@ -101,6 +103,7 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
       setCategory("");
       setQuantity(0);
       setMinimumQuantity(0);
+      setCostPerUnit("");
       setSupplier("");
       setNotes("");
     } catch (error) {
@@ -169,6 +172,27 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
         </div>
       </div>
 
+      {/* F-007: Banner de alerta de stock bajo */}
+      {lowStockCount > 0 && (
+        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle size={16} className="text-red-600 shrink-0" />
+            <p className="text-sm font-bold text-red-800">
+              {lowStockCount} {lowStockCount === 1 ? "insumo" : "insumos"} con stock bajo o agotado
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {items
+              .filter((i) => i.active && Number(i.currentQuantity || 0) <= Number(i.minimumQuantity || 0))
+              .map((i) => (
+                <span key={i.id} className="rounded-full bg-red-100 border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-700">
+                  {i.name} — {i.currentQuantity} {i.unit}
+                </span>
+              ))}
+          </div>
+        </div>
+      )}
+
       <form
         onSubmit={handleCreate}
         className="mb-8 grid gap-3 lg:grid-cols-3"
@@ -235,6 +259,18 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
                 className="h-11 w-full rounded-lg border border-zinc-200 px-3"
             />
         </div>
+
+        <input
+          value={costPerUnit}
+          onChange={(e) => setCostPerUnit(e.target.value)}
+          type="number"
+          min={0}
+          step="any"
+          placeholder="Costo por unidad ($)"
+          disabled={!stockEnabled}
+          className="h-11 rounded-lg border border-zinc-200 px-3"
+          title="F-029: Costo por unidad para calcular margen"
+        />
 
         <input
           value={supplier}

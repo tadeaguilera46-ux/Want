@@ -175,6 +175,7 @@ export const registerCashierPayment = async ({
   metodo,
   actorUid,
   actorEmail,
+  tip,
 }: {
   restaurantId: string;
   cuentaId: string;
@@ -183,6 +184,7 @@ export const registerCashierPayment = async ({
   metodo: MetodoPago | null;
   actorUid: string;
   actorEmail?: string | null;
+  tip?: number;
 }) => {
   if (!payments.length) {
     throw new Error("Agregá al menos un pago.");
@@ -213,6 +215,7 @@ export const registerCashierPayment = async ({
     metodo,
     payments,
     paidAmount: totalPaid,
+    ...(tip && tip > 0 ? { tip } : {}),
     estado: "pagada",
     paidAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -341,5 +344,52 @@ export const markCashierBillPrinted = async ({
     actorEmail,
     mesa,
     cuentaId,
+  });
+};
+
+// FC-005: Reabrir cuenta pagada con motivo obligatorio
+export const reopenCashierBill = async ({
+  restaurantId,
+  cuentaId,
+  reason,
+  actorUid,
+  actorEmail,
+}: {
+  restaurantId: string;
+  cuentaId: string;
+  reason: string;
+  actorUid: string;
+  actorEmail?: string | null;
+}) => {
+  if (!reason.trim() || reason.trim().length < 4) {
+    throw new Error("Ingresá un motivo claro para reabrir la cuenta.");
+  }
+
+  const cuentaRef = doc(db, "restaurants", restaurantId, "cuentas", cuentaId);
+  const snapshot = await getDoc(cuentaRef);
+  if (!snapshot.exists()) throw new Error("La cuenta no existe.");
+
+  const cuenta = snapshot.data();
+
+  await updateDoc(cuentaRef, {
+    estado: "pendiente",
+    payments: [],
+    paidAmount: 0,
+    tip: 0,
+    metodo: null,
+    reopenReason: reason.trim(),
+    reopenedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  await createCashierAuditLog({
+    restaurantId,
+    action: "cashier_bill_created",
+    actorUid,
+    actorEmail,
+    mesa: Number(cuenta.mesa),
+    cuentaId,
+    reason: `Cuenta reabierta · ${reason.trim()}`,
+    metadata: { reopenReason: reason.trim() },
   });
 };

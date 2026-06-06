@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { collection, doc, onSnapshot, query } from "firebase/firestore";
-import { Copy, DoorOpen, Download, Plus, QrCode, X } from "lucide-react";
+import { collection, doc, getDocs, limit, onSnapshot, orderBy, query, where } from "firebase/firestore";
+import { Clock, Copy, DoorOpen, Download, History, Plus, QrCode, X } from "lucide-react";
 import { QRCodeCanvas } from "qrcode.react";
 import { getDb } from "../lib/firebase";
-import { createMesaIfNotExists, setMesaActive } from "../lib/mesas";
+import { createMesaIfNotExists, setMesaActive, setMesaZona } from "../lib/mesas";
 import { toast } from "sonner";
 import {
   canCreateTable,
@@ -19,6 +19,7 @@ type MesaAdmin = {
   numero?: number;
   estado?: string;
   active?: boolean;
+  zona?: string;
 };
 
 type RestaurantBillingData = {
@@ -50,6 +51,12 @@ export function MesaManagementPanel({
   const [mesas, setMesas] = useState<MesaAdmin[]>([]);
   const [restaurantPlan, setRestaurantPlan] = useState<RestaurantPlan>("starter");
   const [newMesaNumber, setNewMesaNumber] = useState("");
+  const [newMesaZona, setNewMesaZona] = useState("");
+  const [filterZona, setFilterZona] = useState("all");
+  const [editingZona, setEditingZona] = useState<{ mesaId: string; value: string } | null>(null);
+  const [historialMesa, setHistorialMesa] = useState<MesaAdmin | null>(null);
+  const [historialItems, setHistorialItems] = useState<{ id: string; mesa: number; total: number; estado: string; paidAt?: number; createdAt?: number; payments?: { method: string }[] }[]>([]);
+  const [loadingHistorial, setLoadingHistorial] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [qrMesa, setQrMesa] = useState<MesaAdmin | null>(null);
@@ -99,13 +106,57 @@ export function MesaManagementPanel({
     return () => unsubscribe();
   }, [restaurantId]);
 
-  const sortedMesas = useMemo(() => {
-    return [...mesas].sort((a, b) => {
-      const aNum = Number(a.numero ?? a.id);
-      const bNum = Number(b.numero ?? b.id);
-      return aNum - bNum;
-    });
+  const allZonas = useMemo(() => {
+    const set = new Set(mesas.map((m) => m.zona).filter(Boolean) as string[]);
+    return Array.from(set).sort();
   }, [mesas]);
+
+  const sortedMesas = useMemo(() => {
+    return [...mesas]
+      .filter((m) => filterZona === "all" || m.zona === filterZona)
+      .sort((a, b) => {
+        const aNum = Number(a.numero ?? a.id);
+        const bNum = Number(b.numero ?? b.id);
+        return aNum - bNum;
+      });
+  }, [mesas, filterZona]);
+
+  const handleOpenHistorial = async (mesa: MesaAdmin) => {
+    const numero = Number(mesa.numero ?? mesa.id);
+    setHistorialMesa(mesa);
+    setHistorialItems([]);
+    setLoadingHistorial(true);
+    try {
+      const q = query(
+        collection(db, "restaurants", restaurantId, "cuentas"),
+        where("mesa", "==", numero),
+        where("estado", "==", "pagada"),
+        orderBy("paidAt", "desc"),
+        limit(10)
+      );
+      const snap = await getDocs(q);
+      setHistorialItems(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as { id: string; mesa: number; total: number; estado: string; paidAt?: number; createdAt?: number; payments?: { method: string }[] }));
+    } catch {
+      toast.error("No se pudo cargar el historial.");
+    } finally {
+      setLoadingHistorial(false);
+    }
+  };
+
+  const handleSaveZona = async (mesa: MesaAdmin) => {
+    if (!editingZona || editingZona.mesaId !== mesa.id) return;
+    const numero = Number(mesa.numero ?? mesa.id);
+    try {
+      setSaving(true);
+      await setMesaZona(restaurantId, numero, editingZona.value);
+      setEditingZona(null);
+      toast.success("Zona actualizada.");
+    } catch {
+      toast.error("No se pudo guardar la zona.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const activeMesasCount = useMemo(() => {
     return mesas.filter((mesa) => mesa.active !== false).length;
@@ -134,8 +185,9 @@ export function MesaManagementPanel({
 
     try {
       setSaving(true);
-      await createMesaIfNotExists(restaurantId, numero);
+      await createMesaIfNotExists(restaurantId, numero, newMesaZona.trim() || undefined);
       setNewMesaNumber("");
+      setNewMesaZona("");
     } catch (error) {
       console.error("Error creando mesa:", error);
       toast.error("No se pudo crear la mesa");
@@ -255,16 +307,22 @@ export function MesaManagementPanel({
             </div>
           </div>
 
-          <form onSubmit={handleCreateMesa} className="flex gap-2">
+          <form onSubmit={handleCreateMesa} className="flex flex-wrap gap-2">
             <input
               type="number"
               min={1}
               placeholder="N° mesa"
               value={newMesaNumber}
               onChange={(e) => setNewMesaNumber(e.target.value)}
-              className="h-11 w-32 rounded-lg border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+              className="h-11 w-28 rounded-lg border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
             />
-
+            <input
+              type="text"
+              placeholder="Zona (opcional)"
+              value={newMesaZona}
+              onChange={(e) => setNewMesaZona(e.target.value)}
+              className="h-11 w-36 rounded-lg border border-zinc-200 px-3 text-sm outline-none focus:ring-2 focus:ring-black/10"
+            />
             <button
               type="submit"
               disabled={saving || reachedTableLimit}
@@ -292,11 +350,30 @@ export function MesaManagementPanel({
             Todavía no hay mesas creadas.
           </div>
         ) : (
+          <>
+          {/* F-013: Filtro por zona */}
+          {allZonas.length > 0 && (
+            <div className="mb-3 flex items-center gap-2">
+              <span className="text-xs font-bold text-zinc-500">Filtrar por zona:</span>
+              <select
+                value={filterZona}
+                onChange={(e) => setFilterZona(e.target.value)}
+                className="h-9 rounded-lg border border-zinc-200 px-3 text-sm"
+              >
+                <option value="all">Todas</option>
+                {allZonas.map((z) => (
+                  <option key={z} value={z}>{z}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="max-h-[430px] overflow-y-auto rounded-lg border border-zinc-200">
-            <table className="w-full min-w-[860px] text-left text-sm">
+            <table className="w-full min-w-[900px] text-left text-sm">
               <thead className="sticky top-0 z-10 bg-zinc-50">
                 <tr className="border-b border-zinc-200 text-xs uppercase tracking-wide text-zinc-500">
                   <th className="py-3 pl-4 pr-4">Mesa</th>
+                  <th className="py-3 pr-4">Zona</th>
                   <th className="py-3 pr-4">Estado operativo</th>
                   <th className="py-3 pr-4">Visible QR</th>
                   <th className="py-3 pr-4 text-right">Acciones</th>
@@ -307,6 +384,7 @@ export function MesaManagementPanel({
                 {sortedMesas.map((mesa) => {
                   const numero = Number(mesa.numero ?? mesa.id);
                   const active = mesa.active !== false;
+                  const isEditingThisZona = editingZona?.mesaId === mesa.id;
 
                   return (
                     <tr
@@ -320,6 +398,30 @@ export function MesaManagementPanel({
                         <p className="mt-1 text-xs text-zinc-500">
                           Documento: {mesa.id}
                         </p>
+                      </td>
+
+                      <td className="py-4 pr-4">
+                        {isEditingThisZona ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              value={editingZona.value}
+                              onChange={(e) => setEditingZona({ mesaId: mesa.id, value: e.target.value })}
+                              placeholder="Ej: Salón, Terraza"
+                              className="h-8 w-28 rounded border border-zinc-300 px-2 text-xs"
+                              autoFocus
+                              onKeyDown={(e) => { if (e.key === "Enter") handleSaveZona(mesa); if (e.key === "Escape") setEditingZona(null); }}
+                            />
+                            <button onClick={() => handleSaveZona(mesa)} className="rounded bg-zinc-900 px-2 py-1 text-xs font-bold text-white">OK</button>
+                            <button onClick={() => setEditingZona(null)} className="rounded border border-zinc-200 px-2 py-1 text-xs text-zinc-500">✕</button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setEditingZona({ mesaId: mesa.id, value: mesa.zona || "" })}
+                            className="rounded-full border border-dashed border-zinc-300 px-2.5 py-1 text-xs font-semibold text-zinc-600 hover:border-zinc-500"
+                          >
+                            {mesa.zona || "Sin zona"}
+                          </button>
+                        )}
                       </td>
 
                       <td className="py-4 pr-4">
@@ -359,6 +461,14 @@ export function MesaManagementPanel({
                           </button>
 
                           <button
+                            onClick={() => handleOpenHistorial(mesa)}
+                            className="flex h-10 items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 font-semibold text-zinc-700 transition hover:bg-zinc-50"
+                          >
+                            <History size={14} />
+                            Historial
+                          </button>
+
+                          <button
                             onClick={() => handleToggleActive(mesa)}
                             disabled={saving}
                             className={`h-10 rounded-lg px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60 ${
@@ -375,6 +485,7 @@ export function MesaManagementPanel({
               </tbody>
             </table>
           </div>
+          </>
         )}
       </section>
 
@@ -429,6 +540,55 @@ export function MesaManagementPanel({
                 <Download size={16} />
                 Descargar PNG
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* F-015: Modal historial de sesiones de mesa */}
+      {historialMesa && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4">
+              <div className="flex items-center gap-2">
+                <Clock size={16} className="text-zinc-500" />
+                <h3 className="font-bold text-zinc-950">
+                  Historial · Mesa {Number(historialMesa.numero ?? historialMesa.id)}
+                </h3>
+              </div>
+              <button onClick={() => setHistorialMesa(null)} className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 text-zinc-500 hover:bg-zinc-50">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto p-5">
+              {loadingHistorial ? (
+                <p className="text-sm text-zinc-500">Cargando historial...</p>
+              ) : historialItems.length === 0 ? (
+                <p className="text-sm text-zinc-500">No hay sesiones cerradas para esta mesa.</p>
+              ) : (
+                <div className="space-y-2">
+                  {historialItems.map((cuenta) => {
+                    const raw = cuenta.paidAt ?? cuenta.createdAt;
+                    const ts = raw == null ? 0
+                      : typeof raw === "object" && "seconds" in (raw as object)
+                        ? (raw as { seconds: number }).seconds * 1000
+                        : Number(raw);
+                    const method = cuenta.payments?.[0]?.method ?? "—";
+                    return (
+                      <div key={cuenta.id} className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3">
+                        <div>
+                          <p className="text-sm font-bold text-zinc-950">
+                            {new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(cuenta.total || 0)}
+                          </p>
+                          <p className="text-xs text-zinc-500 capitalize">{method}</p>
+                        </div>
+                        <p className="text-xs text-zinc-400">
+                          {ts ? new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" }).format(new Date(ts)) : "—"}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>

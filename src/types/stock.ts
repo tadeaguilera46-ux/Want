@@ -8,6 +8,7 @@ export type StockItem = {
   unit: StockUnit;
   currentQuantity: number;
   minimumQuantity: number;
+  costPerUnit?: number;
   supplier?: string;
   notes?: string;
   active: boolean;

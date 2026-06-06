@@ -52,6 +52,12 @@ type DraftItem = {
   description: string;
   image: string;
   ingredients: MenuIngredient[];
+  availableFrom?: string;
+  availableTo?: string;
+  availableDays?: number[];
+  allergens?: string[];
+  comboItems?: string[];
+  modifierGroups?: { name: string; required: boolean; options: { name: string; priceAdd: number }[] }[];
 };
 
 type IngredientFormState = {
@@ -69,7 +75,7 @@ const emptyIngredientForm: IngredientFormState = {
 };
 
 const getItemType = (item: MenuItem): MenuType => {
-  if (item.type === "food" || item.type === "drinks") return item.type;
+  if (item.type === "food" || item.type === "drinks" || item.type === "combo") return item.type;
   if (item.category === "drinks") return "drinks";
   return "food";
 };
@@ -346,6 +352,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
   const [description, setDescription] = useState("");
   const [image, setImage] = useState("");
   const [ingredients, setIngredients] = useState<MenuIngredient[]>([]);
+  const [comboItemIds, setComboItemIds] = useState<string[]>([]);
 
   const [uploadingCreateImage, setUploadingCreateImage] = useState(false);
   const [uploadingEditImageId, setUploadingEditImageId] = useState<
@@ -543,7 +550,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
         active: true,
         ingredients,
         variants: [],
-        comboItems: [],
+        comboItems: type === "combo" ? comboItemIds : [],
       });
 
       setName("");
@@ -553,6 +560,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       setDescription("");
       setImage("");
       setIngredients([]);
+      setComboItemIds([]);
     } catch (error) {
       console.error("Error creando producto:", error);
      toast.error("No se pudo crear el producto");
@@ -569,6 +577,12 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       description: item.description || "",
       image: item.image || "",
       ingredients: item.ingredients || [],
+      availableFrom: item.availableFrom || "",
+      availableTo: item.availableTo || "",
+      availableDays: item.availableDays || [],
+      allergens: item.allergens || [],
+      modifierGroups: item.modifierGroups || [],
+      comboItems: item.comboItems || [],
     });
   };
 
@@ -606,6 +620,12 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
         description: draft.description.trim(),
         image: draft.image.trim(),
         ingredients: draft.ingredients,
+        availableFrom: draft.availableFrom?.trim() || undefined,
+        availableTo: draft.availableTo?.trim() || undefined,
+        availableDays: draft.availableDays?.length ? draft.availableDays : undefined,
+        allergens: draft.allergens?.length ? draft.allergens : undefined,
+        modifierGroups: draft.modifierGroups?.length ? draft.modifierGroups : undefined,
+        comboItems: draft.type === "combo" ? (draft.comboItems || []) : [],
       });
 
       cancelEditing();
@@ -690,6 +710,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
         >
           <option value="food">Sale a cocina</option>
           <option value="drinks">Sale a barra</option>
+          <option value="combo">Combo</option>
         </select>
 
         <input
@@ -706,6 +727,25 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
           rows={3}
           className="rounded-lg border border-zinc-200 px-3 py-3 outline-none focus:ring-2 focus:ring-black/10 lg:col-span-3"
         />
+
+        {/* F-017: Selector de sub-ítems para combo */}
+        {type === "combo" && (
+          <div className="lg:col-span-4 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+            <p className="mb-2 text-xs font-bold text-zinc-600">Ítems que componen este combo</p>
+            <div className="flex flex-wrap gap-1.5">
+              {items.filter(i => i.active && i.type !== "combo").map((i) => (
+                <button
+                  key={i.id}
+                  type="button"
+                  onClick={() => setComboItemIds(prev => prev.includes(i.id) ? prev.filter(x => x !== i.id) : [...prev, i.id])}
+                  className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${comboItemIds.includes(i.id) ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:border-zinc-400"}`}
+                >
+                  {i.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="space-y-2">
           <label className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100">
@@ -844,6 +884,19 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
 
                         <p className="mt-2 text-sm font-bold text-zinc-700">
                           {formatPriceARS(item.price)}
+                          {(() => {
+                            const cost = (item.ingredients || []).reduce((sum, ing) => {
+                              const si = stockItems.find(s => s.id === ing.stockItemId);
+                              return sum + (si?.costPerUnit ?? 0) * (ing.quantity ?? 0);
+                            }, 0);
+                            if (cost <= 0) return null;
+                            const margin = ((item.price - cost) / item.price) * 100;
+                            return (
+                              <span className={`ml-2 text-xs font-semibold ${margin >= 60 ? "text-emerald-600" : margin >= 30 ? "text-amber-600" : "text-red-500"}`}>
+                                Costo {formatPriceARS(cost)} · Margen {margin.toFixed(0)}%
+                              </span>
+                            );
+                          })()}
                         </p>
 
                         {itemIngredients.length > 0 && (
@@ -997,6 +1050,213 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                               )
                             }
                           />
+                        )}
+
+                        {/* F-014: Horario de disponibilidad */}
+                        {draft && (
+                          <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                            <p className="mb-2 text-xs font-bold text-zinc-600">Horario de disponibilidad (opcional)</p>
+                            <div className="flex flex-wrap items-center gap-3 mb-2">
+                              <div className="flex items-center gap-1">
+                                <label className="text-xs text-zinc-500">Desde</label>
+                                <input
+                                  type="time"
+                                  value={draft.availableFrom || ""}
+                                  onChange={(e) => setDraft((prev) => prev ? { ...prev, availableFrom: e.target.value } : prev)}
+                                  className="h-8 rounded border border-zinc-200 px-2 text-xs"
+                                />
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <label className="text-xs text-zinc-500">Hasta</label>
+                                <input
+                                  type="time"
+                                  value={draft.availableTo || ""}
+                                  onChange={(e) => setDraft((prev) => prev ? { ...prev, availableTo: e.target.value } : prev)}
+                                  className="h-8 rounded border border-zinc-200 px-2 text-xs"
+                                />
+                              </div>
+                              {(draft.availableFrom || draft.availableTo) && (
+                                <button
+                                  type="button"
+                                  onClick={() => setDraft((prev) => prev ? { ...prev, availableFrom: "", availableTo: "", availableDays: [] } : prev)}
+                                  className="text-xs text-red-500 hover:underline"
+                                >
+                                  Quitar horario
+                                </button>
+                              )}
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {["D","L","M","X","J","V","S"].map((label, idx) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => setDraft((prev) => {
+                                    if (!prev) return prev;
+                                    const days = prev.availableDays || [];
+                                    return { ...prev, availableDays: days.includes(idx) ? days.filter(d => d !== idx) : [...days, idx] };
+                                  })}
+                                  className={`h-7 w-7 rounded-full text-xs font-bold transition ${(draft.availableDays || []).includes(idx) ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-500"}`}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="mt-1 text-xs text-zinc-400">Sin horario = disponible siempre. Sin días = disponible todos los días.</p>
+                          </div>
+                        )}
+
+                        {/* F-004: Modificadores */}
+                        {draft && (
+                          <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                            <div className="mb-2 flex items-center justify-between">
+                              <p className="text-xs font-bold text-zinc-600">Grupos de modificadores</p>
+                              <button
+                                type="button"
+                                onClick={() => setDraft((prev) => prev ? {
+                                  ...prev,
+                                  modifierGroups: [...(prev.modifierGroups || []), { name: "Opción", required: false, options: [{ name: "Variante", priceAdd: 0 }] }]
+                                } : prev)}
+                                className="rounded border border-zinc-300 bg-white px-2 py-0.5 text-xs font-bold text-zinc-600 hover:bg-zinc-100"
+                              >
+                                + Agregar grupo
+                              </button>
+                            </div>
+                            {(draft.modifierGroups || []).map((group, gi) => (
+                              <div key={gi} className="mb-2 rounded border border-zinc-200 bg-white p-2">
+                                <div className="mb-1.5 flex items-center gap-2">
+                                  <input
+                                    value={group.name}
+                                    onChange={(e) => setDraft((prev) => {
+                                      if (!prev) return prev;
+                                      const gs = [...(prev.modifierGroups || [])];
+                                      gs[gi] = { ...gs[gi], name: e.target.value };
+                                      return { ...prev, modifierGroups: gs };
+                                    })}
+                                    className="h-7 flex-1 rounded border border-zinc-200 px-2 text-xs"
+                                    placeholder="Nombre del grupo"
+                                  />
+                                  <label className="flex items-center gap-1 text-xs text-zinc-500">
+                                    <input type="checkbox" checked={group.required} onChange={(e) => setDraft((prev) => {
+                                      if (!prev) return prev;
+                                      const gs = [...(prev.modifierGroups || [])];
+                                      gs[gi] = { ...gs[gi], required: e.target.checked };
+                                      return { ...prev, modifierGroups: gs };
+                                    })} /> Obligatorio
+                                  </label>
+                                  <button type="button" onClick={() => setDraft((prev) => {
+                                    if (!prev) return prev;
+                                    return { ...prev, modifierGroups: (prev.modifierGroups || []).filter((_, i) => i !== gi) };
+                                  })} className="text-red-400 hover:text-red-600 text-xs">✕</button>
+                                </div>
+                                {group.options.map((opt, oi) => (
+                                  <div key={oi} className="mb-1 flex items-center gap-1.5">
+                                    <input
+                                      value={opt.name}
+                                      onChange={(e) => setDraft((prev) => {
+                                        if (!prev) return prev;
+                                        const gs = [...(prev.modifierGroups || [])];
+                                        const opts = [...gs[gi].options];
+                                        opts[oi] = { ...opts[oi], name: e.target.value };
+                                        gs[gi] = { ...gs[gi], options: opts };
+                                        return { ...prev, modifierGroups: gs };
+                                      })}
+                                      className="h-7 flex-1 rounded border border-zinc-200 px-2 text-xs"
+                                      placeholder="Opción"
+                                    />
+                                    <input
+                                      type="number" min={0}
+                                      value={opt.priceAdd}
+                                      onChange={(e) => setDraft((prev) => {
+                                        if (!prev) return prev;
+                                        const gs = [...(prev.modifierGroups || [])];
+                                        const opts = [...gs[gi].options];
+                                        opts[oi] = { ...opts[oi], priceAdd: Number(e.target.value) };
+                                        gs[gi] = { ...gs[gi], options: opts };
+                                        return { ...prev, modifierGroups: gs };
+                                      })}
+                                      className="h-7 w-20 rounded border border-zinc-200 px-2 text-xs"
+                                      placeholder="+$"
+                                    />
+                                    <button type="button" onClick={() => setDraft((prev) => {
+                                      if (!prev) return prev;
+                                      const gs = [...(prev.modifierGroups || [])];
+                                      gs[gi] = { ...gs[gi], options: gs[gi].options.filter((_, i) => i !== oi) };
+                                      return { ...prev, modifierGroups: gs };
+                                    })} className="text-red-400 hover:text-red-600 text-xs">✕</button>
+                                  </div>
+                                ))}
+                                <button type="button" onClick={() => setDraft((prev) => {
+                                  if (!prev) return prev;
+                                  const gs = [...(prev.modifierGroups || [])];
+                                  gs[gi] = { ...gs[gi], options: [...gs[gi].options, { name: "", priceAdd: 0 }] };
+                                  return { ...prev, modifierGroups: gs };
+                                })} className="mt-1 text-xs font-semibold text-zinc-500 hover:text-zinc-800">
+                                  + opción
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* F-017: Editar sub-ítems del combo */}
+                        {draft && draft.type === "combo" && (
+                          <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50 p-3">
+                            <p className="mb-2 text-xs font-bold text-violet-700">Sub-ítems del combo</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {items.filter(i => i.active && i.type !== "combo" && i.id !== item.id).map((i) => (
+                                <button
+                                  key={i.id}
+                                  type="button"
+                                  onClick={() => setDraft((prev) => {
+                                    if (!prev) return prev;
+                                    const list = prev.comboItems || [];
+                                    return { ...prev, comboItems: list.includes(i.id) ? list.filter(x => x !== i.id) : [...list, i.id] };
+                                  })}
+                                  className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${(draft.comboItems || []).includes(i.id) ? "bg-zinc-900 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:border-zinc-400"}`}
+                                >
+                                  {i.name}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* F-033: Alérgenos */}
+                        {draft && (
+                          <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                            <p className="mb-2 text-xs font-bold text-zinc-600">Alérgenos</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {["TACC","Mariscos","Lácteos","Maní","Huevo","Soja","Frutos secos","Mostaza","Apio","Sésamo"].map((a) => (
+                                <button
+                                  key={a}
+                                  type="button"
+                                  onClick={() => setDraft((prev) => {
+                                    if (!prev) return prev;
+                                    const list = prev.allergens || [];
+                                    return { ...prev, allergens: list.includes(a) ? list.filter(x => x !== a) : [...list, a] };
+                                  })}
+                                  className={`rounded-full px-2.5 py-1 text-xs font-semibold transition ${(draft.allergens || []).includes(a) ? "bg-amber-500 text-white" : "border border-zinc-200 bg-white text-zinc-600 hover:border-amber-300"}`}
+                                >
+                                  {a}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* F-017: Mostrar sub-ítems del combo */}
+                        {item.type === "combo" && item.comboItems && item.comboItems.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-bold text-violet-700">COMBO</span>
+                            {item.comboItems.map((cid) => {
+                              const sub = items.find(i => i.id === cid);
+                              return sub ? (
+                                <span key={cid} className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-0.5 text-xs font-semibold text-zinc-600">
+                                  {sub.name}
+                                </span>
+                              ) : null;
+                            })}
+                          </div>
                         )}
                       </>
                     )}

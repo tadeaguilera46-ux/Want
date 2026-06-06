@@ -11,7 +11,7 @@ import type { MenuIngredient, MenuVariant } from "./store";
 
 const db = getDb();
 
-export type MenuType = "food" | "drinks";
+export type MenuType = "food" | "drinks" | "combo";
 
 export type MenuItem = {
   id: string;
@@ -25,6 +25,40 @@ export type MenuItem = {
   ingredients?: MenuIngredient[];
   variants?: MenuVariant[];
   comboItems?: string[];
+  availableFrom?: string;
+  availableTo?: string;
+  availableDays?: number[];
+  allergens?: string[];
+  modifierGroups?: ModifierGroup[];
+};
+
+export type ModifierOption = {
+  name: string;
+  priceAdd: number;
+};
+
+export type ModifierGroup = {
+  name: string;
+  required: boolean;
+  options: ModifierOption[];
+};
+
+export const isMenuItemAvailableNow = (item: MenuItem): boolean => {
+  const now = new Date();
+  const day = now.getDay();
+  if (item.availableDays && item.availableDays.length > 0) {
+    if (!item.availableDays.includes(day)) return false;
+  }
+  if (item.availableFrom && item.availableTo) {
+    const [fh, fm] = item.availableFrom.split(":").map(Number);
+    const [th, tm] = item.availableTo.split(":").map(Number);
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+    const fromMin = fh * 60 + fm;
+    const toMin = th * 60 + tm;
+    if (fromMin <= toMin) return nowMin >= fromMin && nowMin <= toMin;
+    return nowMin >= fromMin || nowMin <= toMin;
+  }
+  return true;
 };
 
 export const createMenuItem = async (
