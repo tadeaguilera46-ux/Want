@@ -344,6 +344,21 @@ export const mpWebhook = onRequest(
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
+      // Si hay una suscripción anterior distinta, cancelarla en MP automáticamente
+      if (billingStatus === "active") {
+        const prevSubscriptionId = restaurantData?.billing?.subscriptionId;
+        if (prevSubscriptionId && prevSubscriptionId !== subscription.id) {
+          await fetch(`https://api.mercadopago.com/preapproval/${prevSubscriptionId}`, {
+            method: "PUT",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ status: "cancelled" }),
+          }).catch((err) => console.warn("No se pudo cancelar suscripción anterior:", err));
+        }
+      }
+
       // Registrar pago en payments para que aparezca en el Super Admin
       if (billingStatus === "active") {
         const monthlyPrice = Number(restaurantData?.monthlyPrice ?? 0);

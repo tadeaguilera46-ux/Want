@@ -139,6 +139,8 @@ export function AdminBilling({ restaurantId }: { restaurantId: string }) {
   const isPastDue = subscriptionStatus === "past_due";
   const isTrial = subscriptionStatus === "trial";
 
+  const hasActiveSub = !!mpSubscriptionId && subscriptionStatus === "active";
+
   const handleSubscribe = async (plan: RestaurantPlan) => {
     if (plan === currentPlan && subscriptionStatus === "active") return;
 
@@ -146,11 +148,27 @@ export function AdminBilling({ restaurantId }: { restaurantId: string }) {
     const isUpgrade = PLAN_ORDER[plan] > PLAN_ORDER[currentPlan];
     const isDowngrade = PLAN_ORDER[plan] < PLAN_ORDER[currentPlan];
 
-    let message = `¿Querés suscribirte al plan ${PLAN_LABELS[plan]} por ${formatPriceARS(config?.price ?? 0)}/mes?`;
-    if (isUpgrade)
-      message = `¿Querés hacer upgrade al plan ${PLAN_LABELS[plan]} por ${formatPriceARS(config?.price ?? 0)}/mes?`;
-    if (isDowngrade)
-      message = `¿Querés cambiar al plan ${PLAN_LABELS[plan]}? Algunas funcionalidades quedarán deshabilitadas.`;
+    let message: string;
+
+    if (hasActiveSub && isUpgrade) {
+      message =
+        `Upgrade a ${PLAN_LABELS[plan]} — ${formatPriceARS(config?.price ?? 0)}/mes.\n\n` +
+        `Serás redirigido a Mercado Pago para autorizar el nuevo plan. ` +
+        `Una vez confirmado, tu suscripción anterior se cancela automáticamente y el nuevo importe rige desde el próximo ciclo.\n\n` +
+        `¿Confirmás el upgrade?`;
+    } else if (hasActiveSub && isDowngrade) {
+      message =
+        `Cambiar a ${PLAN_LABELS[plan]} — ${formatPriceARS(config?.price ?? 0)}/mes.\n\n` +
+        `Algunas funcionalidades quedarán deshabilitadas según los límites del nuevo plan. ` +
+        `Tu suscripción anterior se cancela al confirmar el nuevo pago en Mercado Pago.\n\n` +
+        `¿Confirmás el cambio?`;
+    } else if (isUpgrade) {
+      message = `Upgrade al plan ${PLAN_LABELS[plan]} por ${formatPriceARS(config?.price ?? 0)}/mes. ¿Confirmás?`;
+    } else if (isDowngrade) {
+      message = `Cambiar al plan ${PLAN_LABELS[plan]}. Algunas funcionalidades quedarán deshabilitadas. ¿Confirmás?`;
+    } else {
+      message = `Suscribirte al plan ${PLAN_LABELS[plan]} por ${formatPriceARS(config?.price ?? 0)}/mes. ¿Confirmás?`;
+    }
 
     if (!window.confirm(message)) return;
 
@@ -340,9 +358,9 @@ export function AdminBilling({ restaurantId }: { restaurantId: string }) {
                     {subscribing ? (
                       <Loader2 size={16} className="animate-spin" />
                     ) : isUpgrade ? (
-                      "Hacer upgrade"
+                      hasActiveSub ? "Hacer upgrade →" : "Hacer upgrade"
                     ) : (
-                      "Cambiar plan"
+                      hasActiveSub ? "Cambiar plan →" : "Cambiar plan"
                     )}
                   </button>
                 )}
