@@ -375,5 +375,57 @@ service cloud.firestore {
       allow update: if isSuperAdmin() || isRunnerCashierOrAdmin(restaurantId);
       allow delete: if isSuperAdmin() || isAdmin(restaurantId);
     }
+
+    // Facturación ARCA — config por restaurante.
+    // La clave privada está cifrada con master key del servidor: seguro leer desde admin.
+    // Escritura solo via Cloud Functions (Admin SDK), no desde cliente.
+    match /restaurants/{restaurantId}/afipConfig/{docId} {
+      allow read: if isSuperAdmin() || isAdmin(restaurantId);
+      allow write: if isSuperAdmin();
+    }
+
+    // Tokens ARCA cacheados (renovación automática cada ~10h por Cloud Function)
+    match /restaurants/{restaurantId}/afipTokens/{docId} {
+      allow read: if isSuperAdmin() || isAdmin(restaurantId);
+      allow write: if isSuperAdmin();
+    }
+
+    // Lista de espera (Waitlist)
+    match /restaurants/{restaurantId}/waitlist/{entryId} {
+      allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
+      allow create: if isSuperAdmin() || isAdmin(restaurantId)
+        && request.resource.data.restaurantId == restaurantId;
+      allow update: if isSuperAdmin() || isActiveStaff(restaurantId);
+      allow delete: if isSuperAdmin() || isAdmin(restaurantId);
+    }
+
+    // Reservas
+    match /restaurants/{restaurantId}/reservations/{reservationId} {
+      allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
+      allow create: if isSuperAdmin() || isAdmin(restaurantId)
+        && request.resource.data.restaurantId == restaurantId;
+      allow update: if isSuperAdmin() || isActiveStaff(restaurantId);
+      allow delete: if isSuperAdmin() || isAdmin(restaurantId);
+    }
+
+    // Turnos del personal (clock in/out)
+    match /restaurants/{restaurantId}/shifts/{shiftId} {
+      allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
+      allow create: if isSuperAdmin() || isActiveStaff(restaurantId)
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.staffId == request.auth.uid;
+      allow update: if isSuperAdmin()
+        || isAdmin(restaurantId)
+        || (isActiveStaff(restaurantId)
+            && resource.data.staffId == request.auth.uid
+            && resource.data.endedAt == null);
+      allow delete: if isSuperAdmin() || isAdmin(restaurantId);
+    }
+
+    // Promociones y Happy Hour
+    match /restaurants/{restaurantId}/promotions/{promoId} {
+      allow read: if true;
+      allow create, update, delete: if isSuperAdmin() || isAdmin(restaurantId);
+    }
   }
 }
