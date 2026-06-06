@@ -137,20 +137,29 @@ const ActivationScreen = ({ restaurantId }: { restaurantId: string }) => {
             Tu prueba gratuita terminó
           </h1>
           <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-zinc-500">
-            Elegí el plan que mejor se adapta a tu restaurante. El primer pago incluye
-            el setup inicial + el primer mes, todo en un solo cobro.
+            Elegí tu plan para activar WANT. La suscripción mensual se configura
+            ahora vía Mercado Pago — el setup inicial lo coordinamos con vos por separado.
           </p>
         </div>
 
-        {/* Aviso pago único */}
-        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-center">
-          <p className="text-sm font-black text-amber-900">
-            Pago único de activación = Setup inicial + Primer mes
-          </p>
-          <p className="mt-1 text-xs text-amber-700">
-            El setup incluye instalación, video de capacitación y carga de datos.
-            A partir del segundo mes, solo pagás la mensualidad.
-          </p>
+        {/* Aviso dos pasos */}
+        <div className="mb-6 rounded-2xl border border-zinc-200 bg-zinc-50 px-5 py-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:gap-6">
+            <div className="flex items-start gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-black text-white">1</span>
+              <div>
+                <p className="text-sm font-black text-zinc-950">Setup inicial</p>
+                <p className="text-xs text-zinc-500">Instalación, video de capacitación y carga de datos — lo coordinamos con vos.</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-black text-white">2</span>
+              <div>
+                <p className="text-sm font-black text-zinc-950">Suscripción mensual</p>
+                <p className="text-xs text-zinc-500">Débito automático mensual por Mercado Pago — lo configurás ahora.</p>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Planes */}
@@ -196,7 +205,7 @@ const ActivationScreen = ({ restaurantId }: { restaurantId: string }) => {
                   {option.name}
                 </p>
 
-                {/* Pago único */}
+                {/* Suscripción mensual — lo que cobra MP */}
                 <div
                   className={`mt-4 rounded-2xl p-3 ${
                     isSelected ? "bg-white/10" : "bg-zinc-50"
@@ -207,20 +216,18 @@ const ActivationScreen = ({ restaurantId }: { restaurantId: string }) => {
                       isSelected ? "text-white/60" : "text-zinc-400"
                     }`}
                   >
-                    Pago único de activación
+                    Suscripción mensual
                   </p>
-                  <p className="mt-1 text-2xl font-black">{formatARS(total)}</p>
-                  <div
-                    className={`mt-2 space-y-0.5 text-xs ${
-                      isSelected ? "text-white/50" : "text-zinc-400"
-                    }`}
-                  >
-                    <p>Setup: {formatARS(option.setup)}</p>
-                    <p>Primer mes: {formatARS(option.monthly)}</p>
-                  </div>
+                  <p className="mt-1 text-2xl font-black">
+                    {formatARS(option.monthly)}
+                    <span className={`ml-1 text-xs font-semibold ${isSelected ? "text-white/50" : "text-zinc-400"}`}>/ mes</span>
+                  </p>
+                  <p className={`mt-1 text-xs ${isSelected ? "text-white/40" : "text-zinc-400"}`}>
+                    Débito automático por Mercado Pago
+                  </p>
                 </div>
 
-                {/* Mensualidad siguiente */}
+                {/* Setup — coordinado por separado */}
                 <div
                   className={`mt-2 rounded-2xl p-3 ${
                     isSelected ? "bg-white/10" : "bg-zinc-50"
@@ -231,17 +238,13 @@ const ActivationScreen = ({ restaurantId }: { restaurantId: string }) => {
                       isSelected ? "text-white/60" : "text-zinc-400"
                     }`}
                   >
-                    Desde el 2° mes
+                    Setup inicial
                   </p>
                   <p className="mt-1 text-base font-black">
-                    {formatARS(option.monthly)}
-                    <span
-                      className={`text-xs font-semibold ${
-                        isSelected ? "text-white/50" : "text-zinc-400"
-                      }`}
-                    >
-                      {" "}/ mes
-                    </span>
+                    {formatARS(option.setup)}
+                  </p>
+                  <p className={`mt-1 text-xs ${isSelected ? "text-white/40" : "text-zinc-400"}`}>
+                    Coordinado con el equipo de WANT
                   </p>
                 </div>
 
@@ -306,16 +309,13 @@ const ActivationScreen = ({ restaurantId }: { restaurantId: string }) => {
           <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
             <div>
               <p className="text-sm font-bold text-zinc-950">
-                Plan {plan.name} — Pago único{" "}
-                <span className="text-zinc-500">
-                  ({formatARS(plan.setup)} setup + {formatARS(plan.monthly)} primer mes)
-                </span>
+                Plan {plan.name} — suscripción mensual
               </p>
               <p className="mt-0.5 text-xl font-black text-zinc-950">
-                {formatARS(plan.setup + plan.monthly)}
+                {formatARS(plan.monthly)}<span className="text-sm font-medium text-zinc-400"> / mes</span>
               </p>
               <p className="text-xs text-zinc-400">
-                Luego {formatARS(plan.monthly)} / mes. Cancelá cuando quieras.
+                Setup inicial {formatARS(plan.setup)} — lo coordinamos con vos por separado.
               </p>
             </div>
 
@@ -333,7 +333,7 @@ const ActivationScreen = ({ restaurantId }: { restaurantId: string }) => {
               ) : (
                 <>
                   <CreditCard size={18} />
-                  Activar con Mercado Pago
+                  Configurar suscripción mensual
                 </>
               )}
             </button>
