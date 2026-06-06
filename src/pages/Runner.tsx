@@ -638,7 +638,13 @@ const Runner = () => {
       setLoadingBillsById((prev) => ({ ...prev, [bill.id]: true }));
       setError(null);
 
-      await markMesaAvailable(restaurantId, Number(bill.mesa));
+      try {
+        await markMesaAvailable(restaurantId, Number(bill.mesa));
+      } catch (mesaErr) {
+        // La mesa puede tener datos inconsistentes (mesas viejas), pero igual cerramos la cuenta
+        console.warn("markMesaAvailable falló, cerrando solo la cuenta:", mesaErr);
+      }
+
       await actualizarEstadoCuenta(
         restaurantId,
         bill.id,
