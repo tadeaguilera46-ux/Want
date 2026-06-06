@@ -2155,7 +2155,7 @@ ${adjRows ? `<h2>Ajustes de caja</h2><table><thead><tr><th>Monto</th><th>Motivo<
                             onChange={(e) => setInvoiceType(e.target.value as "A" | "B" | "C" | "ticket")}
                             className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
                           >
-                            <option value="ticket">Ticket</option>
+                            <option value="ticket">Ticket / comprobante</option>
                             <option value="A">Factura A</option>
                             <option value="B">Factura B</option>
                             <option value="C">Factura C</option>
@@ -2166,17 +2166,63 @@ ${adjRows ? `<h2>Ajustes de caja</h2><table><thead><tr><th>Monto</th><th>Motivo<
                             placeholder="Nombre / Razón social"
                             className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
                           />
+                          <select
+                            value={invoiceDocumentType}
+                            onChange={(e) => setInvoiceDocumentType(e.target.value as "DNI" | "CUIT" | "CUIL" | "PASSPORT")}
+                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
+                          >
+                            <option value="DNI">DNI</option>
+                            <option value="CUIT">CUIT</option>
+                            <option value="CUIL">CUIL</option>
+                            <option value="PASSPORT">Pasaporte</option>
+                          </select>
                           <input
                             value={invoiceDocumentNumber}
                             onChange={(e) => setInvoiceDocumentNumber(e.target.value)}
-                            placeholder="DNI / CUIT"
+                            placeholder="Número de documento"
+                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
+                          />
+                          <input
+                            value={invoiceIvaCondition}
+                            onChange={(e) => setInvoiceIvaCondition(e.target.value)}
+                            placeholder="Condición IVA"
+                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
+                          />
+                          <input
+                            value={invoiceFiscalRegime}
+                            onChange={(e) => setInvoiceFiscalRegime(e.target.value)}
+                            placeholder="Régimen fiscal"
+                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
+                          />
+                          <input
+                            value={invoiceFiscalAddress}
+                            onChange={(e) => setInvoiceFiscalAddress(e.target.value)}
+                            placeholder="Dirección fiscal"
+                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
+                          />
+                          <input
+                            value={invoicePostalCode}
+                            onChange={(e) => setInvoicePostalCode(e.target.value)}
+                            placeholder="Código postal"
+                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
+                          />
+                          <input
+                            value={invoiceProvince}
+                            onChange={(e) => setInvoiceProvince(e.target.value)}
+                            placeholder="Provincia"
+                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
+                          />
+                          <input
+                            value={invoiceCity}
+                            onChange={(e) => setInvoiceCity(e.target.value)}
+                            placeholder="Localidad"
                             className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
                           />
                           <input
                             value={invoiceEmail}
                             onChange={(e) => setInvoiceEmail(e.target.value)}
-                            placeholder="Email (opcional)"
-                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
+                            placeholder="Email para enviar factura (opcional)"
+                            className="col-span-full h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
                           />
                           <button
                             onClick={handleRequestInvoice}
@@ -2185,6 +2231,18 @@ ${adjRows ? `<h2>Ajustes de caja</h2><table><thead><tr><th>Monto</th><th>Motivo<
                           >
                             Guardar solicitud de factura
                           </button>
+                          {selectedCuenta.invoice?.status === "issued" && selectedCuenta.invoice.cae ? (
+                            <div className="col-span-full rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                              <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide">Factura emitida ✓</p>
+                              <p className="mt-1 font-mono text-xs text-emerald-900">
+                                {selectedCuenta.invoice.invoiceType} N° {String(selectedCuenta.invoice.invoiceNumber).padStart(8, "0")}
+                              </p>
+                              <p className="mt-0.5 font-mono text-xs text-emerald-700">CAE: {selectedCuenta.invoice.cae}</p>
+                              <p className="mt-0.5 text-xs text-emerald-600">Vence: {selectedCuenta.invoice.caeExpiry}</p>
+                            </div>
+                          ) : selectedCuenta.invoice?.status === "requested" ? (
+                            <p className="col-span-full text-sm font-semibold text-amber-600">Solicitud de factura pendiente</p>
+                          ) : null}
                         </div>
                       )}
                     </div>
@@ -2232,143 +2290,6 @@ ${adjRows ? `<h2>Ajustes de caja</h2><table><thead><tr><th>Monto</th><th>Motivo<
                   )}
                 </div>
 
-                <div className="rounded-xl border border-zinc-200 bg-white p-4">
-                  <div className="mb-4 flex items-center gap-2">
-                    <FileText size={18} />
-                    <h3 className="text-lg font-bold text-zinc-950">
-                      Solicitud de factura
-                    </h3>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <select
-                      value={invoiceType}
-                      onChange={(e) =>
-                        setInvoiceType(
-                          e.target.value as "A" | "B" | "C" | "ticket"
-                        )
-                      }
-                      className="h-12 rounded-lg border border-zinc-200 px-3"
-                    >
-                      <option value="ticket">Ticket / comprobante</option>
-                      <option value="A">Factura A</option>
-                      <option value="B">Factura B</option>
-                      <option value="C">Factura C</option>
-                    </select>
-
-                    <input
-                      value={invoiceCustomerName}
-                      onChange={(e) => setInvoiceCustomerName(e.target.value)}
-                      placeholder="Nombre / Razón social"
-                      className="h-12 rounded-lg border border-zinc-200 px-4"
-                    />
-
-                    <select
-                      value={invoiceDocumentType}
-                      onChange={(e) =>
-                        setInvoiceDocumentType(
-                          e.target.value as
-                            | "DNI"
-                            | "CUIT"
-                            | "CUIL"
-                            | "PASSPORT"
-                        )
-                      }
-                      className="h-12 rounded-lg border border-zinc-200 px-3"
-                    >
-                      <option value="DNI">DNI</option>
-                      <option value="CUIT">CUIT</option>
-                      <option value="CUIL">CUIL</option>
-                      <option value="PASSPORT">Pasaporte</option>
-                    </select>
-
-                    <input
-                      value={invoiceDocumentNumber}
-                      onChange={(e) => setInvoiceDocumentNumber(e.target.value)}
-                      placeholder="Número de documento"
-                      className="h-12 rounded-lg border border-zinc-200 px-4"
-                    />
-
-                    <input
-                      value={invoiceIvaCondition}
-                      onChange={(e) => setInvoiceIvaCondition(e.target.value)}
-                      placeholder="Condición IVA"
-                      className="h-12 rounded-lg border border-zinc-200 px-4"
-                    />
-
-                    <input
-                      value={invoiceFiscalRegime}
-                      onChange={(e) => setInvoiceFiscalRegime(e.target.value)}
-                      placeholder="Régimen fiscal"
-                      className="h-12 rounded-lg border border-zinc-200 px-4"
-                    />
-
-                    <input
-                      value={invoiceFiscalAddress}
-                      onChange={(e) => setInvoiceFiscalAddress(e.target.value)}
-                      placeholder="Dirección fiscal"
-                      className="h-12 rounded-lg border border-zinc-200 px-4"
-                    />
-
-                    <input
-                      value={invoicePostalCode}
-                      onChange={(e) => setInvoicePostalCode(e.target.value)}
-                      placeholder="Código postal"
-                      className="h-12 rounded-lg border border-zinc-200 px-4"
-                    />
-
-                    <input
-                      value={invoiceProvince}
-                      onChange={(e) => setInvoiceProvince(e.target.value)}
-                      placeholder="Provincia"
-                      className="h-12 rounded-lg border border-zinc-200 px-4"
-                    />
-
-                    <input
-                      value={invoiceCity}
-                      onChange={(e) => setInvoiceCity(e.target.value)}
-                      placeholder="Localidad"
-                      className="h-12 rounded-lg border border-zinc-200 px-4"
-                    />
-
-                    <input
-                      value={invoiceEmail}
-                      onChange={(e) => setInvoiceEmail(e.target.value)}
-                      placeholder="Email para enviar factura"
-                      className="h-12 rounded-lg border border-zinc-200 px-4 md:col-span-2"
-                    />
-                  </div>
-
-                  <button
-                      onClick={handleRequestInvoice}
-                      disabled={processing || !isOnline}
-                    className="mt-3 h-12 w-full rounded-lg border border-zinc-200 bg-zinc-50 font-bold text-zinc-800 disabled:opacity-50"
-                  >
-                    Guardar solicitud de factura
-                  </button>
-
-                  {selectedCuenta.invoice?.status === "issued" && selectedCuenta.invoice.cae ? (
-                    <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                      <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide">
-                        Factura emitida ✓
-                      </p>
-                      <p className="mt-1 font-mono text-xs text-emerald-900">
-                        {selectedCuenta.invoice.invoiceType} N°{" "}
-                        {String(selectedCuenta.invoice.invoiceNumber).padStart(8, "0")}
-                      </p>
-                      <p className="mt-0.5 font-mono text-xs text-emerald-700">
-                        CAE: {selectedCuenta.invoice.cae}
-                      </p>
-                      <p className="mt-0.5 text-xs text-emerald-600">
-                        Vence: {selectedCuenta.invoice.caeExpiry}
-                      </p>
-                    </div>
-                  ) : selectedCuenta.invoice?.status === "requested" ? (
-                    <p className="mt-3 text-sm font-semibold text-amber-600">
-                      Solicitud de factura pendiente
-                    </p>
-                  ) : null}
-                </div>
               </div>
             )}
           </section>
