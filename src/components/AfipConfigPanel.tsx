@@ -63,16 +63,16 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
     });
   }, [restaurantId]);
 
-  const [stepOverride, setStepOverride] = useState<number | null>(null);
+  const [currentStep, setCurrentStep] = useState(0);
 
-  const currentStep = stepOverride !== null ? stepOverride :
-    (!config || config.status === "unconfigured" ? 0
-    : config.status === "pending_certificate" ? 1
-    : 2);
-
-  // Limpiar el override cuando Firestore confirma el cambio
-  if (stepOverride === 0 && config?.status === "unconfigured") {
-    setStepOverride(null);
+  // Solo sincronizar el paso desde Firestore la primera vez que llega el config
+  const [stepInitialized, setStepInitialized] = useState(false);
+  if (!stepInitialized && config !== null) {
+    const derived = config.status === "active" ? 2
+      : config.status === "pending_certificate" ? 1
+      : 0;
+    setCurrentStep(derived);
+    setStepInitialized(true);
   }
 
   // ─── Paso 1: Generar CSR ───────────────────────────────────────────────────
@@ -92,8 +92,15 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
       setSaving(true);
       const fn = httpsCallable<unknown, { csrPem: string }>(functions, "afipGenerateCsr");
       const res = await fn({ restaurantId, cuit: rawCuit, puntoVenta: pv, fiscalCondition, env });
-      setCsrPem(res.data.csrPem);
-      toast.success("CSR generado. Ahora pegalo en ARCA.");
+      if (env === "simulacion") {
+        // Simulación salta directo al paso 3
+        setCurrentStep(2);
+        toast.success("Modo simulación activado.");
+      } else {
+        setCsrPem(res.data.csrPem);
+        setCurrentStep(1);
+        toast.success("CSR generado. Ahora pegalo en ARCA.");
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo generar el CSR.");
     } finally {
@@ -117,6 +124,7 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
       setSaving(true);
       const fn = httpsCallable(functions, "afipSaveCertificate");
       await fn({ restaurantId, certificatePem: text });
+      setCurrentStep(2);
       toast.success("¡Facturación ARCA activada!");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo activar el certificado.");
@@ -275,17 +283,9 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
         <div className="space-y-4">
           {/* Botón volver */}
           <button
-            onClick={async () => {
-              // Override inmediato — no espera a Firestore
-              setStepOverride(0);
+            onClick={() => {
+              setCurrentStep(0);
               setCsrPem("");
-              try {
-                const firestoreModule = await import("firebase/firestore");
-                const ref = firestoreModule.doc(db, "restaurants", restaurantId, "afipConfig", "main");
-                await firestoreModule.updateDoc(ref, { status: "unconfigured", csrPem: "" });
-              } catch {
-                setStepOverride(null); // si falla, deja que Firestore decida
-              }
             }}
             className="flex items-center gap-1.5 text-sm font-semibold text-zinc-500 hover:text-zinc-800"
           >
@@ -449,13 +449,10 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
           </div>
 
           <button
-            onClick={async () => {
+            onClick={() => {
               if (!confirm("¿Reconfigurar? Se generará un nuevo par de claves y deberás volver a registrar el certificado en ARCA.")) return;
-              setStepOverride(0);
+              setCurrentStep(0);
               setCsrPem("");
-              const firestoreModule = await import("firebase/firestore");
-              const ref = firestoreModule.doc(db, "restaurants", restaurantId, "afipConfig", "main");
-              await firestoreModule.updateDoc(ref, { status: "unconfigured", certificate: "", csrPem: "" });
             }}
             className="mt-3 w-full rounded-lg border border-zinc-200 py-2 text-xs font-semibold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition"
           >
