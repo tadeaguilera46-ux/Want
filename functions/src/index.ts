@@ -141,14 +141,30 @@ export const createSubscription = onCall(
       throw new HttpsError("permission-denied", "No tenés permisos");
     }
 
-    // Prevenir doble pago: bloquear si hay un checkout iniciado hace menos de 10 minutos
+    // Prevenir doble pago
     const restaurantSnap = await admin
       .firestore()
       .collection("restaurants")
       .doc(restaurantId)
       .get();
 
-    const currentBilling = restaurantSnap.data()?.billing;
+    const restaurantSnap2Data = restaurantSnap.data();
+    const currentBilling = restaurantSnap2Data?.billing;
+    const currentPlan = restaurantSnap2Data?.plan;
+
+    // Caso 1: ya tienen suscripción activa con el mismo plan → bloquear
+    if (
+      currentBilling?.status === "active" &&
+      currentBilling?.subscriptionId &&
+      currentPlan === plan
+    ) {
+      throw new HttpsError(
+        "already-exists",
+        "Ya tenés una suscripción activa con este plan."
+      );
+    }
+
+    // Caso 2: hay un checkout en curso hace menos de 10 minutos → bloquear
     if (currentBilling?.status === "pending" && currentBilling?.updatedAt) {
       const updatedAt: Date =
         typeof currentBilling.updatedAt.toDate === "function"
