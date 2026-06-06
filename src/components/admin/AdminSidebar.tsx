@@ -3,11 +3,15 @@ import {
   BarChart3,
   Brush,
   Boxes,
+  Calendar,
   ChefHat,
+  Clock,
   CreditCard,
+  FileText,
   LayoutDashboard,
   LogOut,
   ReceiptText,
+  Tag,
   Users,
 } from "lucide-react";
 import type { ElementType } from "react";
@@ -26,18 +30,38 @@ type Props = {
   invoicesEnabled: boolean;
 };
 
-const navItems: {
-  id: AdminSection;
+type NavGroup = {
   label: string;
-  description: string;
-  icon: ElementType;
-}[] = [
-  { id: "dashboard", label: "Panel", description: "Mesas y operación", icon: LayoutDashboard },
-  { id: "branding", label: "Branding", description: "Identidad visual", icon: Brush },
-  { id: "staff", label: "Empleados", description: "Roles y accesos", icon: Users },
-  { id: "menu", label: "Menú", description: "Platos y precios", icon: ChefHat },
-  { id: "stock", label: "Stock", description: "Inventario", icon: Boxes },
-  { id: "billing", label: "Suscripción", description: "Plan y pagos", icon: CreditCard },
+  items: { id: AdminSection; label: string; icon: ElementType }[];
+};
+
+const navGroups: NavGroup[] = [
+  {
+    label: "Operación",
+    items: [
+      { id: "dashboard", label: "Panel", icon: LayoutDashboard },
+      { id: "menu", label: "Menú", icon: ChefHat },
+      { id: "stock", label: "Stock", icon: Boxes },
+      { id: "promotions", label: "Promociones", icon: Tag },
+    ],
+  },
+  {
+    label: "Salón",
+    items: [
+      { id: "waitlist", label: "Lista de espera", icon: Users },
+      { id: "reservations", label: "Reservas", icon: Calendar },
+      { id: "shifts", label: "Turnos", icon: Clock },
+    ],
+  },
+  {
+    label: "Configuración",
+    items: [
+      { id: "branding", label: "Branding", icon: Brush },
+      { id: "staff", label: "Empleados", icon: Users },
+      { id: "afip", label: "Facturación AFIP", icon: FileText },
+      { id: "billing", label: "Suscripción", icon: CreditCard },
+    ],
+  },
 ];
 
 export function AdminSidebar({
@@ -66,30 +90,34 @@ export function AdminSidebar({
 
         {/* Nav */}
         <nav className="mt-3 space-y-0.5">
-          <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/40">
-            Operación
-          </p>
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = activeSection === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => onSectionChange(item.id)}
-                className={`flex w-full items-center gap-2.5 rounded-md border px-2.5 py-2 text-left text-sm font-medium transition-colors duration-100 ${
-                  active
-                    ? "border-white/[0.08] bg-white/[0.1] text-[#F9F8F6]"
-                    : "border-transparent text-white/50 hover:bg-white/[0.06] hover:text-white/80"
-                }`}
-              >
-                <Icon size={15} className="shrink-0 opacity-80" />
-                <span className="flex-1">{item.label}</span>
-                {active && (
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
-                )}
-              </button>
-            );
-          })}
+          {navGroups.map((group) => (
+            <div key={group.label}>
+              <p className="mb-1.5 mt-4 first:mt-0 px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/40">
+                {group.label}
+              </p>
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const active = activeSection === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => onSectionChange(item.id)}
+                    className={`flex w-full items-center gap-2.5 rounded-md border px-2.5 py-2 text-left text-sm font-medium transition-colors duration-100 ${
+                      active
+                        ? "border-white/[0.08] bg-white/[0.1] text-[#F9F8F6]"
+                        : "border-transparent text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                    }`}
+                  >
+                    <Icon size={15} className="shrink-0 opacity-80" />
+                    <span className="flex-1">{item.label}</span>
+                    {active && (
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
 
           <p className="mb-1.5 mt-4 px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/40">
             Cuenta
