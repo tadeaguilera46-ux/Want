@@ -105,6 +105,11 @@ type Cuenta = {
     province?: string;
     city?: string;
     email?: string;
+    cae?: string;
+    caeExpiry?: string;
+    invoiceNumber?: number;
+    invoiceType?: string;
+    puntoVenta?: number;
   };
   createdAt?: {
     seconds?: number;
@@ -1023,6 +1028,16 @@ const Cashier = () => {
         const afipIssue = httpsCallable<unknown, { cae: string; invoiceNumber: number; invoiceType: string }>(
           fns, "afipIssueInvoice"
         );
+        // "ticket" no es un tipo ARCA válido — lo mapeamos a "B" para RI o "C" para monotributista
+        const arcaInvoiceType = (invoiceType === "A" || invoiceType === "B" || invoiceType === "C")
+          ? invoiceType
+          : null;
+
+        if (!arcaInvoiceType) {
+          // Tipo "ticket" u otro: no llamamos ARCA, queda como solicitud manual
+          throw new Error("tipo_no_arca");
+        }
+
         const docType = invoiceDocumentType === "CUIT" ? "CUIT"
           : invoiceDocumentType === "DNI" ? "DNI"
           : "consumidor_final";
@@ -1033,8 +1048,8 @@ const Cashier = () => {
           customerName: invoiceCustomerName.trim(),
           customerDocType: docType,
           customerDocNumber: invoiceDocumentNumber.trim() || undefined,
-          invoiceType,
-          total: Number(selectedCuenta.total || 0),
+          invoiceType: arcaInvoiceType,
+          total: finalTotal,
         });
 
         toast.success(
@@ -1043,8 +1058,11 @@ const Cashier = () => {
       } catch (afipErr) {
         // Si AFIP no está configurado o falla, la solicitud manual ya quedó guardada
         const msg = afipErr instanceof Error ? afipErr.message : "";
-        if (!msg.includes("no tiene AFIP configurado") && !msg.includes("no está activa")) {
-          console.warn("AFIP error (no crítico):", afipErr);
+        const silencioso = msg.includes("no tiene AFIP configurado")
+          || msg.includes("no está activa")
+          || msg === "tipo_no_arca";
+        if (!silencioso) {
+          console.warn("ARCA error (no crítico):", afipErr);
         }
         // Silencioso si AFIP no está configurado — la solicitud manual alcanza
       }

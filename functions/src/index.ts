@@ -702,6 +702,7 @@ export const afipGenerateCsr = onCall(
         fiscalCondition,
         privateKeyEncrypted: encrypted,
         privateKeyIv: iv,
+        csrPem,
         certificate: "",
         status: "pending_certificate",
         env: AFIP_ENV,

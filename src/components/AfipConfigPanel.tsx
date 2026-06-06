@@ -12,6 +12,7 @@ type AfipConfig = {
   puntoVenta?: number;
   fiscalCondition?: string;
   status: AfipStatus;
+  csrPem?: string;
   activatedAt?: { toDate?: () => Date };
 };
 
@@ -50,7 +51,12 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
       "main"
     );
     return onSnapshot(ref, (snap) => {
-      setConfig(snap.exists() ? (snap.data() as AfipConfig) : { status: "unconfigured" });
+      const data = snap.exists() ? (snap.data() as AfipConfig) : { status: "unconfigured" as AfipStatus };
+      setConfig(data);
+      // Restaurar CSR desde Firestore si el estado local está vacío
+      if (data.csrPem && !csrPem) {
+        setCsrPem(data.csrPem);
+      }
       setLoading(false);
     });
   }, [restaurantId]);
@@ -293,7 +299,7 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
 
           {!csrPem && (
             <p className="text-center text-xs text-zinc-400">
-              Si ya generaste el CSR antes, cerrá y volvé a abrir esta pantalla para verlo.
+              Cargando CSR...
             </p>
           )}
         </div>

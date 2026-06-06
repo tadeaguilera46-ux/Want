@@ -39,7 +39,7 @@ export function decryptPrivateKey(
   const encrypted = encBuf.slice(0, encBuf.length - AUTH_TAG_LENGTH);
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv) as crypto.DecipherGCM;
   decipher.setAuthTag(authTag);
-  return decipher.update(encrypted) + decipher.final("utf8");
+  return decipher.update(encrypted).toString("utf8") + decipher.final("utf8");
 }
 
 // ─── Generación de par de claves RSA + CSR ────────────────────────────────────

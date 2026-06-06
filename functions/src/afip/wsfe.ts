@@ -109,15 +109,16 @@ export async function issueFECAE(
   let ivaBlock = "";
 
   if (req.invoiceType === "C") {
-    // Monotributista: sin IVA discriminado
-    impTotal = Math.round(req.total * 100) / 100;
-    impNeto = impTotal;
+    // Monotributista: sin IVA — impTotal = impNeto
+    impNeto = Math.round(req.total * 100) / 100;
     impIVA = 0;
+    impTotal = impNeto;
   } else if (req.invoiceType === "B") {
-    // RI → Consumidor Final: total incluye IVA 21%, pero no se discrimina
-    impTotal = Math.round(req.total * 100) / 100;
-    impNeto = Math.round((impTotal / 1.21) * 100) / 100;
-    impIVA = Math.round((impTotal - impNeto) * 100) / 100;
+    // RI → Consumidor Final: total incluye IVA 21%
+    // impNeto se obtiene descontando IVA, impTotal = impNeto + impIVA (sin redondear por separado)
+    impNeto = Math.round((req.total / 1.21) * 100) / 100;
+    impIVA = Math.round((req.total - impNeto) * 100) / 100;
+    impTotal = impNeto + impIVA; // garantiza ImpTotal = ImpNeto + ImpIVA exacto
     ivaBlock = `
       <ar:Iva>
         <ar:AlicIva>
@@ -130,7 +131,7 @@ export async function issueFECAE(
     // Factura A: IVA discriminado 21%
     impNeto = Math.round((req.total / 1.21) * 100) / 100;
     impIVA = Math.round((req.total - impNeto) * 100) / 100;
-    impTotal = Math.round(req.total * 100) / 100;
+    impTotal = impNeto + impIVA; // garantiza ImpTotal = ImpNeto + ImpIVA exacto
     ivaBlock = `
       <ar:Iva>
         <ar:AlicIva>
@@ -139,6 +140,17 @@ export async function issueFECAE(
           <ar:Importe>${impIVA.toFixed(2)}</ar:Importe>
         </ar:AlicIva>
       </ar:Iva>`;
+  }
+
+  // Factura A exige CUIT del receptor — no se puede emitir a consumidor final
+  if (req.invoiceType === "A") {
+    if (req.customerDocType !== "CUIT") {
+      throw new Error("Factura A requiere el CUIT del cliente. Usá Factura B para consumidores finales o clientes con DNI.");
+    }
+    const rawDocNro = (req.customerDocNumber ?? "").replace(/-/g, "");
+    if (!rawDocNro || rawDocNro.length < 10) {
+      throw new Error("Factura A requiere un CUIT válido del cliente (11 dígitos).");
+    }
   }
 
   // Datos del receptor
