@@ -289,7 +289,7 @@ const Cart = () => {
               </button>
 
               <div className="min-w-0">
-                <h1 className="text-xl font-black tracking-tight text-slate-950">
+                <h1 className="text-xl font-bold tracking-tight text-slate-950">
                   Tu pedido
                 </h1>
                 <p className="text-sm text-slate-500">
@@ -306,7 +306,7 @@ const Cart = () => {
 
         {error && (
           <div className="px-4 pt-4">
-            <div className="rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
               {error}
             </div>
           </div>
@@ -314,7 +314,7 @@ const Cart = () => {
 
         {isValidatingSession ? (
           <div className="px-4 py-10">
-            <div className="rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+            <div className="rounded-xl border border-slate-200 bg-white p-6 text-center shadow-sm">
               <p className="text-sm font-semibold text-slate-500">
                 Validando mesa...
               </p>
@@ -322,12 +322,12 @@ const Cart = () => {
           </div>
         ) : cart.length === 0 ? (
           <div className="px-4 py-10">
-            <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center shadow-sm">
+            <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center shadow-sm">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-slate-500">
                 <ShoppingBag size={28} />
               </div>
 
-              <h2 className="mt-4 text-xl font-black tracking-tight text-slate-950">
+              <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-950">
                 Tu carrito está vacío
               </h2>
 
@@ -341,7 +341,7 @@ const Cart = () => {
                     state: { table, restaurantId },
                   })
                 }
-                className="mt-5 h-11 rounded-2xl bg-slate-950 px-5 text-sm font-semibold text-white"
+                className="mt-5 h-11 rounded-lg bg-slate-950 px-5 text-sm font-semibold text-white"
               >
                 Volver al menú
               </button>
@@ -368,10 +368,10 @@ const Cart = () => {
                 <motion.div
                   key={`${item.id}__${observation}`}
                   layout
-                  className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+                  className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
                 >
                   <div className="flex gap-4">
-                    <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-3xl bg-slate-100 text-4xl">
+                    <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-slate-100 text-4xl">
                       {item.image ? (
                         <img
                           src={item.image}
@@ -388,7 +388,7 @@ const Cart = () => {
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <h3 className="text-base font-black leading-tight text-slate-950">
+                          <h3 className="text-base font-bold leading-tight text-slate-950">
                             {itemName}
                           </h3>
 
@@ -405,14 +405,14 @@ const Cart = () => {
                       </div>
 
                       {hasObservation && (
-                        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
                           <div className="flex items-start gap-2 text-amber-900">
                             <MessageSquareText
                               size={14}
                               className="mt-0.5 shrink-0"
                             />
                             <div className="min-w-0">
-                              <p className="mb-1 text-[11px] font-extrabold uppercase tracking-wide">
+                              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide">
                                 Observación
                               </p>
                               <p className="break-words text-sm font-medium">
@@ -439,7 +439,7 @@ const Cart = () => {
                             <Minus size={14} />
                           </button>
 
-                          <span className="min-w-[28px] text-center text-sm font-black text-slate-950">
+                          <span className="min-w-[28px] text-center text-sm font-bold text-slate-950">
                             {safeQuantity}
                           </span>
 
@@ -464,10 +464,10 @@ const Cart = () => {
       {cart.length > 0 && (
         <div className="fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-4 backdrop-blur">
           <div className="mx-auto max-w-lg">
-            <div className="mb-3 rounded-2xl bg-slate-50 px-4 py-3">
+            <div className="mb-3 rounded-lg bg-slate-50 px-4 py-3">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-medium text-slate-500">Total</span>
-                <span className="text-2xl font-black tracking-tight text-slate-950">
+                <span className="text-2xl font-bold tracking-tight text-slate-950">
                   {formatPriceARS(total)}
                 </span>
               </div>
@@ -478,7 +478,7 @@ const Cart = () => {
                 whileTap={{ scale: isBusy ? 1 : 0.985 }}
                 onClick={handlePedido}
                 disabled={isBusy}
-                className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-base font-black text-primary-foreground shadow-want disabled:opacity-50"
+                className="flex h-14 w-full items-center justify-center gap-2 rounded-lg bg-primary text-base font-bold text-primary-foreground shadow-want disabled:opacity-50"
               >
                 <span>
                   {isSubmittingOrder ? "Enviando..." : "Enviar pedido"}
@@ -489,7 +489,7 @@ const Cart = () => {
               <button
                 onClick={handlePedidoYCuenta}
                 disabled={isBusy}
-                className="h-12 w-full rounded-2xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 disabled:opacity-50"
+                className="h-12 w-full rounded-lg border border-slate-200 bg-white text-sm font-semibold text-slate-700 disabled:opacity-50"
               >
                 {isSubmittingOrderAndBill
                   ? "Procesando..."

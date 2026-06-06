@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
+@import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@800,700,500,400&f[]=satoshi@700,500,400,300&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,54 +6,64 @@
 
 @layer base {
   :root {
-    --background: 38 68% 95%;
-    --foreground: 30 6% 16%;
+    /* Warm white base — barely warm, like quality stationery */
+    --background: 40 25% 97%;
+    --foreground: 60 8% 8%;
 
     --card: 0 0% 100%;
-    --card-foreground: 30 6% 16%;
+    --card-foreground: 60 8% 8%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 30 6% 16%;
+    --popover-foreground: 60 8% 8%;
 
-    --primary: 43 74% 64%;
-    --primary-foreground: 30 6% 16%;
+    /* Primary = near-black — the ONE filled button per screen */
+    --primary: 60 8% 8%;
+    --primary-foreground: 40 25% 97%;
 
-    --secondary: 0 0% 100%;
-    --secondary-foreground: 30 6% 16%;
+    /* Secondary = surface-2 for hover states and inputs */
+    --secondary: 40 18% 95%;
+    --secondary-foreground: 60 8% 8%;
 
-    --muted: 38 30% 90%;
-    --muted-foreground: 30 6% 40%;
+    --muted: 40 18% 95%;
+    --muted-foreground: 50 5% 43%;
 
-    --accent: 24 84% 50%;
+    /* Accent = amber, used sparingly — active nav dot, focus ring, one outline button */
+    --accent: 36 67% 47%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84% 60%;
+    --destructive: 5 63% 46%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 38 20% 88%;
-    --input: 38 20% 88%;
-    --ring: 43 74% 64%;
+    /* Warm subtle border */
+    --border: 40 12% 88%;
+    --input: 40 12% 88%;
+    --ring: 36 67% 47%;
 
-    --radius: 1rem;
+    --radius: 0.375rem;
 
-    --success: 145 63% 42%;
+    --success: 150 45% 34%;
     --success-foreground: 0 0% 100%;
 
-    --warning: 35 92% 50%;
+    --warning: 30 84% 37%;
     --warning-foreground: 0 0% 100%;
 
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 30 6% 16%;
-    --sidebar-primary: 43 74% 64%;
-    --sidebar-primary-foreground: 30 6% 16%;
-    --sidebar-accent: 38 30% 90%;
-    --sidebar-accent-foreground: 30 6% 16%;
-    --sidebar-border: 38 20% 88%;
-    --sidebar-ring: 43 74% 64%;
+    /* Sidebar — dark, the only dark surface */
+    --sidebar-background: 60 8% 8%;
+    --sidebar-foreground: 40 25% 97%;
+    --sidebar-primary: 36 67% 47%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 60 5% 14%;
+    --sidebar-accent-foreground: 40 25% 97%;
+    --sidebar-border: 60 5% 14%;
+    --sidebar-ring: 36 67% 47%;
   }
 }
 
 @layer base {
+  html {
+    background-color: hsl(40 25% 97%);
+  }
+
   * {
     @apply border-border;
   }
@@ -69,37 +79,24 @@
 
 @layer utilities {
   .shadow-want {
-    box-shadow: 0 4px 20px -4px hsl(43 74% 64% / 0.25);
+    box-shadow: 0 1px 8px -2px hsl(40 12% 60% / 0.25);
   }
-  
+
   .shadow-card {
-    box-shadow: 0 2px 12px -2px hsl(30 6% 16% / 0.08);
+    box-shadow: 0 1px 4px -1px hsl(60 8% 8% / 0.06);
   }
 
   .glass {
-    @apply bg-secondary/80 backdrop-blur-md;
-  }
-}
-@layer utilities {
-  .shadow-want {
-    box-shadow: 0 4px 20px -4px hsl(43 74% 64% / 0.25);
-  }
-  
-  .shadow-card {
-    box-shadow: 0 2px 12px -2px hsl(30 6% 16% / 0.08);
-  }
-
-  .glass {
-    @apply bg-secondary/80 backdrop-blur-md;
+    @apply bg-card/80 backdrop-blur-md;
   }
 
   .dashboard-scroll {
     scrollbar-width: thin;
-    scrollbar-color: rgb(161 161 170) transparent;
+    scrollbar-color: hsl(40 12% 82%) transparent;
   }
 
   .dashboard-scroll::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
   }
 
   .dashboard-scroll::-webkit-scrollbar-track {
@@ -107,13 +104,11 @@
   }
 
   .dashboard-scroll::-webkit-scrollbar-thumb {
-    background-color: rgb(161 161 170);
+    background-color: hsl(40 12% 82%);
     border-radius: 9999px;
-    border: 2px solid transparent;
-    background-clip: content-box;
   }
 
   .dashboard-scroll::-webkit-scrollbar-thumb:hover {
-    background-color: rgb(113 113 122);
+    background-color: hsl(40 10% 72%);
   }
 }

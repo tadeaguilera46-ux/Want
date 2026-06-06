@@ -32,42 +32,12 @@ const navItems: {
   description: string;
   icon: ElementType;
 }[] = [
-  {
-    id: "dashboard",
-    label: "Panel",
-    description: "Mesas y operación",
-    icon: LayoutDashboard,
-  },
-  {
-    id: "branding",
-    label: "Branding",
-    description: "Identidad visual",
-    icon: Brush,
-  },
-  {
-    id: "staff",
-    label: "Empleados",
-    description: "Roles y accesos",
-    icon: Users,
-  },
-  {
-    id: "menu",
-    label: "Menú",
-    description: "Platos y precios",
-    icon: ChefHat,
-  },
-  {
-    id: "stock",
-    label: "Stock",
-    description: "Inventario",
-    icon: Boxes,
-  },
-  {
-    id: "billing",
-    label: "Suscripción",
-    description: "Plan y pagos",
-    icon: CreditCard,
-  },
+  { id: "dashboard", label: "Panel", description: "Mesas y operación", icon: LayoutDashboard },
+  { id: "branding", label: "Branding", description: "Identidad visual", icon: Brush },
+  { id: "staff", label: "Empleados", description: "Roles y accesos", icon: Users },
+  { id: "menu", label: "Menú", description: "Platos y precios", icon: ChefHat },
+  { id: "stock", label: "Stock", description: "Inventario", icon: Boxes },
+  { id: "billing", label: "Suscripción", description: "Plan y pagos", icon: CreditCard },
 ];
 
 export function AdminSidebar({
@@ -83,110 +53,109 @@ export function AdminSidebar({
   invoicesEnabled,
 }: Props) {
   return (
-    <aside className="sticky top-0 hidden h-screen w-[300px] shrink-0 overflow-hidden border-r border-white/60 bg-zinc-950 p-4 text-white shadow-2xl lg:flex lg:flex-col">
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto pr-1 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.25)_transparent]">
-        <div className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-4 shadow-inner">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-zinc-950 shadow-sm">
-            <LayoutDashboard size={22} />
+    <aside className="sticky top-0 hidden h-screen w-[240px] shrink-0 flex-col overflow-hidden bg-[#141412] p-3 text-[#F9F8F6] lg:flex">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-width:thin] [scrollbar-color:rgba(249,248,246,0.15)_transparent]">
+
+        {/* Logo */}
+        <div className="flex items-center gap-2.5 border-b border-white/[0.08] px-2 pb-4 pt-1">
+          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[4px] bg-[#F9F8F6]">
+            <LayoutDashboard size={14} className="text-[#141412]" />
           </div>
-
-          <h2 className="mt-4 text-2xl font-black tracking-tight">WANT</h2>
-
-          <p className="mt-1 text-xs font-medium leading-relaxed text-white/50">
-            Panel de administración premium para operación gastronómica.
-          </p>
-
-          {userEmail && (
-            <p className="mt-3 truncate rounded-full border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-bold text-white/70">
-              {userEmail}
-            </p>
-          )}
+          <span className="font-display text-base font-bold tracking-tight">WANT</span>
         </div>
 
-        <nav className="mt-5 space-y-1.5">
+        {/* Nav */}
+        <nav className="mt-3 space-y-0.5">
+          <p className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/40">
+            Operación
+          </p>
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = activeSection === item.id;
-
             return (
               <button
                 key={item.id}
                 onClick={() => onSectionChange(item.id)}
-                className={`group flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition-all duration-200 ${
+                className={`flex w-full items-center gap-2.5 rounded-md border px-2.5 py-2 text-left text-sm font-medium transition-colors duration-100 ${
                   active
-                    ? "bg-white text-zinc-950 shadow-lg shadow-black/20"
-                    : "text-white/70 hover:bg-white/[0.08] hover:text-white"
+                    ? "border-white/[0.08] bg-white/[0.1] text-[#F9F8F6]"
+                    : "border-transparent text-white/50 hover:bg-white/[0.06] hover:text-white/80"
                 }`}
               >
-                <div
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition ${
-                    active ? "bg-zinc-950 text-white" : "bg-white/10 text-white"
-                  }`}
-                >
-                  <Icon size={18} />
-                </div>
-
-                <div className="min-w-0">
-                  <p className="text-sm font-black">{item.label}</p>
-                  <p
-                    className={`text-xs ${
-                      active ? "text-zinc-500" : "text-white/40"
-                    }`}
-                  >
-                    {item.description}
-                  </p>
-                </div>
+                <Icon size={15} className="shrink-0 opacity-80" />
+                <span className="flex-1">{item.label}</span>
+                {active && (
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent" />
+                )}
               </button>
             );
           })}
-        </nav>
 
-        <div className="mt-auto space-y-2 border-t border-white/10 pt-4">
+          <p className="mb-1.5 mt-4 px-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-white/40">
+            Cuenta
+          </p>
+
           <button
             onClick={onAnalytics}
-            className="flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left text-white/70 transition hover:bg-white/[0.08] hover:text-white"
+            className="flex w-full items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 text-left text-sm font-medium text-white/50 transition-colors hover:bg-white/[0.06] hover:text-white/80"
           >
-            <BarChart3 size={18} />
-            <span className="text-sm font-bold">Analytics</span>
+            <BarChart3 size={15} className="shrink-0 opacity-80" />
+            <span>Analytics</span>
           </button>
 
           <button
             onClick={onInvoices}
-            className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
+            className={`flex w-full items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 text-left text-sm font-medium transition-colors ${
               invoicesEnabled
-                ? "text-white/70 hover:bg-white/[0.08] hover:text-white"
-                : "text-amber-300/80 hover:bg-amber-400/10"
+                ? "text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                : "text-accent/80 hover:bg-accent/10"
             }`}
           >
-            <ReceiptText size={18} />
-            <span className="text-sm font-bold">
-              Facturación {!invoicesEnabled && "· Pro"}
-            </span>
+            <ReceiptText size={15} className="shrink-0 opacity-80" />
+            <span className="flex-1">Facturación</span>
+            {!invoicesEnabled && (
+              <span className="rounded-full border border-accent/30 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
+                Pro
+              </span>
+            )}
           </button>
 
           <button
             onClick={onAuditLogs}
-            className={`flex w-full items-center gap-3 rounded-2xl px-3 py-3 text-left transition ${
+            className={`flex w-full items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 text-left text-sm font-medium transition-colors ${
               auditLogsEnabled
-                ? "text-white/70 hover:bg-white/[0.08] hover:text-white"
-                : "text-amber-300/80 hover:bg-amber-400/10"
+                ? "text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                : "text-accent/80 hover:bg-accent/10"
             }`}
           >
-            <Activity size={18} />
-            <span className="text-sm font-bold">
-              Auditoría {!auditLogsEnabled && "· Pro"}
-            </span>
+            <Activity size={15} className="shrink-0 opacity-80" />
+            <span className="flex-1">Auditoría</span>
+            {!auditLogsEnabled && (
+              <span className="rounded-full border border-accent/30 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
+                Pro
+              </span>
+            )}
           </button>
+        </nav>
+
+        {/* Footer */}
+        <div className="mt-auto border-t border-white/[0.08] pt-3">
+          {userEmail && (
+            <div className="mb-2 flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.06] px-2.5 py-2">
+              <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent text-[10px] font-bold text-white">
+                {userEmail.charAt(0).toUpperCase()}
+              </div>
+              <p className="min-w-0 truncate text-xs font-medium text-white/70">{userEmail}</p>
+            </div>
+          )}
 
           <button
             onClick={onLogout}
             disabled={loggingOut}
-            className="flex w-full items-center gap-3 rounded-2xl border border-red-400/20 bg-red-500/10 px-3 py-3 text-left text-red-200 transition hover:bg-red-500/20 disabled:opacity-50"
+            className="flex w-full items-center gap-2.5 rounded-md border border-transparent px-2.5 py-2 text-left text-sm font-medium text-white/40 transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
           >
-            <LogOut size={18} />
-            <span className="text-sm font-black">
-              {loggingOut ? "Cerrando..." : "Cerrar sesión"}
-            </span>
+            <LogOut size={15} className="shrink-0" />
+            <span>{loggingOut ? "Cerrando..." : "Cerrar sesión"}</span>
           </button>
         </div>
       </div>

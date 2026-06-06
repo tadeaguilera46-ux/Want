@@ -176,7 +176,7 @@ const BillConfirmed = () => {
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"
+          className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
         >
           <div
             className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full ${
@@ -188,7 +188,7 @@ const BillConfirmed = () => {
             {sessionClosed ? <AlertTriangle size={30} /> : <Receipt size={30} />}
           </div>
 
-          <h1 className="mt-5 text-center text-2xl font-black tracking-tight text-slate-950">
+          <h1 className="mt-5 text-center text-2xl font-bold tracking-tight text-slate-950">
             {sessionClosed ? "Mesa cerrada" : "Cuenta solicitada"}
           </h1>
 
@@ -198,7 +198,7 @@ const BillConfirmed = () => {
               : `Ya avisamos al staff. Te mostramos acá el estado de la cuenta de la mesa ${table}.`}
           </p>
 
-          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4">
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm font-medium text-slate-500">Mesa</span>
               <span className="text-sm font-bold text-slate-950">{table}</span>
@@ -228,13 +228,13 @@ const BillConfirmed = () => {
           </div>
 
           {error && (
-            <div className="mt-4 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            <div className="mt-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
               {error}
             </div>
           )}
 
           {sessionClosed ? (
-            <div className="mt-5 rounded-2xl border border-red-300 bg-red-50 p-4">
+            <div className="mt-5 rounded-lg border border-red-300 bg-red-50 p-4">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="mt-0.5 shrink-0 text-red-700" size={18} />
                 <div>
@@ -250,7 +250,7 @@ const BillConfirmed = () => {
               </div>
             </div>
           ) : waitingForStaff ? (
-            <div className="mt-5 rounded-2xl border border-amber-300 bg-amber-50 p-4">
+            <div className="mt-5 rounded-lg border border-amber-300 bg-amber-50 p-4">
               <div className="flex items-start gap-3">
                 <Clock3 className="mt-0.5 shrink-0 text-amber-800" size={18} />
                 <div>
@@ -265,7 +265,7 @@ const BillConfirmed = () => {
               </div>
             </div>
           ) : cuentaPagada ? (
-            <div className="mt-5 rounded-2xl border border-emerald-300 bg-emerald-50 p-4">
+            <div className="mt-5 rounded-lg border border-emerald-300 bg-emerald-50 p-4">
               <div className="flex items-start gap-3">
                 <CheckCircle2
                   className="mt-0.5 shrink-0 text-emerald-700"
@@ -283,7 +283,7 @@ const BillConfirmed = () => {
               </div>
             </div>
           ) : (
-            <div className="mt-5 rounded-2xl border border-slate-300 bg-slate-50 p-4">
+            <div className="mt-5 rounded-lg border border-slate-300 bg-slate-50 p-4">
               <div className="flex items-start gap-3">
                 <CheckCircle2
                   className="mt-0.5 shrink-0 text-slate-700"
@@ -303,10 +303,10 @@ const BillConfirmed = () => {
 
           <div className="mt-6 space-y-3">
             {shouldShowRescanMessage && (
-              <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+              <div className="flex items-start gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-4">
                 <QrCode size={20} className="mt-0.5 shrink-0 text-slate-700" />
                 <div>
-                  <p className="text-sm font-black text-slate-950">
+                  <p className="text-sm font-bold text-slate-950">
                     Escaneá el QR para volver a pedir
                   </p>
                   <p className="mt-1 text-sm leading-relaxed text-slate-600">
@@ -316,7 +316,7 @@ const BillConfirmed = () => {
               </div>
             )}
 
-            <div className="flex items-start gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <div className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
               <ShieldCheck
                 size={16}
                 className="mt-0.5 shrink-0 text-slate-500"

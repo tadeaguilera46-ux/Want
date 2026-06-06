@@ -81,12 +81,12 @@ const QrEntry = () => {
   if (error) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-        <div className="w-full max-w-sm rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm">
+        <div className="w-full max-w-sm rounded-xl border border-red-200 bg-white p-6 text-center shadow-sm">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-red-100 text-red-700">
             <AlertTriangle size={26} />
           </div>
 
-          <h1 className="mt-4 text-xl font-black text-slate-950">
+          <h1 className="mt-4 text-xl font-bold text-slate-950">
             No se pudo abrir la mesa
           </h1>
 
@@ -100,10 +100,10 @@ const QrEntry = () => {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
-      <div className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+      <div className="w-full max-w-sm rounded-xl border border-slate-200 bg-white p-6 text-center shadow-sm">
         <Loader2 className="mx-auto h-9 w-9 animate-spin text-slate-900" />
 
-        <h1 className="mt-4 text-xl font-black text-slate-950">
+        <h1 className="mt-4 text-xl font-bold text-slate-950">
           Abriendo mesa {table}
         </h1>
 

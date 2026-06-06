@@ -53,7 +53,7 @@ const MenuSkeleton = () => {
             <div className="h-4 w-full rounded-full bg-zinc-100" />
             <div className="h-4 w-4/5 rounded-full bg-zinc-100" />
             <div className="flex items-center justify-between pt-3">
-              <div className="h-10 w-28 rounded-2xl bg-zinc-100" />
+              <div className="h-10 w-28 rounded-lg bg-zinc-100" />
               <div className="h-11 w-11 rounded-full bg-zinc-200" />
             </div>
           </div>
@@ -382,8 +382,8 @@ const Menu = () => {
         className="flex min-h-screen items-center justify-center px-6"
         style={{ backgroundColor: pageBackground }}
       >
-        <div className="w-full max-w-md rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm">
-          <h1 className="text-lg font-black text-zinc-950">
+        <div className="w-full max-w-md rounded-xl border border-red-200 bg-white p-6 text-center shadow-sm">
+          <h1 className="text-lg font-bold text-zinc-950">
             No se pudo abrir la mesa
           </h1>
           <p className="mt-2 text-sm text-zinc-600">{sessionError}</p>
@@ -414,7 +414,7 @@ const Menu = () => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => { setAssistOpen(true); setAssistSent(null); }}
-                  className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-extrabold shadow-sm transition-all hover:opacity-80 active:scale-[0.97]"
+                  className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition-all hover:opacity-80 active:scale-[0.97]"
                   style={{ color: primaryColor, borderColor: primaryColor, backgroundColor: `${primaryColor}12` }}
                 >
                   <Bell size={14} />
@@ -428,7 +428,7 @@ const Menu = () => {
                       { state: { table, restaurantId } }
                     )
                   }
-                  className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-extrabold text-white shadow-want transition-all hover:scale-[1.03] active:scale-[0.98]"
+                  className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white shadow-want transition-all hover:scale-[1.03] active:scale-[0.98]"
                   style={{ backgroundColor: primaryColor }}
                 >
                   <Receipt size={16} />
@@ -458,7 +458,7 @@ const Menu = () => {
 
               <div className="flex items-center gap-3 px-4 py-2.5">
                 {logoUrl && !logoError && (
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-black/5 bg-white shadow-sm">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-black/5 bg-white shadow-sm">
                     <img
                       src={logoUrl}
                       alt={restaurantName}
@@ -471,11 +471,11 @@ const Menu = () => {
                 )}
 
                 <div className="min-w-0 flex-1">
-                  <p className="text-[9px] font-extrabold uppercase tracking-[0.22em] text-zinc-500">
+                  <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
                     Menú digital
                   </p>
 
-                  <h1 className="mt-0.5 truncate text-xl font-black leading-tight tracking-tight text-zinc-950">
+                  <h1 className="mt-0.5 truncate text-xl font-bold leading-tight tracking-tight text-zinc-950">
                     {restaurantName}
                   </h1>
 
@@ -518,7 +518,7 @@ const Menu = () => {
           {loading ? (
             <MenuSkeleton />
           ) : filteredItems.length === 0 ? (
-            <div className="rounded-3xl border border-black/5 bg-white p-6 text-center shadow-sm">
+            <div className="rounded-xl border border-black/5 bg-white p-6 text-center shadow-sm">
               <p className="font-bold text-zinc-950">
                 No hay productos disponibles
               </p>
@@ -576,19 +576,19 @@ const Menu = () => {
                   state: { table, restaurantId },
                 })
               }
-              className="pointer-events-auto flex h-14 w-full items-center justify-between rounded-2xl px-4 text-white shadow-[0_14px_34px_-12px_rgba(0,0,0,0.45)]"
+              className="pointer-events-auto flex h-14 w-full items-center justify-between rounded-lg px-4 text-white shadow-[0_14px_34px_-12px_rgba(0,0,0,0.45)]"
               style={{ backgroundColor: primaryColor }}
             >
               <div className="flex items-center gap-3">
                 <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
                   <ShoppingCart size={20} />
-                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white px-1 text-[11px] font-extrabold text-zinc-950">
+                  <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-white px-1 text-[11px] font-semibold text-zinc-950">
                     {totalItems}
                   </span>
                 </div>
 
                 <div className="text-left">
-                  <p className="text-sm font-extrabold">Ver pedido</p>
+                  <p className="text-sm font-semibold">Ver pedido</p>
                   <p className="text-xs text-white/70">
                     Total: {formatPriceARS(total)}
                   </p>
@@ -610,7 +610,7 @@ const Menu = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 16 }}
               transition={{ duration: 0.18 }}
-              className="w-full max-w-lg rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl"
+              className="w-full max-w-lg rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-xl"
             >
               {assistSent ? (
                 <motion.div
@@ -622,7 +622,7 @@ const Menu = () => {
                   <div className="flex h-12 w-12 items-center justify-center rounded-full border border-zinc-200 bg-zinc-50">
                     <Check size={20} className="text-zinc-700" />
                   </div>
-                  <p className="mt-3 text-base font-black text-zinc-950">
+                  <p className="mt-3 text-base font-bold text-zinc-950">
                     Solicitud enviada
                   </p>
                   <p className="mt-1 text-sm text-zinc-500">
@@ -633,10 +633,10 @@ const Menu = () => {
                 <>
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-zinc-400">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
                         Mesa {table}
                       </p>
-                      <h2 className="mt-0.5 text-xl font-black tracking-tight text-zinc-950">
+                      <h2 className="mt-0.5 text-xl font-bold tracking-tight text-zinc-950">
                         ¿Necesitás algo?
                       </h2>
                     </div>
@@ -654,7 +654,7 @@ const Menu = () => {
                         key={opt.key}
                         disabled={sendingAssist}
                         onClick={() => void sendAssistance(opt.key)}
-                        className="flex w-full items-center justify-between rounded-2xl border border-zinc-200 bg-white px-5 py-4 text-left transition hover:bg-zinc-50 active:bg-zinc-100 disabled:opacity-50"
+                        className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-5 py-4 text-left transition hover:bg-zinc-50 active:bg-zinc-100 disabled:opacity-50"
                       >
                         <span className="text-sm font-semibold text-zinc-800">
                           {opt.label}
@@ -683,14 +683,14 @@ const Menu = () => {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 24 }}
               transition={{ duration: 0.18 }}
-              className="w-full max-w-lg rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-3xl"
+              className="w-full max-w-lg rounded-t-3xl bg-white p-5 shadow-2xl sm:rounded-xl"
             >
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-extrabold uppercase tracking-[0.18em] text-zinc-500">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
                     Observación
                   </p>
-                  <h2 className="mt-1 text-2xl font-black tracking-tight text-zinc-950">
+                  <h2 className="mt-1 text-2xl font-bold tracking-tight text-zinc-950">
                     {selectedItem.name}
                   </h2>
                   <p className="mt-2 text-sm leading-relaxed text-zinc-500">
@@ -713,7 +713,7 @@ const Menu = () => {
                 rows={4}
                 maxLength={140}
                 placeholder="Escribí una observación para este producto..."
-                className="w-full rounded-2xl border border-zinc-200 p-3 text-sm outline-none transition focus:ring-2 focus:ring-black/10"
+                className="w-full rounded-lg border border-zinc-200 p-3 text-sm outline-none transition focus:ring-2 focus:ring-black/10"
               />
 
               <div className="mt-2 text-right text-xs text-zinc-400">
@@ -723,14 +723,14 @@ const Menu = () => {
               <div className="mt-5 grid grid-cols-2 gap-3">
                 <button
                   onClick={closeNoteModal}
-                  className="h-12 rounded-2xl border border-zinc-200 bg-white font-semibold text-zinc-700"
+                  className="h-12 rounded-lg border border-zinc-200 bg-white font-semibold text-zinc-700"
                 >
                   Cancelar
                 </button>
 
                 <button
                   onClick={handleAddWithNote}
-                  className="h-12 rounded-2xl font-semibold text-white"
+                  className="h-12 rounded-lg font-semibold text-white"
                   style={{ backgroundColor: primaryColor }}
                 >
                   Agregar al pedido

@@ -127,13 +127,13 @@ const ActivationScreen = ({ restaurantId }: { restaurantId: string }) => {
 
         {/* Header */}
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl bg-zinc-950 text-white">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-zinc-950 text-white">
             <Sparkles size={28} />
           </div>
-          <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-zinc-500">
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-zinc-500">
             WANT RESTAURANT SAAS
           </p>
-          <h1 className="mt-3 text-3xl font-black tracking-tight text-zinc-950 md:text-4xl">
+          <h1 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950 md:text-4xl">
             Tu prueba gratuita terminó
           </h1>
           <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-zinc-500">
@@ -143,19 +143,19 @@ const ActivationScreen = ({ restaurantId }: { restaurantId: string }) => {
         </div>
 
         {/* Aviso dos pasos */}
-        <div className="mb-6 rounded-2xl border border-zinc-200 bg-zinc-50 px-5 py-4">
+        <div className="mb-6 rounded-lg border border-zinc-200 bg-zinc-50 px-5 py-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:gap-6">
             <div className="flex items-start gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-black text-white">1</span>
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-bold text-white">1</span>
               <div>
-                <p className="text-sm font-black text-zinc-950">Setup inicial</p>
+                <p className="text-sm font-bold text-zinc-950">Setup inicial</p>
                 <p className="text-xs text-zinc-500">Instalación, video de capacitación y carga de datos — lo coordinamos con vos.</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-black text-white">2</span>
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-xs font-bold text-white">2</span>
               <div>
-                <p className="text-sm font-black text-zinc-950">Suscripción mensual</p>
+                <p className="text-sm font-bold text-zinc-950">Suscripción mensual</p>
                 <p className="text-xs text-zinc-500">Débito automático mensual por Mercado Pago — lo configurás ahora.</p>
               </div>
             </div>
@@ -174,7 +174,7 @@ const ActivationScreen = ({ restaurantId }: { restaurantId: string }) => {
                 key={option.id}
                 type="button"
                 onClick={() => setSelectedPlan(option.id)}
-                className={`relative rounded-3xl border p-5 text-left transition ${
+                className={`relative rounded-xl border p-5 text-left transition ${
                   isSelected
                     ? "border-zinc-950 bg-zinc-950 text-white shadow-[0_18px_50px_-18px_rgba(0,0,0,0.4)]"
                     : "border-zinc-200 bg-white text-zinc-950 hover:bg-zinc-50"
@@ -182,7 +182,7 @@ const ActivationScreen = ({ restaurantId }: { restaurantId: string }) => {
               >
                 {option.recommended && (
                   <span
-                    className={`absolute right-4 top-4 rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide ${
+                    className={`absolute right-4 top-4 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${
                       isSelected
                         ? "bg-white/15 text-white"
                         : "bg-emerald-100 text-emerald-700"
@@ -200,25 +200,25 @@ const ActivationScreen = ({ restaurantId }: { restaurantId: string }) => {
                 )}
 
                 <p
-                  className={`text-lg font-black ${isSelected ? "mt-0 pl-7" : ""}`}
+                  className={`text-lg font-bold ${isSelected ? "mt-0 pl-7" : ""}`}
                 >
                   {option.name}
                 </p>
 
                 {/* Suscripción mensual — lo que cobra MP */}
                 <div
-                  className={`mt-4 rounded-2xl p-3 ${
+                  className={`mt-4 rounded-lg p-3 ${
                     isSelected ? "bg-white/10" : "bg-zinc-50"
                   }`}
                 >
                   <p
-                    className={`text-xs font-extrabold uppercase tracking-wide ${
+                    className={`text-xs font-semibold uppercase tracking-wide ${
                       isSelected ? "text-white/60" : "text-zinc-400"
                     }`}
                   >
                     Suscripción mensual
                   </p>
-                  <p className="mt-1 text-2xl font-black">
+                  <p className="mt-1 text-2xl font-bold">
                     {formatARS(option.monthly)}
                     <span className={`ml-1 text-xs font-semibold ${isSelected ? "text-white/50" : "text-zinc-400"}`}>/ mes</span>
                   </p>
@@ -229,18 +229,18 @@ const ActivationScreen = ({ restaurantId }: { restaurantId: string }) => {
 
                 {/* Setup — coordinado por separado */}
                 <div
-                  className={`mt-2 rounded-2xl p-3 ${
+                  className={`mt-2 rounded-lg p-3 ${
                     isSelected ? "bg-white/10" : "bg-zinc-50"
                   }`}
                 >
                   <p
-                    className={`text-xs font-extrabold uppercase tracking-wide ${
+                    className={`text-xs font-semibold uppercase tracking-wide ${
                       isSelected ? "text-white/60" : "text-zinc-400"
                     }`}
                   >
                     Setup inicial
                   </p>
-                  <p className="mt-1 text-base font-black">
+                  <p className="mt-1 text-base font-bold">
                     {formatARS(option.setup)}
                   </p>
                   <p className={`mt-1 text-xs ${isSelected ? "text-white/40" : "text-zinc-400"}`}>
@@ -305,13 +305,13 @@ const ActivationScreen = ({ restaurantId }: { restaurantId: string }) => {
         </div>
 
         {/* CTA */}
-        <div className="mt-6 rounded-3xl border border-black/5 bg-white p-5 shadow-[0_18px_50px_-24px_rgba(0,0,0,0.15)]">
+        <div className="mt-6 rounded-xl border border-black/5 bg-white p-5 shadow-[0_18px_50px_-24px_rgba(0,0,0,0.15)]">
           <div className="flex flex-col items-center gap-4 sm:flex-row sm:justify-between">
             <div>
               <p className="text-sm font-bold text-zinc-950">
                 Plan {plan.name} — suscripción mensual
               </p>
-              <p className="mt-0.5 text-xl font-black text-zinc-950">
+              <p className="mt-0.5 text-xl font-bold text-zinc-950">
                 {formatARS(plan.monthly)}<span className="text-sm font-medium text-zinc-400"> / mes</span>
               </p>
               <p className="text-xs text-zinc-400">
@@ -323,7 +323,7 @@ const ActivationScreen = ({ restaurantId }: { restaurantId: string }) => {
               type="button"
               onClick={() => void handleActivate()}
               disabled={subscribing}
-              className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-8 text-base font-black text-white transition hover:opacity-90 disabled:opacity-50 sm:w-auto"
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-lg bg-zinc-950 px-8 text-base font-bold text-white transition hover:opacity-90 disabled:opacity-50 sm:w-auto"
             >
               {subscribing ? (
                 <>
@@ -355,7 +355,7 @@ const BlockedScreen = ({ restaurantId }: { restaurantId: string }) => {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-[#f6f4ef] px-4">
-      <div className="w-full max-w-md rounded-[32px] border border-black/5 bg-white p-8 shadow-[0_18px_50px_-18px_rgba(0,0,0,0.22)]">
+      <div className="w-full max-w-md rounded-xl border border-black/5 bg-white p-8 shadow-[0_18px_50px_-18px_rgba(0,0,0,0.22)]">
         <div className="flex justify-center">
           <div className="flex h-20 w-20 items-center justify-center rounded-full bg-[#6B4423]/10">
             <CreditCard size={38} className="text-[#6B4423]" />
@@ -363,10 +363,10 @@ const BlockedScreen = ({ restaurantId }: { restaurantId: string }) => {
         </div>
 
         <div className="mt-6 text-center">
-          <p className="text-xs font-extrabold uppercase tracking-[0.28em] text-zinc-500">
+          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-zinc-500">
             WANT RESTAURANT SAAS
           </p>
-          <h1 className="mt-3 text-3xl font-black tracking-tight text-zinc-950">
+          <h1 className="mt-3 text-3xl font-bold tracking-tight text-zinc-950">
             Suscripción vencida
           </h1>
           <p className="mt-4 text-sm leading-relaxed text-zinc-600">
@@ -375,7 +375,7 @@ const BlockedScreen = ({ restaurantId }: { restaurantId: string }) => {
           </p>
         </div>
 
-        <div className="mt-7 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+        <div className="mt-7 rounded-lg border border-amber-200 bg-amber-50 p-4">
           <div className="flex items-start gap-3">
             <MessageCircleWarning size={20} className="mt-0.5 text-amber-600" />
             <div>
@@ -394,7 +394,7 @@ const BlockedScreen = ({ restaurantId }: { restaurantId: string }) => {
             href={`https://wa.me/${WHATSAPP_NUMBER}?text=Hola,%20quiero%20reactivar%20mi%20suscripci%C3%B3n%20de%20WANT.%20Restaurante:%20${encodeURIComponent(restaurantId)}`}
             target="_blank"
             rel="noreferrer"
-            className="flex h-14 w-full items-center justify-center rounded-2xl bg-[#6B4423] text-sm font-extrabold text-white transition-all hover:scale-[1.01] active:scale-[0.99]"
+            className="flex h-14 w-full items-center justify-center rounded-lg bg-[#6B4423] text-sm font-semibold text-white transition-all hover:scale-[1.01] active:scale-[0.99]"
           >
             Contactar soporte
           </a>
@@ -402,7 +402,7 @@ const BlockedScreen = ({ restaurantId }: { restaurantId: string }) => {
           <button
             type="button"
             onClick={() => navigate(`/staff/admin?restaurantId=${restaurantId}`, { replace: true })}
-            className="h-12 w-full rounded-2xl border border-black/10 bg-white text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
+            className="h-12 w-full rounded-lg border border-black/10 bg-white text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50"
           >
             Reintentar acceso
           </button>

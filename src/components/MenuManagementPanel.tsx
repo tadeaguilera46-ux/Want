@@ -183,11 +183,11 @@ const IngredientsEditor = ({
   };
 
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-3">
+    <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-3">
       <div className="mb-3 flex items-start gap-2">
         <Boxes size={17} className="mt-0.5 text-zinc-700" />
         <div>
-          <p className="text-sm font-black text-zinc-950">
+          <p className="text-sm font-bold text-zinc-950">
             Ingredientes / receta
           </p>
           <p className="text-xs text-zinc-500">
@@ -198,7 +198,7 @@ const IngredientsEditor = ({
       </div>
 
       {stockItems.length === 0 ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
           Primero cargá insumos en Control de stock para poder armar recetas.
         </div>
       ) : (
@@ -283,7 +283,7 @@ const IngredientsEditor = ({
       )}
 
       {ingredients.length === 0 ? (
-        <div className="mt-3 flex items-start gap-2 rounded-2xl border border-dashed border-zinc-300 bg-white p-3 text-xs text-zinc-500">
+        <div className="mt-3 flex items-start gap-2 rounded-lg border border-dashed border-zinc-300 bg-white p-3 text-xs text-zinc-500">
           <AlertTriangle size={15} className="shrink-0" />
           Este producto no tiene receta cargada. En Premium seguirá siendo
           vendible, pero no descontará stock automáticamente.
@@ -304,7 +304,7 @@ const IngredientsEditor = ({
                 type="button"
                 disabled={disabled}
                 onClick={() => toggleEssential(ingredient.stockItemId)}
-                className={`rounded-full px-2 py-0.5 text-[10px] font-black uppercase tracking-wide ${
+                className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
                   ingredient.essential
                     ? "bg-red-100 text-red-700"
                     : "bg-amber-100 text-amber-700"
@@ -651,14 +651,14 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
   };
 
   return (
-    <section className="mb-6 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+    <section className="mb-6 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-zinc-950 text-white">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-zinc-950 text-white">
           <Utensils size={20} />
         </div>
 
         <div>
-          <h2 className="text-xl font-black text-zinc-950">Menú editable</h2>
+          <h2 className="text-xl font-bold text-zinc-950">Menú editable</h2>
           <p className="mt-1 text-sm text-zinc-500">
             Creá productos y conectalos con stock usando ingredientes
             esenciales o secundarios.
@@ -671,7 +671,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
           placeholder="Nombre del producto"
           value={name}
           onChange={(e) => setName(e.target.value)}
-          className="h-11 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+          className="h-11 rounded-lg border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
         />
 
         <input
@@ -680,13 +680,13 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
           min={0}
           value={price}
           onChange={(e) => setPrice(e.target.value)}
-          className="h-11 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+          className="h-11 rounded-lg border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
         />
 
         <select
           value={type}
           onChange={(e) => setType(e.target.value as MenuType)}
-          className="h-11 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+          className="h-11 rounded-lg border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
         >
           <option value="food">Sale a cocina</option>
           <option value="drinks">Sale a barra</option>
@@ -696,7 +696,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
           placeholder="Categoría: Pizzas"
           value={category}
           onChange={(e) => setCategory(e.target.value)}
-          className="h-11 rounded-2xl border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+          className="h-11 rounded-lg border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
         />
 
         <textarea
@@ -704,11 +704,11 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={3}
-          className="rounded-2xl border border-zinc-200 px-3 py-3 outline-none focus:ring-2 focus:ring-black/10 lg:col-span-3"
+          className="rounded-lg border border-zinc-200 px-3 py-3 outline-none focus:ring-2 focus:ring-black/10 lg:col-span-3"
         />
 
         <div className="space-y-2">
-          <label className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100">
+          <label className="flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100">
             <input
               type="file"
               accept="image/*"
@@ -731,7 +731,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
           </label>
 
           {image && (
-            <div className="h-24 overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-100">
+            <div className="h-24 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100">
               <img
                 src={image}
                 alt="Preview producto"
@@ -754,7 +754,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
           type="button"
           onClick={handleCreate}
           disabled={uploadingCreateImage}
-          className="flex h-11 items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60 lg:col-span-4"
+          className="flex h-11 items-center justify-center gap-2 rounded-lg bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60 lg:col-span-4"
         >
           <Plus size={16} />
           Agregar producto
@@ -762,15 +762,15 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       </div>
 
       {loading ? (
-        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">
+        <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">
           Cargando menú...
         </div>
       ) : sortedItems.length === 0 ? (
-        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">
+        <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">
           Todavía no hay productos cargados.
         </div>
       ) : (
-        <div className="max-h-[640px] overflow-y-auto rounded-2xl border border-zinc-200 p-3">
+        <div className="max-h-[640px] overflow-y-auto rounded-lg border border-zinc-200 p-3">
           <div className="grid gap-3">
             {sortedItems.map((item) => {
               const isSaving = savingId === item.id;
@@ -783,9 +783,9 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
               return (
                 <div
                   key={item.id}
-                  className="grid gap-3 rounded-2xl border border-zinc-200 bg-white p-3 md:grid-cols-[120px_1fr_auto]"
+                  className="grid gap-3 rounded-lg border border-zinc-200 bg-white p-3 md:grid-cols-[120px_1fr_auto]"
                 >
-                  <div className="h-28 overflow-hidden rounded-2xl bg-zinc-100">
+                  <div className="h-28 overflow-hidden rounded-lg bg-zinc-100">
                     {(isEditing ? draft?.image : item.image) ? (
                       <img
                         src={isEditing ? draft?.image : item.image}
@@ -834,7 +834,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
 
                     {!isEditing ? (
                       <>
-                        <h3 className="text-lg font-black text-zinc-950">
+                        <h3 className="text-lg font-bold text-zinc-950">
                           {item.name}
                         </h3>
 
@@ -1007,7 +1007,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                       <button
                         onClick={() => startEditing(item)}
                         disabled={isSaving}
-                        className="flex h-10 items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 font-semibold text-zinc-900 transition hover:bg-zinc-50 disabled:opacity-60"
+                        className="flex h-10 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 font-semibold text-zinc-900 transition hover:bg-zinc-50 disabled:opacity-60"
                       >
                         <Pencil size={15} />
                         Editar
@@ -1017,7 +1017,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                         <button
                           onClick={() => saveEditing(item)}
                           disabled={isSaving || isUploadingEditImage}
-                          className="flex h-10 items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                          className="flex h-10 items-center justify-center gap-2 rounded-lg bg-zinc-950 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
                         >
                           <Save size={15} />
                           Guardar
@@ -1026,7 +1026,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                         <button
                           onClick={cancelEditing}
                           disabled={isSaving || isUploadingEditImage}
-                          className="flex h-10 items-center justify-center gap-2 rounded-2xl border border-zinc-200 bg-white px-4 font-semibold text-zinc-900 transition hover:bg-zinc-50 disabled:opacity-60"
+                          className="flex h-10 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 font-semibold text-zinc-900 transition hover:bg-zinc-50 disabled:opacity-60"
                         >
                           <X size={15} />
                           Cancelar
@@ -1037,7 +1037,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                     <button
                       onClick={() => toggleActive(item)}
                       disabled={isSaving}
-                      className={`h-10 rounded-2xl px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60 ${
+                      className={`h-10 rounded-lg px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60 ${
                         item.active ? "bg-orange-500" : "bg-emerald-600"
                       }`}
                     >
@@ -1047,7 +1047,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                     <button
                       onClick={() => handleDelete(item)}
                       disabled={isSaving}
-                      className="flex h-10 items-center justify-center gap-2 rounded-2xl bg-red-600 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+                      className="flex h-10 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
                     >
                       <Trash2 size={15} />
                       Eliminar

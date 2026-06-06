@@ -70,20 +70,20 @@ function MenuItemCard({
             ))}
 
             {availability.lowStock && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-black text-amber-800 backdrop-blur">
+              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800 backdrop-blur">
                 <AlertTriangle size={12} />
                 Quedan pocas unidades
               </span>
             )}
           </div>
 
-          <div className="shrink-0 rounded-full bg-white/95 px-3 py-1.5 text-sm font-extrabold text-zinc-950 shadow-sm backdrop-blur">
+          <div className="shrink-0 rounded-full bg-white/95 px-3 py-1.5 text-sm font-semibold text-zinc-950 shadow-sm backdrop-blur">
             {formatPrice(item.price)}
           </div>
         </div>
 
         <div className="absolute bottom-0 left-0 right-0 p-4">
-          <h3 className="text-xl font-black leading-tight text-white drop-shadow-sm">
+          <h3 className="text-xl font-bold leading-tight text-white drop-shadow-sm">
             {item.name}
           </h3>
         </div>
@@ -97,7 +97,7 @@ function MenuItemCard({
         <div className="mt-4 flex items-center justify-between gap-3">
           <button
             onClick={() => onNote(item)}
-            className="inline-flex h-10 items-center gap-2 rounded-2xl border border-black/10 bg-white px-3 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
           >
             <MessageSquareText size={14} />
             Agregar nota
@@ -105,7 +105,7 @@ function MenuItemCard({
 
           <div className="flex items-center gap-3">
             {quantity > 0 && (
-              <span className="min-w-[24px] text-center text-sm font-black text-zinc-700">
+              <span className="min-w-[24px] text-center text-sm font-bold text-zinc-700">
                 {quantity}
               </span>
             )}

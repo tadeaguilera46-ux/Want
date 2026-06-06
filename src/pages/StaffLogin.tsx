@@ -1,28 +1,13 @@
 import { useState } from "react";
-import {
-  useNavigate,
-  useLocation,
-  useSearchParams,
-} from "react-router-dom";
+import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, getDb } from "../lib/firebase";
 import { useRestaurant } from "../lib/restaurant-context";
 
-type StaffRole =
-  | "admin"
-  | "kitchen"
-  | "bar"
-  | "runner"
-  | "cashier";
+type StaffRole = "admin" | "kitchen" | "bar" | "runner" | "cashier";
 
-const validRoles: StaffRole[] = [
-  "admin",
-  "kitchen",
-  "bar",
-  "runner",
-  "cashier",
-];
+const validRoles: StaffRole[] = ["admin", "kitchen", "bar", "runner", "cashier"];
 
 const db = getDb();
 
@@ -41,20 +26,11 @@ const normalizeString = (value: unknown) => {
 
 const getFirebaseAuthMessage = (code?: string) => {
   switch (code) {
-    case "auth/invalid-email":
-      return "Email inválido";
-
-    case "auth/invalid-credential":
-      return "Credenciales inválidas";
-
-    case "auth/user-disabled":
-      return "Usuario deshabilitado";
-
-    case "auth/operation-not-allowed":
-      return "El login por email/password no está habilitado en Firebase";
-
-    default:
-      return "No se pudo iniciar sesión";
+    case "auth/invalid-email": return "Email inválido";
+    case "auth/invalid-credential": return "Credenciales inválidas";
+    case "auth/user-disabled": return "Usuario deshabilitado";
+    case "auth/operation-not-allowed": return "El login por email/password no está habilitado en Firebase";
+    default: return "No se pudo iniciar sesión";
   }
 };
 
@@ -62,15 +38,12 @@ const StaffLogin = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-
   const { setRestaurantId } = useRestaurant();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
   const [showReset, setShowReset] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
@@ -78,10 +51,7 @@ const StaffLogin = () => {
 
   const handlePasswordReset = async () => {
     const cleanEmail = resetEmail.trim();
-    if (!cleanEmail) {
-      setResetMessage("Ingresá tu email.");
-      return;
-    }
+    if (!cleanEmail) { setResetMessage("Ingresá tu email."); return; }
     try {
       setResetLoading(true);
       auth.languageCode = "es";
@@ -96,79 +66,34 @@ const StaffLogin = () => {
 
   const restaurantId =
     normalizeString(searchParams.get("restaurantId")) ||
-    normalizeString(
-      (location.state as { restaurantId?: string } | null)?.restaurantId
-    );
+    normalizeString((location.state as { restaurantId?: string } | null)?.restaurantId);
 
   const handleLogin = async () => {
     setError("");
-
-    if (!restaurantId) {
-      setError("Falta restaurantId en la URL");
-      return;
-    }
-
-    if (!email.trim() || !password.trim()) {
-      setError("Completá email y contraseña");
-      return;
-    }
+    if (!restaurantId) { setError("Falta restaurantId en la URL"); return; }
+    if (!email.trim() || !password.trim()) { setError("Completá email y contraseña"); return; }
 
     try {
       setLoading(true);
-
-      const credential = await signInWithEmailAndPassword(
-        auth,
-        email.trim(),
-        password
-      );
-
+      const credential = await signInWithEmailAndPassword(auth, email.trim(), password);
       const user = credential.user;
-
-      const staffRef = doc(
-        db,
-        "restaurants",
-        restaurantId,
-        "staff",
-        user.uid
-      );
-
+      const staffRef = doc(db, "restaurants", restaurantId, "staff", user.uid);
       const staffSnap = await getDoc(staffRef);
 
-      if (!staffSnap.exists()) {
-        setError("Credenciales inválidas o acceso no autorizado");
-        return;
-      }
-
+      if (!staffSnap.exists()) { setError("Credenciales inválidas o acceso no autorizado"); return; }
       const staffData = staffSnap.data();
-
-      if (staffData.active !== true) {
-        setError("Credenciales inválidas o acceso no autorizado");
-        return;
-      }
+      if (staffData.active !== true) { setError("Credenciales inválidas o acceso no autorizado"); return; }
 
       const role = normalizeString(staffData.role) as StaffRole;
-
-      if (!validRoles.includes(role)) {
-        setError("Credenciales inválidas o acceso no autorizado");
-        return;
-      }
+      if (!validRoles.includes(role)) { setError("Credenciales inválidas o acceso no autorizado"); return; }
 
       setRestaurantId(restaurantId);
-
-      const targetPath = roleHome[role];
-
-      navigate(
-        `${targetPath}?restaurantId=${encodeURIComponent(restaurantId)}`,
-        {
-          replace: true,
-          state: {
-            restaurantId,
-          },
-        }
-      );
+      navigate(`${roleHome[role]}?restaurantId=${encodeURIComponent(restaurantId)}`, {
+        replace: true,
+        state: { restaurantId },
+      });
     } catch (err: any) {
       console.error("Error login staff:", err);
-
       setError(getFirebaseAuthMessage(err?.code));
     } finally {
       setLoading(false);
@@ -176,47 +101,54 @@ const StaffLogin = () => {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
-      <div className="w-full max-w-md rounded-3xl border border-zinc-200 bg-white p-6 shadow-sm">
-        <div className="mb-6 text-center">
-          <h1 className="text-3xl font-black text-zinc-950">
-            Acceso Staff
-          </h1>
+    <div className="flex min-h-screen items-center justify-center bg-background p-6">
+      <div className="w-full max-w-sm rounded-[10px] border border-border bg-card p-8">
 
-          <p className="mt-2 text-sm text-zinc-500">
-            Restaurante activo:{" "}
-            <span className="font-semibold">
-              {restaurantId || "Sin restaurantId"}
-            </span>
+        {/* Logo */}
+        <div className="mb-7">
+          <div className="mb-5 flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-[4px] bg-foreground">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="hsl(40 25% 97%)" strokeWidth="2.5">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+                <rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/>
+              </svg>
+            </div>
+            <span className="font-display text-base font-bold tracking-tight">WANT</span>
+          </div>
+          <h1 className="font-display text-2xl font-bold tracking-tight">Acceso Staff</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {restaurantId ? `Restaurante: ${restaurantId}` : "Sistema operativo para restaurantes"}
           </p>
         </div>
 
-        <div className="space-y-4">
-          <input
-            type="email"
-            placeholder="Email"
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="h-14 w-full rounded-2xl border border-zinc-200 bg-white px-4 outline-none transition focus:ring-2 focus:ring-black/10"
-          />
+        <div className="space-y-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Email</label>
+            <input
+              type="email"
+              placeholder="tu@restaurante.com"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="h-10 w-full rounded-md border border-border bg-secondary px-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+            />
+          </div>
 
-          <input
-            type="password"
-            placeholder="Contraseña"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                void handleLogin();
-              }
-            }}
-            className="h-14 w-full rounded-2xl border border-zinc-200 bg-white px-4 outline-none transition focus:ring-2 focus:ring-black/10"
-          />
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Contraseña</label>
+            <input
+              type="password"
+              placeholder="••••••••"
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") void handleLogin(); }}
+              className="h-10 w-full rounded-md border border-border bg-secondary px-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
+            />
+          </div>
 
           {error && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-sm font-medium text-red-700">
               {error}
             </div>
           )}
@@ -224,26 +156,22 @@ const StaffLogin = () => {
           <button
             onClick={() => void handleLogin()}
             disabled={loading}
-            className="h-14 w-full rounded-2xl bg-black text-lg font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            className="h-10 w-full rounded-md bg-foreground text-sm font-semibold text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? "Ingresando..." : "Ingresar"}
           </button>
 
           <button
             type="button"
-            onClick={() => {
-              setShowReset(!showReset);
-              setResetMessage("");
-              setResetEmail("");
-            }}
-            className="w-full text-center text-sm text-zinc-400 transition hover:text-zinc-700"
+            onClick={() => { setShowReset(!showReset); setResetMessage(""); setResetEmail(""); }}
+            className="w-full pt-1 text-center text-xs text-muted-foreground transition hover:text-foreground"
           >
             {showReset ? "Volver al login" : "¿Olvidaste tu contraseña?"}
           </button>
 
           {showReset && (
-            <div className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-4">
-              <p className="text-sm font-semibold text-zinc-700">
+            <div className="space-y-2.5 rounded-[10px] border border-border bg-secondary p-4">
+              <p className="text-xs text-muted-foreground">
                 Ingresá tu email y te mandamos un link para restablecer tu contraseña.
               </p>
               <input
@@ -251,10 +179,10 @@ const StaffLogin = () => {
                 placeholder="tu@email.com"
                 value={resetEmail}
                 onChange={(e) => setResetEmail(e.target.value)}
-                className="h-12 w-full rounded-2xl border border-zinc-200 bg-white px-4 text-sm outline-none transition focus:ring-2 focus:ring-black/10"
+                className="h-9 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
               />
               {resetMessage && (
-                <p className={`text-xs font-medium ${resetMessage.includes("mandamos") ? "text-emerald-600" : "text-red-500"}`}>
+                <p className={`text-xs font-medium ${resetMessage.includes("mandamos") ? "text-green-700" : "text-red-600"}`}>
                   {resetMessage}
                 </p>
               )}
@@ -262,7 +190,7 @@ const StaffLogin = () => {
                 type="button"
                 onClick={() => void handlePasswordReset()}
                 disabled={resetLoading}
-                className="h-11 w-full rounded-2xl bg-zinc-900 text-sm font-bold text-white transition hover:opacity-90 disabled:opacity-60"
+                className="h-9 w-full rounded-md border border-border bg-card text-sm font-medium text-foreground transition hover:bg-secondary disabled:opacity-60"
               >
                 {resetLoading ? "Enviando..." : "Enviar email de recuperación"}
               </button>

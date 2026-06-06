@@ -112,15 +112,15 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
   };
 
   return (
-    <section className="mt-8 rounded-3xl border border-zinc-200 bg-white p-5 shadow-sm">
+    <section className="mt-8 rounded-xl border border-zinc-200 bg-white p-5 shadow-sm">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-950 text-white">
+          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-zinc-950 text-white">
             <Boxes size={22} />
           </div>
 
           <div>
-            <h2 className="text-2xl font-black text-zinc-950">
+            <h2 className="text-2xl font-bold text-zinc-950">
               Control de stock
             </h2>
 
@@ -131,10 +131,10 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
         </div>
 
         {!stockEnabled && (
-          <div className="rounded-2xl border border-amber-300 bg-amber-100 px-4 py-3 text-right">
+          <div className="rounded-lg border border-amber-300 bg-amber-100 px-4 py-3 text-right">
             <div className="flex items-center gap-2 text-amber-900">
               <Lock size={16} />
-              <span className="text-sm font-black uppercase tracking-wide">
+              <span className="text-sm font-bold uppercase tracking-wide">
                 Premium only
               </span>
             </div>
@@ -147,23 +147,23 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
       </div>
 
       <div className="mb-6 grid gap-4 md:grid-cols-3">
-        <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
           <p className="text-sm text-zinc-500">Items</p>
-          <p className="mt-2 text-3xl font-black text-zinc-950">
+          <p className="mt-2 text-3xl font-bold text-zinc-950">
             {items.length}
           </p>
         </div>
 
-        <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
           <p className="text-sm text-zinc-500">Stock bajo</p>
-          <p className="mt-2 text-3xl font-black text-red-600">
+          <p className="mt-2 text-3xl font-bold text-red-600">
             {lowStockCount}
           </p>
         </div>
 
-        <div className="rounded-3xl border border-zinc-200 bg-zinc-50 p-4">
+        <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
           <p className="text-sm text-zinc-500">Plan requerido</p>
-          <p className="mt-2 text-3xl font-black text-zinc-950">
+          <p className="mt-2 text-3xl font-bold text-zinc-950">
             Premium
           </p>
         </div>
@@ -179,7 +179,7 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
           placeholder="Nombre"
           disabled={!stockEnabled}
           required
-          className="h-11 rounded-2xl border border-zinc-200 px-3"
+          className="h-11 rounded-lg border border-zinc-200 px-3"
         />
 
         <input
@@ -188,14 +188,14 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
           placeholder="Categoría"
           disabled={!stockEnabled}
           required
-          className="h-11 rounded-2xl border border-zinc-200 px-3"
+          className="h-11 rounded-lg border border-zinc-200 px-3"
         />
 
         <select
           value={unit}
           onChange={(e) => setUnit(e.target.value as StockUnit)}
           disabled={!stockEnabled}
-          className="h-11 rounded-2xl border border-zinc-200 px-3"
+          className="h-11 rounded-lg border border-zinc-200 px-3"
         >
           {units.map((u) => (
             <option key={u} value={u}>
@@ -216,7 +216,7 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
                 onChange={(e) => setQuantity(Number(e.target.value))}
                 placeholder="Ej: 10"
                 disabled={!stockEnabled}
-                className="h-11 w-full rounded-2xl border border-zinc-200 px-3"
+                className="h-11 w-full rounded-lg border border-zinc-200 px-3"
             />
         </div>
 
@@ -232,7 +232,7 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
                 onChange={(e) => setMinimumQuantity(Number(e.target.value))}
                 placeholder="Ej: 2"
                 disabled={!stockEnabled}
-                className="h-11 w-full rounded-2xl border border-zinc-200 px-3"
+                className="h-11 w-full rounded-lg border border-zinc-200 px-3"
             />
         </div>
 
@@ -241,7 +241,7 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
           onChange={(e) => setSupplier(e.target.value)}
           placeholder="Proveedor"
           disabled={!stockEnabled}
-          className="h-11 rounded-2xl border border-zinc-200 px-3"
+          className="h-11 rounded-lg border border-zinc-200 px-3"
         />
 
         <textarea
@@ -249,13 +249,13 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
           onChange={(e) => setNotes(e.target.value)}
           placeholder="Notas"
           disabled={!stockEnabled}
-          className="min-h-[110px] rounded-2xl border border-zinc-200 p-3 lg:col-span-2"
+          className="min-h-[110px] rounded-lg border border-zinc-200 p-3 lg:col-span-2"
         />
 
         <button
           type="submit"
           disabled={!stockEnabled || saving}
-          className="flex min-h-[110px] items-center justify-center gap-2 rounded-2xl bg-zinc-950 px-5 font-bold text-white disabled:opacity-50"
+          className="flex min-h-[110px] items-center justify-center gap-2 rounded-lg bg-zinc-950 px-5 font-bold text-white disabled:opacity-50"
         >
           <PackagePlus size={18} />
           {saving ? "Guardando..." : "Crear insumo"}
@@ -263,11 +263,11 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
       </form>
 
       {loading ? (
-        <div className="rounded-3xl border border-zinc-200 p-5 text-zinc-500">
+        <div className="rounded-xl border border-zinc-200 p-5 text-zinc-500">
           Cargando stock...
         </div>
       ) : items.length === 0 ? (
-        <div className="rounded-3xl border border-dashed border-zinc-300 p-8 text-center text-zinc-500">
+        <div className="rounded-xl border border-dashed border-zinc-300 p-8 text-center text-zinc-500">
           Todavía no hay insumos cargados.
         </div>
       ) : (
@@ -280,12 +280,12 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
             return (
               <div
                 key={item.id}
-                className="rounded-3xl border border-zinc-200 p-4"
+                className="rounded-xl border border-zinc-200 p-4"
               >
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-lg font-black text-zinc-950">
+                      <h3 className="text-lg font-bold text-zinc-950">
                         {item.name}
                       </h3>
 
@@ -309,14 +309,14 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm font-semibold text-zinc-700">
+                    <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm font-semibold text-zinc-700">
                       {item.currentQuantity} {item.unit}
                     </div>
 
                     <button
                       disabled={!stockEnabled}
                       onClick={() => addStock(restaurantId, item, 1)}
-                      className="h-10 rounded-2xl border border-zinc-200 px-4 font-semibold text-zinc-900 disabled:opacity-50"
+                      className="h-10 rounded-lg border border-zinc-200 px-4 font-semibold text-zinc-900 disabled:opacity-50"
                     >
                       +1
                     </button>
@@ -324,7 +324,7 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
                     <button
                       disabled={!stockEnabled}
                       onClick={() => removeStock(restaurantId, item, 1)}
-                      className="h-10 rounded-2xl border border-zinc-200 px-4 font-semibold text-zinc-900 disabled:opacity-50"
+                      className="h-10 rounded-lg border border-zinc-200 px-4 font-semibold text-zinc-900 disabled:opacity-50"
                     >
                       -1
                     </button>
@@ -338,7 +338,7 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
                           !item.active
                         )
                       }
-                      className="flex h-10 items-center gap-2 rounded-2xl bg-zinc-950 px-4 font-semibold text-white disabled:opacity-50"
+                      className="flex h-10 items-center gap-2 rounded-lg bg-zinc-950 px-4 font-semibold text-white disabled:opacity-50"
                     >
                       {item.active ? (
                         <>

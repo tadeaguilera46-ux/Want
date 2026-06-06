@@ -44,8 +44,8 @@ const SuperAdminGuard = ({ children }: Props) => {
   if (user && !hasClaim) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
-        <div className="rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm">
-          <p className="text-lg font-black text-zinc-950">Acceso denegado</p>
+        <div className="rounded-xl border border-red-200 bg-white p-6 text-center shadow-sm">
+          <p className="text-lg font-bold text-zinc-950">Acceso denegado</p>
           <p className="mt-2 text-sm text-zinc-500">
             No tenés permisos para acceder a esta sección.
           </p>

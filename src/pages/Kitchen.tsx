@@ -372,8 +372,8 @@ const Kitchen = () => {
   if (!restaurantId) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100 px-6">
-        <div className="rounded-3xl border border-red-200 bg-white p-6 text-center shadow-sm">
-          <h1 className="text-lg font-black text-slate-950">
+        <div className="rounded-xl border border-red-200 bg-white p-6 text-center shadow-sm">
+          <h1 className="text-lg font-bold text-slate-950">
             Falta restaurante activo
           </h1>
           <p className="mt-2 text-sm text-slate-600">
@@ -390,12 +390,12 @@ const Kitchen = () => {
         <div className="mx-auto max-w-[1800px] px-4 py-4 md:px-6 lg:px-8">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex items-start gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white shadow-sm">
                 <ChefHat size={22} />
               </div>
 
               <div>
-                <h1 className="text-2xl font-black tracking-tight text-slate-950 md:text-3xl">
+                <h1 className="text-2xl font-bold tracking-tight text-slate-950 md:text-3xl">
                   Cocina
                 </h1>
                 <p className="text-sm text-slate-500 md:text-base">
@@ -409,7 +409,7 @@ const Kitchen = () => {
               </div>
             </div>
             <div
-              className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-2 text-sm font-black shadow-sm ${
+              className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-bold shadow-sm ${
                 isWakeLockActive
                   ? "border-blue-200 bg-blue-50 text-blue-700"
                   : "border-zinc-200 bg-white text-zinc-500"
@@ -429,7 +429,7 @@ const Kitchen = () => {
             </div>
             <div className="flex flex-col gap-3 xl:items-end">
               <div
-                className={`flex items-center justify-center gap-2 rounded-2xl border px-4 py-2 text-sm font-black shadow-sm ${
+                className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-bold shadow-sm ${
                   isOnline
                     ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                     : "border-red-200 bg-red-50 text-red-700"
@@ -447,45 +447,45 @@ const Kitchen = () => {
                 <button
                 onClick={handleLogout}
                 disabled={loggingOut}
-                className="flex h-11 items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex h-11 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 font-semibold text-slate-900 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <LogOut size={16} />
                 {loggingOut ? "Cerrando..." : "Cerrar sesión"}
               </button>
 
               <div className="grid grid-cols-2 gap-2 md:grid-cols-4 md:gap-3">
-                <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                  <p className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500">
+                <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                     Activos
                   </p>
-                  <p className="mt-1 text-2xl font-black text-slate-950">
+                  <p className="mt-1 text-2xl font-bold text-slate-950">
                     {stats.activos}
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 shadow-sm">
-                  <p className="text-[11px] font-extrabold uppercase tracking-wide text-red-600">
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 shadow-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-red-600">
                     Pendientes
                   </p>
-                  <p className="mt-1 text-2xl font-black text-red-700">
+                  <p className="mt-1 text-2xl font-bold text-red-700">
                     {stats.pendientes}
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm">
-                  <p className="text-[11px] font-extrabold uppercase tracking-wide text-amber-700">
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 shadow-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-700">
                     Preparando
                   </p>
-                  <p className="mt-1 text-2xl font-black text-amber-800">
+                  <p className="mt-1 text-2xl font-bold text-amber-800">
                     {stats.preparando}
                   </p>
                 </div>
 
-                <div className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 shadow-sm">
-                  <p className="text-[11px] font-extrabold uppercase tracking-wide text-orange-700">
+                <div className="rounded-lg border border-orange-200 bg-orange-50 px-4 py-3 shadow-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-orange-700">
                     Urgentes
                   </p>
-                  <p className="mt-1 text-2xl font-black text-orange-800">
+                  <p className="mt-1 text-2xl font-bold text-orange-800">
                     {stats.urgentes}
                   </p>
                 </div>
@@ -497,24 +497,24 @@ const Kitchen = () => {
 
       <main className="mx-auto max-w-[1800px] px-4 py-4 md:px-6 md:py-6 lg:px-8">
         {!isOnline && (
-          <div className="mb-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+          <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
             Sin conexión. Estás viendo datos guardados localmente. Las acciones quedan deshabilitadas hasta reconectar.
           </div>
         )}
         {!soundEnabled && (
-          <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
+          <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900">
             Tocá la pantalla una vez para habilitar las notificaciones sonoras.
           </div>
         )}
 
         {error && (
-          <div className="mb-4 rounded-2xl border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+          <div className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
             {error}
           </div>
         )}
 
         {pedidosVisibles.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-8 py-14 text-center shadow-sm">
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white px-8 py-14 text-center shadow-sm">
             <p className="text-lg font-semibold text-slate-700">
               No hay pedidos de cocina activos
             </p>
@@ -537,7 +537,7 @@ const Kitchen = () => {
                 <div
                   key={p.id}
                   className={[
-                    "rounded-3xl border border-slate-200 border-l-4 bg-white p-5 shadow-sm transition-all duration-200",
+                    "rounded-xl border border-slate-200 border-l-4 bg-white p-5 shadow-sm transition-all duration-200",
                     getCardStylesByEstado(estadoActual),
                     isNew ? "ring-2 ring-orange-300" : "",
                     urgente ? "shadow-md" : "",
@@ -546,12 +546,12 @@ const Kitchen = () => {
                   <div className="mb-4 flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-2xl font-black tracking-tight text-slate-950">
+                        <p className="text-2xl font-bold tracking-tight text-slate-950">
                           Mesa {p.mesa}
                         </p>
 
                         {isNew && (
-                          <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide text-white">
+                          <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
                             Nuevo
                           </span>
                         )}
@@ -559,7 +559,7 @@ const Kitchen = () => {
 
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <span
-                          className={`inline-flex rounded-full px-3 py-1.5 text-xs font-extrabold uppercase tracking-wide ${getBadgeStylesByEstado(
+                          className={`inline-flex rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide ${getBadgeStylesByEstado(
                             estadoActual
                           )}`}
                         >
@@ -594,23 +594,23 @@ const Kitchen = () => {
                       return (
                         <div
                           key={`${item.nombre}-${observation || "sin-observacion"}-${i}`}
-                          className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3"
+                          className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
-                              <p className="text-lg font-extrabold leading-tight text-slate-950 break-words">
+                              <p className="text-lg font-semibold leading-tight text-slate-950 break-words">
                                 {item.nombre}
                               </p>
                             </div>
 
-                            <div className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base font-black text-slate-900">
+                            <div className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base font-bold text-slate-900">
                               x{item.cantidad}
                             </div>
                           </div>
 
                           {hasObservation && (
                             <div className="mt-3 rounded-xl border border-amber-300 bg-amber-100 px-3 py-2.5">
-                              <p className="mb-1 text-[11px] font-extrabold uppercase tracking-wide text-amber-900">
+                              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
                                 OBS
                               </p>
                               <p className="text-sm font-semibold leading-snug text-amber-950 break-words">
@@ -627,7 +627,7 @@ const Kitchen = () => {
                     <button
                       onClick={() => cambiarEstado(p.id, next)}
                       disabled={isLoading || !isOnline}
-                      className={`mt-5 flex h-12 w-full items-center justify-center rounded-2xl px-4 text-base font-extrabold text-white transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
+                      className={`mt-5 flex h-12 w-full items-center justify-center rounded-lg px-4 text-base font-semibold text-white transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
                         next === "preparando"
                           ? "bg-slate-950 hover:opacity-90"
                           : "bg-emerald-600 hover:opacity-90"
