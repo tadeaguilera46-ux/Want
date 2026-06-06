@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bell, Check, ChevronRight, Receipt, ShoppingCart, X } from "lucide-react";
@@ -39,40 +39,33 @@ const mergeObservations = (manualNote: string, automaticNote: string) => {
   return parts.join(" · ");
 };
 
-const MenuSkeleton = () => {
-  return (
-    <div className="animate-pulse space-y-5">
-      {[1, 2, 3].map((item) => (
-        <div
-          key={item}
-          className="overflow-hidden rounded-[30px] border border-black/5 bg-white shadow-[0_12px_30px_-16px_rgba(0,0,0,0.22)]"
-        >
-          <div className="aspect-[16/10] w-full bg-zinc-200" />
-          <div className="space-y-3 p-4">
-            <div className="h-5 w-2/3 rounded-full bg-zinc-200" />
-            <div className="h-4 w-full rounded-full bg-zinc-100" />
-            <div className="h-4 w-4/5 rounded-full bg-zinc-100" />
-            <div className="flex items-center justify-between pt-3">
-              <div className="h-10 w-28 rounded-lg bg-zinc-100" />
-              <div className="h-11 w-11 rounded-full bg-zinc-200" />
-            </div>
+const MenuSkeleton = () => (
+  <div className="animate-pulse space-y-5">
+    {[1, 2, 3].map((item) => (
+      <div
+        key={item}
+        className="overflow-hidden rounded-[30px] border border-black/5 bg-white shadow-[0_12px_30px_-16px_rgba(0,0,0,0.22)]"
+      >
+        <div className="aspect-[16/10] w-full bg-zinc-200" />
+        <div className="space-y-3 p-4">
+          <div className="h-5 w-2/3 rounded-full bg-zinc-200" />
+          <div className="h-4 w-full rounded-full bg-zinc-100" />
+          <div className="flex items-center justify-between pt-3">
+            <div className="h-10 w-28 rounded-lg bg-zinc-100" />
+            <div className="h-11 w-11 rounded-full bg-zinc-200" />
           </div>
         </div>
-      ))}
-    </div>
-  );
-};
+      </div>
+    ))}
+  </div>
+);
 
 const Menu = () => {
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const navigate = useNavigate();
 
-  const { table, restaurantId } = resolveRuntimeContext({
-    searchParams,
-    location,
-  });
-
+  const { table, restaurantId } = resolveRuntimeContext({ searchParams, location });
   const tableNumber = parseTableNumber(table);
   const { config } = useRestaurantConfig(restaurantId);
 
@@ -82,7 +75,7 @@ const Menu = () => {
     categories,
     activeCategory,
     setActiveCategory,
-    filteredItems,
+    allItems,
   } = useMenuData(restaurantId);
 
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
@@ -97,8 +90,7 @@ const Menu = () => {
 
   const primaryColor = config.primaryColor || "#000000";
   const secondaryColor = config.secondaryColor || "#FFFFFF";
-  const pageBackground =
-    secondaryColor === "#FFFFFF" ? "#f6f4ef" : secondaryColor;
+  const pageBackground = secondaryColor === "#FFFFFF" ? "#f6f4ef" : secondaryColor;
 
   const restaurantName = config.name || "Restaurante";
   const logoUrl = config.logoUrl || "";
@@ -108,9 +100,18 @@ const Menu = () => {
   const [coverError, setCoverError] = useState(false);
   const [logoError, setLogoError] = useState(false);
 
+  // Refs for scroll spy
+  const sectionRefs = useRef<Record<string, HTMLElement | null>>({});
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const tabsContainerRef = useRef<HTMLDivElement>(null);
+  const topbarRef = useRef<HTMLDivElement>(null);
+  const tabsBarRef = useRef<HTMLDivElement>(null);
+  const isScrollingByClick = useRef(false);
+
   useEffect(() => { setCoverError(false); }, [coverUrl]);
   useEffect(() => { setLogoError(false); }, [logoUrl]);
 
+  // Session initialization
   useEffect(() => {
     let isMounted = true;
 
@@ -119,15 +120,9 @@ const Menu = () => {
         setIsInitializingSession(true);
         setSessionError(null);
 
-        const storedSessionId = getStoredTableSessionId({
-          restaurantId,
-          table: tableNumber,
-        });
-
+        const storedSessionId = getStoredTableSessionId({ restaurantId, table: tableNumber });
         if (!storedSessionId) {
-          throw new Error(
-            "Para abrir esta mesa tenés que escanear el QR nuevamente."
-          );
+          throw new Error("Para abrir esta mesa tenés que escanear el QR nuevamente.");
         }
 
         const mesa = await getMesa(restaurantId, tableNumber);
@@ -139,67 +134,42 @@ const Menu = () => {
           session?.status === "active";
 
         if (!isStillValid) {
-          clearStoredTableSessionId({
-            restaurantId,
-            table: tableNumber,
-          });
-
-          throw new Error(
-            "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
-          );
+          clearStoredTableSessionId({ restaurantId, table: tableNumber });
+          throw new Error("Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR.");
         }
 
         if (session?.ordersLocked === true) {
-          throw new Error(
-            "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa."
-          );
+          throw new Error("La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa.");
         }
       } catch (error) {
         console.error("Error inicializando sesión de mesa:", error);
-
         if (isMounted) {
           setSessionError(
-            error instanceof Error
-              ? error.message
-              : "No se pudo inicializar la sesión de la mesa"
+            error instanceof Error ? error.message : "No se pudo inicializar la sesión de la mesa"
           );
         }
       } finally {
-        if (isMounted) {
-          setIsInitializingSession(false);
-        }
+        if (isMounted) setIsInitializingSession(false);
       }
     };
 
     void initializeMesaSession();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [restaurantId, tableNumber]);
 
+  // Re-validate session on page return
   useEffect(() => {
     const validateOnReturn = async () => {
       try {
-        const storedSessionId = getStoredTableSessionId({
-          restaurantId,
-          table: tableNumber,
-        });
-
+        const storedSessionId = getStoredTableSessionId({ restaurantId, table: tableNumber });
         if (!storedSessionId) return;
 
         const session = await getSessionById(restaurantId, storedSessionId);
-
         if (session?.ordersLocked === true) {
-          setSessionError(
-            "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa."
-          );
+          setSessionError("La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa.");
         }
-
         if (!session || session.status !== "active") {
-          setSessionError(
-            "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
-          );
+          setSessionError("Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR.");
         }
       } catch (error) {
         console.error("Error revalidando sesión al volver:", error);
@@ -207,11 +177,8 @@ const Menu = () => {
     };
 
     const handlePageShow = () => void validateOnReturn();
-
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        void validateOnReturn();
-      }
+      if (document.visibilityState === "visible") void validateOnReturn();
     };
 
     window.addEventListener("pageshow", handlePageShow);
@@ -223,58 +190,95 @@ const Menu = () => {
     };
   }, [restaurantId, tableNumber]);
 
+  // Scroll spy — updates active category as user scrolls
+  useEffect(() => {
+    if (!categories.length) return;
+
+    const handleScroll = () => {
+      if (isScrollingByClick.current) return;
+
+      const topbarH = topbarRef.current?.offsetHeight ?? 56;
+      const tabsH = tabsBarRef.current?.offsetHeight ?? 48;
+      const triggerY = window.scrollY + topbarH + tabsH + 24;
+
+      let current = categories[0].key;
+      for (const cat of categories) {
+        const el = sectionRefs.current[cat.key];
+        if (!el) continue;
+        if (el.offsetTop <= triggerY) {
+          current = cat.key;
+        }
+      }
+
+      setActiveCategory(current);
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [categories, setActiveCategory]);
+
+  // Auto-scroll the tabs strip to keep active tab visible
+  useEffect(() => {
+    const btn = tabRefs.current[activeCategory];
+    const container = tabsContainerRef.current;
+    if (!btn || !container) return;
+
+    const btnLeft = btn.offsetLeft;
+    const btnWidth = btn.offsetWidth;
+    const containerScrollLeft = container.scrollLeft;
+    const containerWidth = container.offsetWidth;
+
+    if (btnLeft < containerScrollLeft + 16) {
+      container.scrollTo({ left: btnLeft - 16, behavior: "smooth" });
+    } else if (btnLeft + btnWidth > containerScrollLeft + containerWidth - 16) {
+      container.scrollTo({ left: btnLeft + btnWidth - containerWidth + 16, behavior: "smooth" });
+    }
+  }, [activeCategory]);
+
+  // Click a category tab → smooth scroll to that section
+  const scrollToCategory = (key: string) => {
+    setActiveCategory(key);
+    const el = sectionRefs.current[key];
+    if (!el) return;
+
+    isScrollingByClick.current = true;
+    const topbarH = topbarRef.current?.offsetHeight ?? 56;
+    const tabsH = tabsBarRef.current?.offsetHeight ?? 48;
+    const targetY = el.offsetTop - topbarH - tabsH - 8;
+    window.scrollTo({ top: targetY, behavior: "smooth" });
+
+    // Re-enable scroll spy after smooth scroll finishes
+    setTimeout(() => { isScrollingByClick.current = false; }, 900);
+  };
+
+  // Items helpers
+  const getItemsForCategory = (categoryKey: string) =>
+    allItems.filter((item) => getDisplayCategory(item) === categoryKey);
+
   const getAutomaticObservation = (item: MenuItem) => {
-    // Sin stock cargado (cliente anónimo) no hay información real de faltantes.
-    // create-order.ts agrega la observación correcta al momento de confirmar.
     if (stockItems.length === 0) return "";
-
-    const availability = getMenuItemAvailability({
-      ingredients: item.ingredients,
-      stockItems,
-    });
-
-    return buildMissingOptionalObservation(
-      availability.missingOptionalIngredients
-    );
+    const availability = getMenuItemAvailability({ ingredients: item.ingredients, stockItems });
+    return buildMissingOptionalObservation(availability.missingOptionalIngredients);
   };
 
   const canAddQuantity = (item: MenuItem) => {
-    if (sessionError) {
-      alert(sessionError);
-      return false;
-    }
-
-    const availability = getMenuItemAvailability({
-      ingredients: item.ingredients,
-      stockItems,
-    });
-
+    if (sessionError) { alert(sessionError); return false; }
+    const availability = getMenuItemAvailability({ ingredients: item.ingredients, stockItems });
     const currentQuantity = getQuantity(item.id);
     const maxQuantity = availability.maxQuantity;
-
     if (maxQuantity !== null && currentQuantity >= maxQuantity) {
       toast.error(`Nos quedan ${maxQuantity} ${item.name} en stock.`);
       return false;
     }
-
     return true;
   };
 
   const confirmOptionalMissing = (item: MenuItem) => {
-    // Sin stock cargado (cliente anónimo) no podemos saber qué falta realmente.
     if (stockItems.length === 0) return true;
-
-    const availability = getMenuItemAvailability({
-      ingredients: item.ingredients,
-      stockItems,
-    });
-
+    const availability = getMenuItemAvailability({ ingredients: item.ingredients, stockItems });
     if (availability.missingOptionalIngredients.length === 0) return true;
-
     return window.confirm(
-      `No tenemos ${availability.missingOptionalIngredients.join(
-        ", "
-      )}. ¿Querés pedir igual ${item.name}?`
+      `No tenemos ${availability.missingOptionalIngredients.join(", ")}. ¿Querés pedir igual ${item.name}?`
     );
   };
 
@@ -310,29 +314,18 @@ const Menu = () => {
     setNote("");
   };
 
-  const closeNoteModal = () => {
-    setSelectedItem(null);
-    setNote("");
-  };
+  const closeNoteModal = () => { setSelectedItem(null); setNote(""); };
 
   const handleAddWithoutNote = (item: MenuItem) => {
     if (!canAddQuantity(item)) return;
     if (!confirmOptionalMissing(item)) return;
-
     const automaticObservation = getAutomaticObservation(item);
-
     addToCart({
-      id: item.id,
-      nombre: item.name,
-      name: item.name,
-      precio: item.price,
-      price: item.price,
-      cantidad: 1,
-      category: getItemType(item),
-      displayCategory: getDisplayCategory(item),
+      id: item.id, nombre: item.name, name: item.name,
+      precio: item.price, price: item.price, cantidad: 1,
+      category: getItemType(item), displayCategory: getDisplayCategory(item),
       observacion: automaticObservation,
-      description: item.description || "",
-      image: item.image || "",
+      description: item.description || "", image: item.image || "",
       ingredients: item.ingredients || [],
     } as any);
   };
@@ -341,51 +334,33 @@ const Menu = () => {
     if (!selectedItem) return;
     if (!canAddQuantity(selectedItem)) return;
     if (!confirmOptionalMissing(selectedItem)) return;
-
     const automaticObservation = getAutomaticObservation(selectedItem);
     const finalObservation = mergeObservations(note, automaticObservation);
-
     addToCart({
-      id: selectedItem.id,
-      nombre: selectedItem.name,
-      name: selectedItem.name,
-      precio: selectedItem.price,
-      price: selectedItem.price,
-      cantidad: 1,
-      category: getItemType(selectedItem),
-      displayCategory: getDisplayCategory(selectedItem),
+      id: selectedItem.id, nombre: selectedItem.name, name: selectedItem.name,
+      precio: selectedItem.price, price: selectedItem.price, cantidad: 1,
+      category: getItemType(selectedItem), displayCategory: getDisplayCategory(selectedItem),
       observacion: finalObservation,
-      description: selectedItem.description || "",
-      image: selectedItem.image || "",
+      description: selectedItem.description || "", image: selectedItem.image || "",
       ingredients: selectedItem.ingredients || [],
     } as any);
-
     closeNoteModal();
   };
 
+  // Loading / error states
   if (isInitializingSession) {
     return (
-      <div
-        className="flex min-h-screen items-center justify-center px-6"
-        style={{ backgroundColor: pageBackground }}
-      >
-        <p className="text-sm font-semibold text-zinc-500">
-          Inicializando mesa...
-        </p>
+      <div className="flex min-h-screen items-center justify-center px-6" style={{ backgroundColor: pageBackground }}>
+        <p className="text-sm font-semibold text-zinc-500">Inicializando mesa...</p>
       </div>
     );
   }
 
   if (sessionError) {
     return (
-      <div
-        className="flex min-h-screen items-center justify-center px-6"
-        style={{ backgroundColor: pageBackground }}
-      >
+      <div className="flex min-h-screen items-center justify-center px-6" style={{ backgroundColor: pageBackground }}>
         <div className="w-full max-w-md rounded-xl border border-red-200 bg-white p-6 text-center shadow-sm">
-          <h1 className="text-lg font-bold text-zinc-950">
-            No se pudo abrir la mesa
-          </h1>
+          <h1 className="text-lg font-bold text-zinc-950">No se pudo abrir la mesa</h1>
           <p className="mt-2 text-sm text-zinc-600">{sessionError}</p>
         </div>
       </div>
@@ -393,107 +368,109 @@ const Menu = () => {
   }
 
   return (
-    <div
-      className="min-h-screen pb-32"
-      style={{ backgroundColor: pageBackground }}
-    >
-      <div className="mx-auto w-full max-w-lg">
-        <header
-          className="sticky top-0 z-40 border-b border-black/5 backdrop-blur"
-          style={{ backgroundColor: `${pageBackground}F2` }}
-        >
-          <div className="px-4 pb-2 pt-[max(12px,env(safe-area-inset-top))]">
-            <div className="flex items-center justify-between gap-3">
-              <div
-                className="rounded-full px-3 py-1.5 text-xs font-bold text-white shadow-sm"
-                style={{ backgroundColor: primaryColor }}
-              >
-                Mesa {table}
+    <div className="min-h-screen pb-32" style={{ backgroundColor: pageBackground }}>
+
+      {/* ── Fixed top bar ─────────────────────────────────── */}
+      <div
+        ref={topbarRef}
+        className="fixed left-0 right-0 top-0 z-50 border-b border-black/5 backdrop-blur"
+        style={{ backgroundColor: `${pageBackground}F2` }}
+      >
+        <div className="mx-auto flex w-full max-w-lg items-center justify-between gap-3 px-4 pb-2 pt-[max(10px,env(safe-area-inset-top))]">
+          <div
+            className="rounded-full px-3 py-1.5 text-xs font-bold text-white shadow-sm"
+            style={{ backgroundColor: primaryColor }}
+          >
+            Mesa {table}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setAssistOpen(true); setAssistSent(null); }}
+              className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition-all hover:opacity-80 active:scale-[0.97]"
+              style={{ color: primaryColor, borderColor: primaryColor, backgroundColor: `${primaryColor}12` }}
+            >
+              <Bell size={14} />
+              Asistencia
+            </button>
+
+            <button
+              onClick={() =>
+                navigate(`/bill?restaurantId=${restaurantId}&table=${table}&total=${total}`, {
+                  state: { table, restaurantId },
+                })
+              }
+              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white shadow-want transition-all hover:scale-[1.03] active:scale-[0.98]"
+              style={{ backgroundColor: primaryColor }}
+            >
+              <Receipt size={16} />
+              Pedir cuenta
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Scrollable content ────────────────────────────── */}
+      <div className="mx-auto w-full max-w-lg pt-14">
+        {/* Hero — scrolls away */}
+        <div className="px-4 pb-0 pt-3">
+          <div className="overflow-hidden rounded-[24px] border border-black/5 bg-white shadow-[0_8px_24px_-14px_rgba(0,0,0,0.18)]">
+            {coverUrl && !coverError ? (
+              <div className="h-[150px] w-full overflow-hidden bg-zinc-100 sm:h-[184px]">
+                <img
+                  src={coverUrl}
+                  alt={restaurantName}
+                  loading="lazy"
+                  decoding="async"
+                  onError={() => setCoverError(true)}
+                  className="h-full w-full object-cover"
+                />
               </div>
+            ) : (
+              <div className="h-[150px] w-full sm:h-[184px]" style={{ backgroundColor: primaryColor }} />
+            )}
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => { setAssistOpen(true); setAssistSent(null); }}
-                  className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold shadow-sm transition-all hover:opacity-80 active:scale-[0.97]"
-                  style={{ color: primaryColor, borderColor: primaryColor, backgroundColor: `${primaryColor}12` }}
-                >
-                  <Bell size={14} />
-                  Asistencia
-                </button>
-
-                <button
-                  onClick={() =>
-                    navigate(
-                      `/bill?restaurantId=${restaurantId}&table=${table}&total=${total}`,
-                      { state: { table, restaurantId } }
-                    )
-                  }
-                  className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold text-white shadow-want transition-all hover:scale-[1.03] active:scale-[0.98]"
-                  style={{ backgroundColor: primaryColor }}
-                >
-                  <Receipt size={16} />
-                  Pedir cuenta
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-3 overflow-hidden rounded-[24px] border border-black/5 bg-white shadow-[0_8px_24px_-14px_rgba(0,0,0,0.18)]">
-              {coverUrl && !coverError ? (
-                <div className="h-[150px] w-full overflow-hidden bg-zinc-100 sm:h-[184px]">
+            <div className="flex items-center gap-3 px-4 py-2.5">
+              {logoUrl && !logoError && (
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-black/5 bg-white shadow-sm">
                   <img
-                    src={coverUrl}
+                    src={logoUrl}
                     alt={restaurantName}
                     loading="lazy"
                     decoding="async"
-                    onError={() => setCoverError(true)}
-                    className="h-full w-full object-cover"
+                    onError={() => setLogoError(true)}
+                    className="h-full w-full object-contain"
                   />
                 </div>
-              ) : (
-                <div
-                  className="h-[150px] w-full sm:h-[184px]"
-                  style={{ backgroundColor: primaryColor }}
-                />
               )}
-
-              <div className="flex items-center gap-3 px-4 py-2.5">
-                {logoUrl && !logoError && (
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-black/5 bg-white shadow-sm">
-                    <img
-                      src={logoUrl}
-                      alt={restaurantName}
-                      loading="lazy"
-                      decoding="async"
-                      onError={() => setLogoError(true)}
-                      className="h-full w-full object-contain"
-                    />
-                  </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-zinc-500">Menú digital</p>
+                <h1 className="mt-0.5 truncate text-xl font-bold leading-tight tracking-tight text-zinc-950">
+                  {restaurantName}
+                </h1>
+                {welcomeMessage && (
+                  <p className="mt-0.5 truncate text-sm leading-tight text-zinc-500">{welcomeMessage}</p>
                 )}
-
-                <div className="min-w-0 flex-1">
-                  <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
-                    Menú digital
-                  </p>
-
-                  <h1 className="mt-0.5 truncate text-xl font-bold leading-tight tracking-tight text-zinc-950">
-                    {restaurantName}
-                  </h1>
-
-                  {welcomeMessage && (
-                    <p className="mt-0.5 truncate text-sm leading-tight text-zinc-500">
-                      {welcomeMessage}
-                    </p>
-                  )}
-                </div>
               </div>
             </div>
           </div>
+        </div>
 
-          <div className="no-scrollbar flex gap-2 overflow-x-auto px-4 pb-2 pt-0">
+        {/* Sticky category tabs — stick just below the fixed topbar */}
+        <div
+          ref={tabsBarRef}
+          className="sticky top-14 z-40 border-b border-black/5 backdrop-blur"
+          style={{ backgroundColor: `${pageBackground}F2` }}
+        >
+          <div
+            ref={tabsContainerRef}
+            className="no-scrollbar flex gap-2 overflow-x-auto px-4 py-2"
+          >
             {categories.map((category) => (
               <button
                 key={category.key}
-                onClick={() => setActiveCategory(category.key)}
+                ref={(el) => { tabRefs.current[category.key] = el; }}
+                onClick={() => scrollToCategory(category.key)}
                 className={`relative inline-flex h-9 shrink-0 items-center rounded-full px-4 text-sm font-semibold transition-colors ${
                   activeCategory === category.key
                     ? "text-white"
@@ -512,59 +489,71 @@ const Menu = () => {
               </button>
             ))}
           </div>
-        </header>
+        </div>
 
+        {/* All items grouped by category */}
         <main className="px-4 py-4">
           {loading ? (
             <MenuSkeleton />
-          ) : filteredItems.length === 0 ? (
+          ) : allItems.length === 0 ? (
             <div className="rounded-xl border border-black/5 bg-white p-6 text-center shadow-sm">
-              <p className="font-bold text-zinc-950">
-                No hay productos disponibles
-              </p>
-              <p className="mt-1 text-sm text-zinc-500">
-                Probá otra categoría o consultá al staff.
-              </p>
+              <p className="font-bold text-zinc-950">No hay productos disponibles</p>
+              <p className="mt-1 text-sm text-zinc-500">Consultá al staff.</p>
             </div>
           ) : (
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={activeCategory}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.18 }}
-                className="space-y-5"
-              >
-                {filteredItems.map((item) => {
-                  const quantity = getQuantity(item.id);
-                  const tags = getItemTags(item);
+            <div className="space-y-8">
+              {categories.map((cat) => {
+                const items = getItemsForCategory(cat.key);
+                if (items.length === 0) return null;
 
-                  const availability = getMenuItemAvailability({
-                    ingredients: item.ingredients,
-                    stockItems,
-                  });
+                return (
+                  <section
+                    key={cat.key}
+                    ref={(el) => { sectionRefs.current[cat.key] = el; }}
+                    data-category={cat.key}
+                  >
+                    {/* Category heading */}
+                    <div className="mb-3 flex items-center gap-3">
+                      <h2 className="text-base font-bold tracking-tight text-zinc-950">
+                        {cat.label}
+                      </h2>
+                      <div className="h-px flex-1 bg-black/8" />
+                      <span className="text-xs font-medium text-zinc-400">{items.length}</span>
+                    </div>
 
-                  return (
-                    <MenuItemCard
-                      key={item.id}
-                      item={item}
-                      quantity={quantity}
-                      tags={tags}
-                      availability={availability}
-                      primaryColor={primaryColor}
-                      formatPrice={formatPriceARS}
-                      onAdd={handleAddWithoutNote}
-                      onNote={openNoteModal}
-                    />
-                  );
-                })}
-              </motion.div>
-            </AnimatePresence>
+                    <div className="space-y-5">
+                      {items.map((item) => {
+                        const quantity = getQuantity(item.id);
+                        const tags = getItemTags(item);
+                        const availability = getMenuItemAvailability({
+                          ingredients: item.ingredients,
+                          stockItems,
+                        });
+
+                        return (
+                          <MenuItemCard
+                            key={item.id}
+                            item={item}
+                            quantity={quantity}
+                            tags={tags}
+                            availability={availability}
+                            primaryColor={primaryColor}
+                            formatPrice={formatPriceARS}
+                            onAdd={handleAddWithoutNote}
+                            onNote={openNoteModal}
+                          />
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
           )}
         </main>
       </div>
 
+      {/* Cart button */}
       {totalItems > 0 && (
         <div className="pointer-events-none fixed inset-x-0 bottom-0 z-50 px-4 pb-[max(16px,env(safe-area-inset-bottom))]">
           <div className="mx-auto max-w-lg">
@@ -586,15 +575,11 @@ const Menu = () => {
                     {totalItems}
                   </span>
                 </div>
-
                 <div className="text-left">
                   <p className="text-sm font-semibold">Ver pedido</p>
-                  <p className="text-xs text-white/70">
-                    Total: {formatPriceARS(total)}
-                  </p>
+                  <p className="text-xs text-white/70">Total: {formatPriceARS(total)}</p>
                 </div>
               </div>
-
               <ChevronRight size={18} />
             </motion.button>
           </div>
@@ -622,23 +607,15 @@ const Menu = () => {
                   <div className="flex h-12 w-12 items-center justify-center rounded-full border border-zinc-200 bg-zinc-50">
                     <Check size={20} className="text-zinc-700" />
                   </div>
-                  <p className="mt-3 text-base font-bold text-zinc-950">
-                    Solicitud enviada
-                  </p>
-                  <p className="mt-1 text-sm text-zinc-500">
-                    En un momento viene el mozo.
-                  </p>
+                  <p className="mt-3 text-base font-bold text-zinc-950">Solicitud enviada</p>
+                  <p className="mt-1 text-sm text-zinc-500">En un momento viene el mozo.</p>
                 </motion.div>
               ) : (
                 <>
                   <div className="mb-4 flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">
-                        Mesa {table}
-                      </p>
-                      <h2 className="mt-0.5 text-xl font-bold tracking-tight text-zinc-950">
-                        ¿Necesitás algo?
-                      </h2>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-400">Mesa {table}</p>
+                      <h2 className="mt-0.5 text-xl font-bold tracking-tight text-zinc-950">¿Necesitás algo?</h2>
                     </div>
                     <button
                       onClick={() => setAssistOpen(false)}
@@ -647,7 +624,6 @@ const Menu = () => {
                       <X size={16} />
                     </button>
                   </div>
-
                   <div className="space-y-2">
                     {ASSIST_OPTIONS.map((opt) => (
                       <button
@@ -656,9 +632,7 @@ const Menu = () => {
                         onClick={() => void sendAssistance(opt.key)}
                         className="flex w-full items-center justify-between rounded-lg border border-zinc-200 bg-white px-5 py-4 text-left transition hover:bg-zinc-50 active:bg-zinc-100 disabled:opacity-50"
                       >
-                        <span className="text-sm font-semibold text-zinc-800">
-                          {opt.label}
-                        </span>
+                        <span className="text-sm font-semibold text-zinc-800">{opt.label}</span>
                         <ChevronRight size={15} className="shrink-0 text-zinc-400" />
                       </button>
                     ))}
@@ -666,15 +640,12 @@ const Menu = () => {
                 </>
               )}
             </motion.div>
-            <button
-              aria-label="Cerrar"
-              onClick={() => setAssistOpen(false)}
-              className="absolute inset-0 -z-10"
-            />
+            <button aria-label="Cerrar" onClick={() => setAssistOpen(false)} className="absolute inset-0 -z-10" />
           </div>
         )}
       </AnimatePresence>
 
+      {/* Note modal */}
       <AnimatePresence>
         {selectedItem && (
           <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center">
@@ -687,18 +658,12 @@ const Menu = () => {
             >
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                    Observación
-                  </p>
-                  <h2 className="mt-1 text-2xl font-bold tracking-tight text-zinc-950">
-                    {selectedItem.name}
-                  </h2>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Observación</p>
+                  <h2 className="mt-1 text-2xl font-bold tracking-tight text-zinc-950">{selectedItem.name}</h2>
                   <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                    Escribí detalles como ingredientes a quitar, punto de cocción
-                    o preferencias del pedido.
+                    Escribí detalles como ingredientes a quitar, punto de cocción o preferencias del pedido.
                   </p>
                 </div>
-
                 <button
                   onClick={closeNoteModal}
                   className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-zinc-700"
@@ -715,10 +680,7 @@ const Menu = () => {
                 placeholder="Escribí una observación para este producto..."
                 className="w-full rounded-lg border border-zinc-200 p-3 text-sm outline-none transition focus:ring-2 focus:ring-black/10"
               />
-
-              <div className="mt-2 text-right text-xs text-zinc-400">
-                {note.length}/140
-              </div>
+              <div className="mt-2 text-right text-xs text-zinc-400">{note.length}/140</div>
 
               <div className="mt-5 grid grid-cols-2 gap-3">
                 <button
@@ -727,7 +689,6 @@ const Menu = () => {
                 >
                   Cancelar
                 </button>
-
                 <button
                   onClick={handleAddWithNote}
                   className="h-12 rounded-lg font-semibold text-white"
@@ -737,12 +698,7 @@ const Menu = () => {
                 </button>
               </div>
             </motion.div>
-
-            <button
-              aria-label="Close modal"
-              onClick={closeNoteModal}
-              className="absolute inset-0 -z-10"
-            />
+            <button aria-label="Close modal" onClick={closeNoteModal} className="absolute inset-0 -z-10" />
           </div>
         )}
       </AnimatePresence>

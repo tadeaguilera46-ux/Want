@@ -199,5 +199,6 @@ export const useMenuData = (restaurantId: string) => {
     activeCategory,
     setActiveCategory,
     filteredItems,
+    allItems: availableMenuItems,
   };
 };
