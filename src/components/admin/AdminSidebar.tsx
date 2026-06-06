@@ -58,7 +58,7 @@ const navGroups: NavGroup[] = [
     items: [
       { id: "branding", label: "Branding", icon: Brush },
       { id: "staff", label: "Empleados", icon: Users },
-      { id: "afip", label: "Facturación AFIP", icon: FileText },
+      { id: "afip", label: "Facturación", icon: FileText },
       { id: "billing", label: "Suscripción", icon: CreditCard },
     ],
   },

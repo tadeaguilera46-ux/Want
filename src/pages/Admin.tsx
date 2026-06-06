@@ -1355,8 +1355,8 @@ return (
 
           {adminSection === "afip" && (
             <AdminSectionShell
-              title="Facturación electrónica AFIP"
-              description="Conectá el restaurante con AFIP para emitir facturas A, B y C directamente desde la caja."
+              title="Facturación electrónica"
+              description="Conectá el restaurante con ARCA para emitir facturas A, B y C directamente desde la caja."
             >
               <AfipConfigPanel restaurantId={restaurantId} />
             </AdminSectionShell>

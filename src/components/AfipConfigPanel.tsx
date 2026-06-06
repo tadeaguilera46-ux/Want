@@ -18,14 +18,14 @@ type AfipConfig = {
 const db = getDb();
 const functions = getFunctions(undefined, "us-central1");
 
-const STEPS = ["Datos fiscales", "Certificado AFIP", "Activado"];
+const STEPS = ["Datos fiscales", "Certificado ARCA", "Activado"];
 
-const AFIP_INSTRUCTIONS = [
-  "Ingresá a **afip.gob.ar** con tu CUIT y clave fiscal.",
+const ARCA_INSTRUCTIONS = [
+  "Ingresá a **arca.gob.ar** con tu CUIT y clave fiscal.",
   'En el menú, buscá **"Administración de Certificados Digitales"** (o WSASS).',
   "Creá un nuevo certificado para el servicio **wsfe**.",
   'Pegá el texto del CSR en el campo correspondiente y hacé clic en **"Crear"**.',
-  "Descargá el archivo **.crt** que genera AFIP.",
+  "Descargá el archivo **.crt** que genera ARCA.",
   "Subilo acá abajo para activar la facturación.",
 ];
 
@@ -78,7 +78,7 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
       const fn = httpsCallable<unknown, { csrPem: string }>(functions, "afipGenerateCsr");
       const res = await fn({ restaurantId, cuit: rawCuit, puntoVenta: pv, fiscalCondition });
       setCsrPem(res.data.csrPem);
-      toast.success("CSR generado. Ahora pegalo en AFIP.");
+      toast.success("CSR generado. Ahora pegalo en ARCA.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo generar el CSR.");
     } finally {
@@ -90,7 +90,7 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
 
   const handleSaveCertificate = async () => {
     if (!certFile) {
-      toast.error("Seleccioná el archivo .crt que descargaste de AFIP.");
+      toast.error("Seleccioná el archivo .crt que descargaste de ARCA.");
       return;
     }
     const text = await certFile.text();
@@ -102,7 +102,7 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
       setSaving(true);
       const fn = httpsCallable(functions, "afipSaveCertificate");
       await fn({ restaurantId, certificatePem: text });
-      toast.success("¡Facturación AFIP activada!");
+      toast.success("¡Facturación ARCA activada!");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo activar el certificado.");
     } finally {
@@ -115,7 +115,7 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
   };
 
   if (loading) {
-    return <p className="text-sm text-zinc-500">Cargando configuración AFIP...</p>;
+    return <p className="text-sm text-zinc-500">Cargando configuración ARCA...</p>;
   }
 
   return (
@@ -145,7 +145,7 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
           <div>
             <h3 className="font-bold text-zinc-950">Datos fiscales del restaurante</h3>
             <p className="mt-1 text-sm text-zinc-500">
-              Estos datos se usan para generar el certificado digital que AFIP necesita.
+              Estos datos se usan para generar el certificado digital que ARCA necesita.
             </p>
           </div>
 
@@ -161,7 +161,7 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-bold text-zinc-600">Punto de venta en AFIP</label>
+              <label className="mb-1 block text-xs font-bold text-zinc-600">Punto de venta en ARCA</label>
               <input
                 type="number"
                 min={1}
@@ -171,7 +171,7 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
                 placeholder="1"
                 className="h-11 w-full rounded-lg border border-zinc-200 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-black/10"
               />
-              <p className="mt-1 text-xs text-zinc-400">El número que creaste en afip.gob.ar → Puntos de venta</p>
+              <p className="mt-1 text-xs text-zinc-400">El número que creaste en arca.gob.ar → Puntos de venta</p>
             </div>
             <div className="sm:col-span-2">
               <label className="mb-1 block text-xs font-bold text-zinc-600">Condición fiscal</label>
@@ -236,10 +236,10 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
           {/* Instrucciones */}
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-5">
             <h3 className="mb-3 font-bold text-amber-900">
-              {csrPem ? "Ahora pegalo en AFIP:" : "Pasos para configurar en AFIP:"}
+              {csrPem ? "Ahora pegalo en ARCA:" : "Pasos para configurar en ARCA:"}
             </h3>
             <ol className="space-y-2">
-              {AFIP_INSTRUCTIONS.map((step, i) => (
+              {ARCA_INSTRUCTIONS.map((step, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-amber-800">
                   <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-amber-600 text-xs font-bold text-white">
                     {i + 1}
@@ -251,12 +251,12 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
               ))}
             </ol>
             <a
-              href="https://auth.afip.gob.ar/contribuyente_/login.xhtml"
+              href="https://www.arca.gob.ar"
               target="_blank"
               rel="noopener noreferrer"
               className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-amber-600 text-sm font-bold text-white hover:bg-amber-700"
             >
-              Ir a AFIP →
+              Ir a ARCA →
             </a>
           </div>
 
@@ -269,7 +269,7 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
             >
               <Upload size={24} className="text-zinc-400" />
               <p className="text-sm font-semibold text-zinc-600">
-                {certFile ? certFile.name : "Hacé clic para seleccionar el .crt de AFIP"}
+                {certFile ? certFile.name : "Hacé clic para seleccionar el .crt de ARCA"}
               </p>
               <p className="text-xs text-zinc-400">Archivo en formato PEM (.crt)</p>
               <input
@@ -307,7 +307,7 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
             <div>
               <h3 className="font-bold text-emerald-900 text-lg">Facturación electrónica activa</h3>
               <p className="text-sm text-emerald-700 mt-0.5">
-                Want está conectado a AFIP con el certificado del restaurante.
+                Want está conectado a ARCA con el certificado del restaurante.
               </p>
             </div>
           </div>
@@ -330,7 +330,7 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
           <div className="mt-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-white p-3">
             <CheckCircle size={15} className="text-emerald-600 shrink-0" />
             <p className="text-xs text-zinc-600">
-              Los certificados de AFIP duran 2 años. Cuando venzan, repetí el proceso desde el Paso 1.
+              Los certificados de ARCA duran 2 años. Cuando venzan, repetí el proceso desde el Paso 1.
             </p>
           </div>
         </div>
