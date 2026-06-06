@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   collection,
   doc,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
@@ -17,10 +18,12 @@ import {
   ExternalLink,
   FileText,
   Mail,
+  Printer,
   Receipt,
   RotateCcw,
   XCircle,
 } from "lucide-react";
+import QRCode from "qrcode";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getDb } from "../lib/firebase";
 import { useRestaurant } from "../lib/restaurant-context";
@@ -47,6 +50,7 @@ type CuentaInvoice = {
   provider?: "manual" | "arca" | "external";
   invoiceNumber?: string;
   cae?: string;
+  caeExpiry?: string;
   invoiceUrl?: string;
   failureReason?: string;
   issuedAt?: { seconds?: number; toMillis?: () => number };
@@ -119,7 +123,7 @@ const TABS: { key: TabKey; label: string; color: string; activeClass: string }[]
 const CashierInvoices = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { restaurantId: contextRestaurantId } = useRestaurant();
+  const { restaurantId: contextRestaurantId, restaurant } = useRestaurant();
 
   const restaurantId =
     contextRestaurantId || searchParams.get("restaurantId") || "";
@@ -134,6 +138,26 @@ const CashierInvoices = () => {
   const [cae, setCae] = useState("");
   const [invoiceUrl, setInvoiceUrl] = useState("");
   const [failureReason, setFailureReason] = useState("");
+  const [afipConfig, setAfipConfig] = useState<{
+    cuit: string;
+    puntoVenta: number;
+    fiscalCondition: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!restaurantId) return;
+    getDoc(doc(db, "restaurants", restaurantId, "afipConfig", "main"))
+      .then((snap) => {
+        if (!snap.exists()) return;
+        const d = snap.data();
+        setAfipConfig({
+          cuit: d.cuit || "",
+          puntoVenta: d.puntoVenta || 1,
+          fiscalCondition: d.fiscalCondition || "",
+        });
+      })
+      .catch(() => {});
+  }, [restaurantId]);
 
   useEffect(() => {
     if (!restaurantId) return;
@@ -285,6 +309,126 @@ const CashierInvoices = () => {
       console.error(error);
       toast.error("No se pudo reabrir la solicitud.");
     }
+  };
+
+  const printInvoice = async (cuenta: Cuenta) => {
+    const inv = cuenta.invoice;
+    if (!inv || inv.status !== "issued") return;
+
+    const fmt = (n: number) =>
+      new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 2 }).format(n);
+    const fmtDate = (ms: number) =>
+      new Intl.DateTimeFormat("es-AR", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(ms));
+
+    const issuedMs = inv.issuedAt
+      ? typeof inv.issuedAt.toMillis === "function"
+        ? inv.issuedAt.toMillis()
+        : (inv.issuedAt.seconds || 0) * 1000
+      : Date.now();
+
+    const tipoCmpMap: Record<string, number> = { A: 1, B: 6, C: 11 };
+    const tipoCmp = tipoCmpMap[inv.type || "B"] || 6;
+    const tipoDocMap: Record<string, number> = { CUIT: 80, CUIL: 86, DNI: 96 };
+    const tipoDocRec = tipoDocMap[inv.documentType || ""] ?? 99;
+    const nroDocRec =
+      tipoDocRec === 99 ? 0 : parseInt(inv.documentNumber?.replace(/\D/g, "") || "0");
+
+    const ptoVta = afipConfig?.puntoVenta || 1;
+    const cuitNum = parseInt((afipConfig?.cuit || "").replace(/\D/g, ""));
+    const nroCmp = parseInt(String(inv.invoiceNumber || "0"));
+    const nroComprobante = `${String(ptoVta).padStart(4, "0")}-${String(nroCmp).padStart(8, "0")}`;
+
+    const fiscalCondLabel: Record<string, string> = {
+      responsable_inscripto: "Responsable Inscripto",
+      monotributista: "Monotributista",
+      exento: "Exento",
+    };
+
+    let qrImgTag = "";
+    try {
+      const qrPayload = btoa(
+        JSON.stringify({
+          ver: 1,
+          fecha: new Date(issuedMs).toISOString().slice(0, 10),
+          cuit: cuitNum,
+          ptoVta,
+          tipoCmp,
+          nroCmp,
+          importe: cuenta.total,
+          moneda: "PES",
+          ctz: 1,
+          tipoDocRec,
+          nroDocRec,
+          tipoCodAut: "E",
+          codAut: parseInt(inv.cae || "0"),
+        })
+      );
+      const afipQrUrl = `https://www.afip.gob.ar/fe/qr/?p=${qrPayload}`;
+      const dataUrl = await QRCode.toDataURL(afipQrUrl, { width: 128, margin: 1 });
+      qrImgTag = `<img src="${dataUrl}" width="96" height="96" alt="QR AFIP" />`;
+    } catch {}
+
+    const address = [inv.fiscalAddress, inv.postalCode && "CP " + inv.postalCode, inv.city, inv.province]
+      .filter(Boolean).join(" — ");
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Factura ${inv.type || ""} N° ${nroComprobante}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;font-size:11px;color:#111;max-width:80mm;margin:0 auto;padding:6px}
+  .center{text-align:center}
+  .bold{font-weight:bold}
+  hr{border:none;border-top:1px dashed #aaa;margin:5px 0}
+  .row{display:flex;justify-content:space-between;padding:1px 0}
+  .total{font-size:13px;font-weight:bold}
+  .small{font-size:9px;color:#555;text-transform:uppercase}
+  .tipo{border:2px solid #111;display:inline-block;padding:2px 10px;font-size:22px;font-weight:bold;margin:4px 0}
+  @media print{body{padding:0}}
+</style>
+</head>
+<body>
+  <div class="center">
+    <p class="bold" style="font-size:13px">${restaurant?.name || restaurantId}</p>
+    ${afipConfig?.cuit ? `<p>CUIT: ${afipConfig.cuit}</p>` : ""}
+    ${afipConfig?.fiscalCondition ? `<p>${fiscalCondLabel[afipConfig.fiscalCondition] || afipConfig.fiscalCondition}</p>` : ""}
+  </div>
+  <hr/>
+  <div class="center">
+    <p class="small">Comprobante tipo</p>
+    <div class="tipo">${inv.type || "B"}</div>
+    <p class="bold">Pto. Vta: ${String(ptoVta).padStart(4, "0")} &nbsp; N°: ${String(nroCmp).padStart(8, "0")}</p>
+    <p>Fecha: ${fmtDate(issuedMs)}</p>
+  </div>
+  <hr/>
+  <p class="small">Receptor</p>
+  <p class="bold">${inv.customerName || ""}</p>
+  ${inv.documentType && inv.documentNumber ? `<p>${inv.documentType}: ${inv.documentNumber}</p>` : ""}
+  ${inv.ivaCondition ? `<p>IVA: ${inv.ivaCondition}</p>` : ""}
+  ${address ? `<p>${address}</p>` : ""}
+  <hr/>
+  <p class="small">Detalle</p>
+  <div class="row">
+    <span>Consumo en restaurante &mdash; Mesa ${cuenta.mesa}</span>
+    <span>${fmt(cuenta.total)}</span>
+  </div>
+  <hr/>
+  <div class="row total"><span>TOTAL</span><span>${fmt(cuenta.total)}</span></div>
+  <hr/>
+  <p class="small">CAE</p>
+  <p class="bold" style="font-family:monospace">${inv.cae || ""}</p>
+  ${inv.caeExpiry ? `<p>Vto. CAE: ${inv.caeExpiry}</p>` : ""}
+  ${qrImgTag ? `<hr/><div class="center"><p class="small" style="margin-bottom:3px">Validar en AFIP</p>${qrImgTag}</div>` : ""}
+  <script>window.onload=()=>{window.print()}</script>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank", "width=420,height=700");
+    if (!win) { toast.error("Bloqueado por el navegador. Permitir popups."); return; }
+    win.document.write(html);
+    win.document.close();
   };
 
   if (!restaurantId) {
@@ -639,8 +783,15 @@ const CashierInvoices = () => {
                       )}
                     </div>
                     <button
+                      onClick={() => printInvoice(selectedCuenta)}
+                      className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 text-sm font-bold text-white transition hover:bg-emerald-700"
+                    >
+                      <Printer size={14} />
+                      Imprimir factura
+                    </button>
+                    <button
                       onClick={() => reopenRequest(selectedCuenta)}
-                      className="mt-4 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-white text-sm font-bold text-emerald-800 transition hover:bg-emerald-100"
+                      className="mt-2 flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-emerald-300 bg-white text-sm font-bold text-emerald-800 transition hover:bg-emerald-100"
                     >
                       <RotateCcw size={14} />
                       Reabrir como pendiente

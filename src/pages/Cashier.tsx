@@ -223,7 +223,7 @@ const cashierMethodToMetodoPago = (
 
 const Cashier = () => {
   const [searchParams] = useSearchParams();
-  const { restaurantId: contextRestaurantId } = useRestaurant();
+  const { restaurantId: contextRestaurantId, restaurant } = useRestaurant();
   const { user, logout } = useAuth();
   const isOnline = useOnlineStatus();
 
@@ -959,6 +959,103 @@ const Cashier = () => {
     }
   };
 
+  const metodoLabel: Record<string, string> = {
+    cash: "Efectivo",
+    debit: "Débito",
+    credit: "Crédito",
+    transfer: "Transferencia",
+    mercado_pago: "Mercado Pago",
+    mixed: "Pago mixto",
+    other: "Otro",
+  };
+
+  const openTicketPopup = (opts: {
+    mesa: number;
+    items: (CashierOrderItem & { _cancelled?: boolean })[];
+    subtotal: number;
+    discountAmount: number;
+    discountReason?: string;
+    extraAmount: number;
+    extraReason?: string;
+    finalTotal: number;
+    payments?: { method: string; amount: number; note?: string }[];
+    metodo?: string | null;
+    tip?: number;
+    restaurantName: string;
+  }) => {
+    const fmt = (n: number) =>
+      new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(n);
+    const now = new Intl.DateTimeFormat("es-AR", {
+      day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
+    }).format(new Date());
+
+    const activeItems = opts.items.filter((i) => !i._cancelled);
+    const itemRows = activeItems.map((item) => {
+      const name = item.nombre || item.name || "Ítem";
+      const qty = item.cantidad || item.quantity || 1;
+      const sub = item.subtotal ?? qty * (item.precio || item.price || 0);
+      const note = item.observacion || item.note;
+      return `<tr><td>${qty}x ${name}${note ? `<br><small style="color:#666">${note}</small>` : ""}</td><td style="text-align:right;white-space:nowrap">${fmt(sub)}</td></tr>`;
+    }).join("");
+
+    const paymentRows = (opts.payments || []).map((p) =>
+      `<tr><td>${metodoLabel[p.method] || p.method}${p.note ? " — " + p.note : ""}</td><td style="text-align:right">${fmt(p.amount)}</td></tr>`
+    ).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Ticket Mesa ${opts.mesa}</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Arial,sans-serif;font-size:11px;color:#111;max-width:80mm;margin:0 auto;padding:6px}
+  .center{text-align:center}
+  .bold{font-weight:bold}
+  hr{border:none;border-top:1px dashed #aaa;margin:5px 0}
+  .row{display:flex;justify-content:space-between;padding:1px 0}
+  .total{font-size:13px;font-weight:bold}
+  .small{font-size:9px;color:#555;text-transform:uppercase}
+  table{width:100%;border-collapse:collapse}
+  td{padding:2px 0;vertical-align:top}
+  @media print{body{padding:0}}
+</style>
+</head>
+<body>
+  <div class="center">
+    <p class="bold" style="font-size:13px">${opts.restaurantName}</p>
+    <p class="small">Ticket &mdash; No válido como factura</p>
+  </div>
+  <hr/>
+  <div style="display:flex;justify-content:space-between">
+    <span><span class="small">Mesa</span><br><span class="bold" style="font-size:16px">${opts.mesa}</span></span>
+    <span style="text-align:right"><span class="small">Fecha</span><br>${now}</span>
+  </div>
+  <hr/>
+  <table>
+    <thead><tr>
+      <th style="text-align:left;font-size:9px;text-transform:uppercase;padding-bottom:3px;border-bottom:1px solid #ccc">Producto</th>
+      <th style="text-align:right;font-size:9px;text-transform:uppercase;border-bottom:1px solid #ccc">Subtotal</th>
+    </tr></thead>
+    <tbody>${itemRows}</tbody>
+  </table>
+  <hr/>
+  ${opts.subtotal !== opts.finalTotal ? `<div class="row"><span>Subtotal</span><span>${fmt(opts.subtotal)}</span></div>` : ""}
+  ${opts.discountAmount > 0 ? `<div class="row"><span>Descuento${opts.discountReason ? " — " + opts.discountReason : ""}</span><span>&minus;${fmt(opts.discountAmount)}</span></div>` : ""}
+  ${opts.extraAmount > 0 ? `<div class="row"><span>${opts.extraReason || "Extra"}</span><span>+${fmt(opts.extraAmount)}</span></div>` : ""}
+  <div class="row total"><span>TOTAL</span><span>${fmt(opts.finalTotal)}</span></div>
+  ${opts.tip ? `<div class="row"><span>Propina</span><span>${fmt(opts.tip)}</span></div>` : ""}
+  ${paymentRows ? `<hr/><p class="small">Forma de pago</p><table><tbody>${paymentRows}</tbody></table>` : opts.metodo ? `<hr/><p class="small">Forma de pago</p><p>${metodoLabel[opts.metodo] || opts.metodo}</p>` : ""}
+  <script>window.onload=()=>{window.print()}</script>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank", "width=420,height=600");
+    if (!win) { toast.error("Bloqueado por el navegador. Permitir popups."); return; }
+    win.document.write(html);
+    win.document.close();
+  };
+
   const handlePrint = async () => {
     if (!isOnline) {
       toast.error("Sin conexión.");
@@ -975,7 +1072,20 @@ const Cashier = () => {
         actorEmail: user.email,
       });
 
-      window.print();
+      openTicketPopup({
+        mesa: selectedCuenta.mesa,
+        items: selectedItems,
+        subtotal: realSubtotal,
+        discountAmount,
+        discountReason: selectedCuenta.discountReason,
+        extraAmount,
+        extraReason: selectedCuenta.manualExtraReason,
+        finalTotal,
+        payments: selectedCuenta.payments,
+        metodo: selectedCuenta.metodo,
+        tip: selectedCuenta.tip,
+        restaurantName: restaurant?.name || restaurantId,
+      });
     } catch (err) {
       console.error("Error registrando impresión:", err);
       alert("No se pudo registrar la impresión.");
@@ -1396,16 +1506,48 @@ ${adjRows ? `<h2>Ajustes de caja</h2><table><thead><tr><th>Monto</th><th>Motivo<
                             </div>
                           </div>
                         </button>
-                        {/* FC-007: Imprimir pre-cuenta sin abrir el detalle */}
+                        {/* FC-007: Imprimir ticket sin abrir el detalle */}
                         <button
-                          onClick={async (e) => {
+                          onClick={(e) => {
                             e.stopPropagation();
-                            setSelectedCuentaId(cuenta.id);
-                            await new Promise((r) => setTimeout(r, 80));
-                            window.print();
+                            const cuentaOrders = orders.filter((o) =>
+                              cuenta.sessionId && o.sessionId
+                                ? o.sessionId === cuenta.sessionId
+                                : Number(o.mesa) === Number(cuenta.mesa)
+                            );
+                            const activeItems = cuentaOrders
+                              .flatMap((o) =>
+                                (o.items || []).map((item, idx) => ({
+                                  ...item,
+                                  _cancelled: o.cancelledItems?.some((c) => c.itemIndex === idx) ?? false,
+                                }))
+                              )
+                              .filter((i) => !i._cancelled);
+                            const ordersTotal = cuentaOrders.reduce((s, o) => s + Number(o.total || 0), 0);
+                            const sub = ordersTotal > 0 ? ordersTotal : Number(cuenta.total);
+                            const dv = Number(cuenta.discountValue || 0);
+                            const da =
+                              cuenta.discountType === "fixed" ? Math.min(sub, dv)
+                              : cuenta.discountType === "percentage" ? Math.min(sub, (sub * dv) / 100)
+                              : 0;
+                            const ea = Number(cuenta.manualExtraAmount || 0) > 0 ? Number(cuenta.manualExtraAmount) : 0;
+                            openTicketPopup({
+                              mesa: cuenta.mesa,
+                              items: activeItems,
+                              subtotal: sub,
+                              discountAmount: da,
+                              discountReason: cuenta.discountReason,
+                              extraAmount: ea,
+                              extraReason: cuenta.manualExtraReason,
+                              finalTotal: Math.max(0, sub - da + ea),
+                              payments: cuenta.payments,
+                              metodo: cuenta.metodo,
+                              tip: cuenta.tip,
+                              restaurantName: restaurant?.name || restaurantId,
+                            });
                           }}
                           className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 shadow-sm hover:bg-zinc-50"
-                          title="Imprimir pre-cuenta"
+                          title="Imprimir ticket"
                         >
                           <Printer size={13} />
                         </button>
