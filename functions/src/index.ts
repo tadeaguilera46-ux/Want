@@ -141,6 +141,28 @@ export const createSubscription = onCall(
       throw new HttpsError("permission-denied", "No tenés permisos");
     }
 
+    // Prevenir doble pago: bloquear si hay un checkout iniciado hace menos de 10 minutos
+    const restaurantSnap = await admin
+      .firestore()
+      .collection("restaurants")
+      .doc(restaurantId)
+      .get();
+
+    const currentBilling = restaurantSnap.data()?.billing;
+    if (currentBilling?.status === "pending" && currentBilling?.updatedAt) {
+      const updatedAt: Date =
+        typeof currentBilling.updatedAt.toDate === "function"
+          ? currentBilling.updatedAt.toDate()
+          : new Date(currentBilling.updatedAt);
+      const minutesElapsed = (Date.now() - updatedAt.getTime()) / 60000;
+      if (minutesElapsed < 10) {
+        throw new HttpsError(
+          "already-exists",
+          "Ya hay un proceso de pago en curso. Esperá unos minutos antes de intentar de nuevo."
+        );
+      }
+    }
+
     const payerEmailResolved = payerEmail || request.auth.token.email || "";
 
     await admin

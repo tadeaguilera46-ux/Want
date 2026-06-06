@@ -77,9 +77,14 @@ export function useBilling(restaurantId: string | null) {
       if (data.initPoint) {
         window.location.href = data.initPoint;
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error iniciando suscripción:", error);
-      toast.error("No se pudo iniciar el pago. Intentá nuevamente.");
+      const code = (error as { code?: string })?.code;
+      if (code === "functions/already-exists") {
+        toast.error("Ya hay un proceso de pago en curso. Esperá unos minutos antes de intentar de nuevo.");
+      } else {
+        toast.error("No se pudo iniciar el pago. Intentá nuevamente.");
+      }
       setSubscribing(false);
     }
   };
