@@ -266,6 +266,17 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
       {/* ── PASO 2: Subir certificado ─────────────────────────────────────── */}
       {currentStep === 1 && (
         <div className="space-y-4">
+          {/* Botón volver */}
+          <button
+            onClick={async () => {
+              const { doc, updateDoc } = await import("firebase/firestore");
+              const ref = doc(db, "restaurants", restaurantId, "afipConfig", "main");
+              await updateDoc(ref, { status: "unconfigured", csrPem: "" });
+            }}
+            className="flex items-center gap-1.5 text-sm font-semibold text-zinc-500 hover:text-zinc-800"
+          >
+            ← Volver al paso 1
+          </button>
           {/* CSR */}
           {csrPem && (
             <div className="rounded-xl border border-zinc-200 bg-white p-5">
