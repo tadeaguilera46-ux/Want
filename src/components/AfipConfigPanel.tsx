@@ -63,10 +63,17 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
     });
   }, [restaurantId]);
 
-  const currentStep =
-    !config || config.status === "unconfigured" ? 0
+  const [stepOverride, setStepOverride] = useState<number | null>(null);
+
+  const currentStep = stepOverride !== null ? stepOverride :
+    (!config || config.status === "unconfigured" ? 0
     : config.status === "pending_certificate" ? 1
-    : 2;
+    : 2);
+
+  // Limpiar el override cuando Firestore confirma el cambio
+  if (stepOverride === 0 && config?.status === "unconfigured") {
+    setStepOverride(null);
+  }
 
   // ─── Paso 1: Generar CSR ───────────────────────────────────────────────────
 
@@ -269,9 +276,16 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
           {/* Botón volver */}
           <button
             onClick={async () => {
-              const { doc, updateDoc } = await import("firebase/firestore");
-              const ref = doc(db, "restaurants", restaurantId, "afipConfig", "main");
-              await updateDoc(ref, { status: "unconfigured", csrPem: "" });
+              // Override inmediato — no espera a Firestore
+              setStepOverride(0);
+              setCsrPem("");
+              try {
+                const firestoreModule = await import("firebase/firestore");
+                const ref = firestoreModule.doc(db, "restaurants", restaurantId, "afipConfig", "main");
+                await firestoreModule.updateDoc(ref, { status: "unconfigured", csrPem: "" });
+              } catch {
+                setStepOverride(null); // si falla, deja que Firestore decida
+              }
             }}
             className="flex items-center gap-1.5 text-sm font-semibold text-zinc-500 hover:text-zinc-800"
           >
@@ -437,9 +451,11 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
           <button
             onClick={async () => {
               if (!confirm("¿Reconfigurar? Se generará un nuevo par de claves y deberás volver a registrar el certificado en ARCA.")) return;
-              const { doc, updateDoc } = await import("firebase/firestore");
-              const ref = doc(db, "restaurants", restaurantId, "afipConfig", "main");
-              await updateDoc(ref, { status: "unconfigured", certificate: "", csrPem: "" });
+              setStepOverride(0);
+              setCsrPem("");
+              const firestoreModule = await import("firebase/firestore");
+              const ref = firestoreModule.doc(db, "restaurants", restaurantId, "afipConfig", "main");
+              await firestoreModule.updateDoc(ref, { status: "unconfigured", certificate: "", csrPem: "" });
             }}
             className="mt-3 w-full rounded-lg border border-zinc-200 py-2 text-xs font-semibold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition"
           >
