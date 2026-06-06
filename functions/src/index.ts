@@ -4,6 +4,7 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
+import { Resend } from "resend";
 
 admin.initializeApp();
 
@@ -17,6 +18,40 @@ Sentry.init({
 
 const MP_ACCESS_TOKEN = defineSecret("MP_ACCESS_TOKEN");
 const MP_WEBHOOK_SECRET = defineSecret("MP_WEBHOOK_SECRET");
+const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
+
+const PLAN_LABELS: Record<string, string> = {
+  starter: "Starter",
+  pro: "Pro",
+  premium: "Premium",
+};
+
+async function sendEmail(
+  apiKey: string,
+  to: string,
+  subject: string,
+  html: string
+): Promise<void> {
+  const resend = new Resend(apiKey);
+  const from = process.env.EMAIL_FROM || "WANT <onboarding@resend.dev>";
+  const { error } = await resend.emails.send({ from, to, subject, html });
+  if (error) console.error("sendEmail error:", error);
+}
+
+function emailWrapper(title: string, body: string): string {
+  return `<!DOCTYPE html><html><body style="margin:0;padding:0;background:#f6f4ef;font-family:sans-serif">
+  <table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:40px 16px">
+  <table width="560" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:24px;overflow:hidden">
+    <tr><td style="background:#0a0a0a;padding:32px;text-align:center">
+      <span style="color:#fff;font-size:22px;font-weight:900;letter-spacing:-0.5px">WANT</span>
+    </td></tr>
+    <tr><td style="padding:32px">
+      <h1 style="margin:0 0 16px;font-size:22px;font-weight:900;color:#09090b">${title}</h1>
+      ${body}
+      <p style="margin:32px 0 0;font-size:12px;color:#a1a1aa">WANT © Plataforma SaaS para restaurantes</p>
+    </td></tr>
+  </table></td></tr></table></body></html>`;
+}
 
 const MP_PLANS: Record<string, string> = {
   starter: "ec0431741ea24561a858ae740135a58c",
@@ -156,7 +191,7 @@ export const createSubscription = onCall(
 // ─── 2. Webhook de Mercado Pago ──────────────────────────────────────────────
 
 export const mpWebhook = onRequest(
-  { secrets: [MP_ACCESS_TOKEN, MP_WEBHOOK_SECRET] },
+  { secrets: [MP_ACCESS_TOKEN, MP_WEBHOOK_SECRET, RESEND_API_KEY] },
   async (req, res) => {
     if (req.method !== "POST") {
       res.status(405).send("Method not allowed");
@@ -327,6 +362,22 @@ export const mpWebhook = onRequest(
             paidAt: admin.firestore.FieldValue.serverTimestamp(),
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
           });
+
+        // Email de pago confirmado
+        const ownerEmail = restaurantData?.ownerEmail ?? subscription.payer_email;
+        if (ownerEmail) {
+          const planLabel = PLAN_LABELS[plan] ?? plan;
+          await sendEmail(
+            RESEND_API_KEY.value(),
+            ownerEmail,
+            `✅ Pago confirmado — WANT ${planLabel}`,
+            emailWrapper(
+              `¡Tu pago fue confirmado!`,
+              `<p style="color:#52525b;line-height:1.6">Tu suscripción al plan <strong>${planLabel}</strong> está activa. Ya podés acceder a tu panel administrativo y operar con normalidad.</p>
+               <p style="color:#52525b;line-height:1.6">Gracias por confiar en WANT.</p>`
+            )
+          );
+        }
       }
 
       res.status(200).send("OK");
@@ -347,7 +398,7 @@ export const mpWebhook = onRequest(
 // ─── 3. Cancelar suscripción ─────────────────────────────────────────────────
 
 export const cancelSubscription = onCall(
-  { secrets: [MP_ACCESS_TOKEN], cors: true },
+  { secrets: [MP_ACCESS_TOKEN, RESEND_API_KEY], cors: true },
   async (request) => {
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "No autenticado");
@@ -409,9 +460,25 @@ export const cancelSubscription = onCall(
       .doc(restaurantId)
       .update({
         plan: "starter",
+        subscriptionStatus: "blocked",
         "billing.status": "canceled",
         "billing.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
       });
+
+    // Email de cancelación
+    const ownerEmail = restaurantDoc.data()?.ownerEmail;
+    if (ownerEmail) {
+      await sendEmail(
+        RESEND_API_KEY.value(),
+        ownerEmail,
+        "Tu suscripción de WANT fue cancelada",
+        emailWrapper(
+          "Suscripción cancelada",
+          `<p style="color:#52525b;line-height:1.6">Tu suscripción fue cancelada correctamente. Tu restaurante quedará con acceso restringido.</p>
+           <p style="color:#52525b;line-height:1.6">Si fue un error o querés reactivarla, contactanos por WhatsApp y te ayudamos.</p>`
+        )
+      );
+    }
 
     return { success: true };
   }
@@ -420,30 +487,90 @@ export const cancelSubscription = onCall(
 // ─── 4. Sync diario de billing ───────────────────────────────────────────────
 
 export const dailyBillingSync = onSchedule(
-  { schedule: "0 3 * * *", timeZone: "America/Argentina/Buenos_Aires" },
+  {
+    schedule: "0 3 * * *",
+    timeZone: "America/Argentina/Buenos_Aires",
+    secrets: [RESEND_API_KEY],
+  },
   async () => {
     const now = admin.firestore.Timestamp.now();
+    const in6Days = admin.firestore.Timestamp.fromDate(
+      new Date(Date.now() + 6 * 24 * 60 * 60 * 1000)
+    );
     const db = admin.firestore();
     const batch = db.batch();
     let updates = 0;
 
     try {
-      // Trials vencidos → past_due
+      // ── Trials vencidos → past_due + email ──────────────────────────────
       const expiredTrials = await db
         .collection("restaurants")
         .where("subscriptionStatus", "==", "trial")
         .where("trialEndsAt", "<", now)
         .get();
 
-      expiredTrials.docs.forEach((doc) => {
+      for (const doc of expiredTrials.docs) {
         batch.update(doc.ref, {
           subscriptionStatus: "past_due",
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
         updates++;
-      });
 
-      // Suscripciones activas con nextBillingDate vencida → past_due
+        const ownerEmail = doc.data().ownerEmail;
+        const name = doc.data().name ?? "tu restaurante";
+        if (ownerEmail) {
+          await sendEmail(
+            RESEND_API_KEY.value(),
+            ownerEmail,
+            "Tu prueba gratuita de WANT terminó",
+            emailWrapper(
+              "Tu trial venció",
+              `<p style="color:#52525b;line-height:1.6">El período de prueba de <strong>${name}</strong> terminó. Para seguir usando WANT, elegí un plan y activá tu cuenta.</p>
+               <p style="margin:24px 0"><a href="https://want-livid.vercel.app/payment-required?restaurantId=${doc.id}" style="background:#0a0a0a;color:#fff;padding:12px 24px;border-radius:12px;text-decoration:none;font-weight:700">Activar mi cuenta</a></p>`
+            )
+          );
+        }
+      }
+
+      // ── Aviso 5 días antes del vencimiento del trial ────────────────────
+      const trialWarnings = await db
+        .collection("restaurants")
+        .where("subscriptionStatus", "==", "trial")
+        .where("trialEndsAt", ">", now)
+        .where("trialEndsAt", "<", in6Days)
+        .get();
+
+      for (const doc of trialWarnings.docs) {
+        const trialEndsAt = doc.data().trialEndsAt?.toDate?.();
+        if (!trialEndsAt) continue;
+
+        const daysLeft = Math.ceil((trialEndsAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+        if (daysLeft > 5) continue;
+
+        // Solo mandar si no se mandó ya hoy
+        if (doc.data().billing?.trialWarningSentAt) continue;
+
+        const ownerEmail = doc.data().ownerEmail;
+        const name = doc.data().name ?? "tu restaurante";
+        if (ownerEmail) {
+          await sendEmail(
+            RESEND_API_KEY.value(),
+            ownerEmail,
+            `Te quedan ${daysLeft} días de prueba en WANT`,
+            emailWrapper(
+              `Quedan ${daysLeft} días de trial`,
+              `<p style="color:#52525b;line-height:1.6">Tu período de prueba de <strong>${name}</strong> vence en <strong>${daysLeft} días</strong>. Para no perder el acceso, activá tu cuenta antes de que expire.</p>
+               <p style="margin:24px 0"><a href="https://want-livid.vercel.app/payment-required?restaurantId=${doc.id}" style="background:#0a0a0a;color:#fff;padding:12px 24px;border-radius:12px;text-decoration:none;font-weight:700">Ver planes y activar</a></p>`
+            )
+          );
+
+          await doc.ref.update({
+            "billing.trialWarningSentAt": admin.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+      }
+
+      // ── Suscripciones activas vencidas → past_due ────────────────────────
       const expiredActive = await db
         .collection("restaurants")
         .where("subscriptionStatus", "==", "active")
