@@ -666,16 +666,21 @@ export const afipGenerateCsr = onCall(
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
 
-    const { restaurantId, cuit, puntoVenta, fiscalCondition } = request.data as {
+    const { restaurantId, cuit, puntoVenta, fiscalCondition, env: reqEnv } = request.data as {
       restaurantId: string;
       cuit: string;
       puntoVenta: number;
       fiscalCondition: "monotributista" | "responsable_inscripto";
+      env?: string;
     };
 
     if (!restaurantId || !cuit || !puntoVenta || !fiscalCondition) {
       throw new HttpsError("invalid-argument", "Faltan datos fiscales");
     }
+
+    // El admin puede elegir el ambiente; si no viene, usa el default del servidor
+    const resolvedEnv: "homologacion" | "produccion" =
+      reqEnv === "homologacion" ? "homologacion" : (AFIP_ENV ?? "produccion");
 
     const staffDoc = await admin.firestore()
       .collection("restaurants").doc(restaurantId)
@@ -705,7 +710,7 @@ export const afipGenerateCsr = onCall(
         csrPem,
         certificate: "",
         status: "pending_certificate",
-        env: AFIP_ENV,
+        env: resolvedEnv,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 

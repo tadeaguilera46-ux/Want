@@ -13,6 +13,7 @@ type AfipConfig = {
   fiscalCondition?: string;
   status: AfipStatus;
   csrPem?: string;
+  env?: "homologacion" | "produccion";
   activatedAt?: { toDate?: () => Date };
 };
 
@@ -39,6 +40,7 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
   const [cuit, setCuit] = useState("");
   const [puntoVenta, setPuntoVenta] = useState("1");
   const [fiscalCondition, setFiscalCondition] = useState<"monotributista" | "responsable_inscripto">("responsable_inscripto");
+  const [env, setEnv] = useState<"homologacion" | "produccion">("produccion");
 
   // Step 2 state
   const [csrPem, setCsrPem] = useState("");
@@ -82,7 +84,7 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
     try {
       setSaving(true);
       const fn = httpsCallable<unknown, { csrPem: string }>(functions, "afipGenerateCsr");
-      const res = await fn({ restaurantId, cuit: rawCuit, puntoVenta: pv, fiscalCondition });
+      const res = await fn({ restaurantId, cuit: rawCuit, puntoVenta: pv, fiscalCondition, env });
       setCsrPem(res.data.csrPem);
       toast.success("CSR generado. Ahora pegalo en ARCA.");
     } catch (err) {
@@ -205,6 +207,39 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
             </div>
           </div>
 
+          {/* Toggle ambiente */}
+          <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+            <p className="mb-2 text-xs font-bold text-zinc-600">Ambiente ARCA</p>
+            <div className="flex gap-2">
+              {(["produccion", "homologacion"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setEnv(v)}
+                  className={`flex-1 rounded-lg border py-2 text-sm font-semibold transition ${
+                    env === v
+                      ? v === "produccion"
+                        ? "border-zinc-900 bg-zinc-900 text-white"
+                        : "border-amber-500 bg-amber-500 text-white"
+                      : "border-zinc-200 bg-white text-zinc-500 hover:border-zinc-400"
+                  }`}
+                >
+                  {v === "produccion" ? "Producción" : "Homologación (test)"}
+                </button>
+              ))}
+            </div>
+            {env === "homologacion" && (
+              <p className="mt-2 text-xs text-amber-700 font-semibold">
+                Modo test — las facturas emitidas NO tienen validez fiscal. Ideal para probar antes de activar en producción.
+              </p>
+            )}
+            {env === "produccion" && (
+              <p className="mt-2 text-xs text-zinc-500">
+                Las facturas emitidas son legalmente válidas ante ARCA.
+              </p>
+            )}
+          </div>
+
           <button
             onClick={handleGenerateCsr}
             disabled={saving || cuit.length < 11}
@@ -307,14 +342,29 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
 
       {/* ── PASO 3: Activo ────────────────────────────────────────────────── */}
       {currentStep === 2 && (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <ShieldCheck size={32} className="text-emerald-600 shrink-0" />
-            <div>
-              <h3 className="font-bold text-emerald-900 text-lg">Facturación electrónica activa</h3>
-              <p className="text-sm text-emerald-700 mt-0.5">
-                Want está conectado a ARCA con el certificado del restaurante.
-              </p>
+        <div className={`rounded-xl border p-6 ${config?.env === "homologacion" ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <div className="flex items-center gap-3">
+              <ShieldCheck size={32} className={config?.env === "homologacion" ? "text-amber-500 shrink-0" : "text-emerald-600 shrink-0"} />
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className={`font-bold text-lg ${config?.env === "homologacion" ? "text-amber-900" : "text-emerald-900"}`}>
+                    Facturación electrónica activa
+                  </h3>
+                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                    config?.env === "homologacion"
+                      ? "bg-amber-200 text-amber-800"
+                      : "bg-emerald-200 text-emerald-800"
+                  }`}>
+                    {config?.env === "homologacion" ? "HOMOLOGACIÓN" : "PRODUCCIÓN"}
+                  </span>
+                </div>
+                <p className={`text-sm mt-0.5 ${config?.env === "homologacion" ? "text-amber-700" : "text-emerald-700"}`}>
+                  {config?.env === "homologacion"
+                    ? "Modo test — las facturas NO son válidas fiscalmente."
+                    : "Want está conectado a ARCA con el certificado del restaurante."}
+                </p>
+              </div>
             </div>
           </div>
           <div className="grid gap-2 sm:grid-cols-3">
@@ -333,12 +383,24 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
               </p>
             </div>
           </div>
-          <div className="mt-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-white p-3">
-            <CheckCircle size={15} className="text-emerald-600 shrink-0" />
+          <div className={`mt-4 flex items-center gap-2 rounded-lg border bg-white p-3 ${config?.env === "homologacion" ? "border-amber-200" : "border-emerald-200"}`}>
+            <CheckCircle size={15} className={config?.env === "homologacion" ? "text-amber-500 shrink-0" : "text-emerald-600 shrink-0"} />
             <p className="text-xs text-zinc-600">
-              Los certificados de ARCA duran 2 años. Cuando venzan, repetí el proceso desde el Paso 1.
+              Los certificados de ARCA duran 2 años. Cuando venzan, o si querés cambiar el ambiente, usá "Reconfigurar".
             </p>
           </div>
+
+          <button
+            onClick={async () => {
+              if (!confirm("¿Reconfigurar? Se generará un nuevo par de claves y deberás volver a registrar el certificado en ARCA.")) return;
+              const { doc, updateDoc } = await import("firebase/firestore");
+              const ref = doc(db, "restaurants", restaurantId, "afipConfig", "main");
+              await updateDoc(ref, { status: "unconfigured", certificate: "", csrPem: "" });
+            }}
+            className="mt-3 w-full rounded-lg border border-zinc-200 py-2 text-xs font-semibold text-zinc-500 hover:border-zinc-400 hover:text-zinc-700 transition"
+          >
+            Reconfigurar (cambiar CUIT, PV o ambiente)
+          </button>
         </div>
       )}
     </div>
