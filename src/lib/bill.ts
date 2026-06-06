@@ -310,6 +310,18 @@ export const actualizarEstadoCuenta = async (
       throw new Error("Mesa inválida al actualizar estado de cuenta");
     }
 
+    const now = serverTimestamp();
+
+    if (estado !== "pagada") {
+      // Para cerrar/pasar a otro estado no se necesita la sesión
+      transaction.update(cuentaRef, {
+        estado,
+        updatedAt: now,
+      });
+      return;
+    }
+
+    // Solo para "pagada": validar y actualizar la sesión
     const sessionRef = sessionDocRef(normalizedRestaurantId, sessionId);
     const sessionSnapshot = await transaction.get(sessionRef);
 
@@ -323,17 +335,6 @@ export const actualizarEstadoCuenta = async (
       throw new Error(
         `Inconsistencia: la cuenta ${sessionId} no pertenece a la mesa ${mesaObjetivo}`
       );
-    }
-
-    const now = serverTimestamp();
-
-    if (estado !== "pagada") {
-      transaction.update(cuentaRef, {
-        estado,
-        updatedAt: now,
-      });
-
-      return;
     }
 
     transaction.update(cuentaRef, {
