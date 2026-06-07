@@ -1,15 +1,195 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   addDoc,
   collection,
   deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
+  query,
   serverTimestamp,
+  where,
 } from "firebase/firestore";
-import { Plus, Tag, Trash2 } from "lucide-react";
+import { ChevronDown, Plus, Search, Tag, Trash2, X } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import { toast } from "sonner";
+
+type MenuItemOption = {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+};
+
+function MenuItemPicker({
+  restaurantId,
+  value,
+  onChange,
+  placeholder = "Seleccionar producto (opcional)",
+}: {
+  restaurantId: string;
+  value: string;
+  onChange: (name: string) => void;
+  placeholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<MenuItemOption[]>([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const loadItems = async () => {
+    if (items.length > 0) return;
+    setLoading(true);
+    try {
+      const snap = await getDocs(
+        query(
+          collection(getDb(), "restaurants", restaurantId, "menu"),
+          where("active", "==", true)
+        )
+      );
+      const data = snap.docs.map((d) => ({
+        id: d.id,
+        name: String(d.data().name || ""),
+        category: String(d.data().category || ""),
+        price: Number(d.data().price || 0),
+      }));
+      data.sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+      setItems(data);
+    } catch {
+      toast.error("No se pudo cargar el menú.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpen = () => {
+    setOpen(true);
+    setSearch("");
+    void loadItems();
+    setTimeout(() => searchRef.current?.focus(), 50);
+  };
+
+  const handleSelect = (name: string) => {
+    onChange(name);
+    setOpen(false);
+  };
+
+  const filtered = search.trim()
+    ? items.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()))
+    : items;
+
+  // Group by category
+  const grouped = filtered.reduce<Record<string, MenuItemOption[]>>((acc, item) => {
+    const cat = item.category || "Sin categoría";
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(item);
+    return acc;
+  }, {});
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={handleOpen}
+        className="flex h-10 w-full items-center justify-between rounded-lg border border-zinc-200 px-3 text-sm transition hover:border-zinc-400"
+      >
+        <span className={value ? "text-zinc-950" : "text-zinc-400"}>
+          {value || placeholder}
+        </span>
+        <div className="flex items-center gap-1">
+          {value && (
+            <span
+              role="button"
+              onClick={(e) => { e.stopPropagation(); onChange(""); }}
+              className="flex h-5 w-5 items-center justify-center rounded-full hover:bg-zinc-100"
+            >
+              <X size={11} className="text-zinc-400" />
+            </span>
+          )}
+          <ChevronDown size={14} className="text-zinc-400" />
+        </div>
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
+          <div className="relative z-10 flex w-full max-w-md flex-col rounded-t-2xl sm:rounded-2xl bg-white shadow-2xl max-h-[80vh]">
+            <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3">
+              <p className="font-bold text-zinc-950">Seleccionar producto</p>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-zinc-100"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="px-4 py-2 border-b border-zinc-100">
+              <div className="flex items-center gap-2 rounded-lg border border-zinc-200 px-3">
+                <Search size={14} className="text-zinc-400 shrink-0" />
+                <input
+                  ref={searchRef}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Buscar producto..."
+                  className="h-9 flex-1 bg-transparent text-sm outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-y-auto flex-1 py-2">
+              {loading && (
+                <p className="px-4 py-6 text-center text-sm text-zinc-400">Cargando menú...</p>
+              )}
+
+              {!loading && filtered.length === 0 && (
+                <p className="px-4 py-6 text-center text-sm text-zinc-400">Sin resultados.</p>
+              )}
+
+              {!loading && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleSelect("")}
+                    className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition hover:bg-zinc-50 ${!value ? "font-semibold text-zinc-950" : "text-zinc-500"}`}
+                  >
+                    Todos los productos (sin filtro)
+                  </button>
+                  <div className="mx-4 my-1 h-px bg-zinc-100" />
+
+                  {Object.entries(grouped).map(([cat, catItems]) => (
+                    <div key={cat}>
+                      <p className="px-4 pb-1 pt-2 text-[10px] font-bold uppercase tracking-widest text-zinc-400">
+                        {cat}
+                      </p>
+                      {catItems.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleSelect(item.name)}
+                          className={`flex w-full items-center justify-between px-4 py-2.5 text-left transition hover:bg-zinc-50 ${
+                            value === item.name ? "bg-zinc-50 font-semibold text-zinc-950" : "text-zinc-700"
+                          }`}
+                        >
+                          <span className="text-sm">{item.name}</span>
+                          <span className="text-xs text-zinc-400">
+                            {new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(item.price)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
 export type Promotion = {
   id: string;
@@ -128,7 +308,14 @@ export function PromotionsPanel({ restaurantId }: { restaurantId: string }) {
           <div className="grid gap-2 sm:grid-cols-2">
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Happy Hour)" required className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
             <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Categoría (vacío = todas)" className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
-            <input value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="Producto exacto (tiene prioridad sobre categoría)" className="h-10 rounded-lg border border-zinc-200 px-3 text-sm sm:col-span-2" />
+            <div className="sm:col-span-2">
+              <MenuItemPicker
+                restaurantId={restaurantId}
+                value={productName}
+                onChange={setProductName}
+                placeholder="Producto específico (tiene prioridad sobre categoría)"
+              />
+            </div>
             <select value={discountType} onChange={(e) => setDiscountType(e.target.value as "percentage" | "fixed")} className="h-10 rounded-lg border border-zinc-200 px-3 text-sm">
               <option value="percentage">Porcentaje (%)</option>
               <option value="fixed">Monto fijo ($)</option>
@@ -276,11 +463,11 @@ export function TwoForOnePanel({ restaurantId }: { restaurantId: string }) {
               required
               className="h-10 rounded-lg border border-zinc-200 px-3 text-sm"
             />
-            <input
+            <MenuItemPicker
+              restaurantId={restaurantId}
               value={productName}
-              onChange={(e) => setProductName(e.target.value)}
-              placeholder="Producto exacto (vacío = todos)"
-              className="h-10 rounded-lg border border-zinc-200 px-3 text-sm"
+              onChange={setProductName}
+              placeholder="Producto específico (vacío = todos)"
             />
             <div className="flex items-center gap-2">
               <label className="text-xs text-zinc-500 shrink-0">Desde</label>
