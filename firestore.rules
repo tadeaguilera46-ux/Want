@@ -495,6 +495,11 @@ service cloud.firestore {
       allow delete: if isSuperAdmin();
     }
 
+    // Carrito compartido por mesa/sesión (acceso anónimo — seguridad via UUID sessionId)
+    match /restaurants/{restaurantId}/carts/{sessionId} {
+      allow read, write: if true;
+    }
+
     // Promociones y Happy Hour
     match /restaurants/{restaurantId}/promotions/{promoId} {
       allow read: if true;

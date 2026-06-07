@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
+import { doc, onSnapshot, setDoc, serverTimestamp } from "firebase/firestore";
 import type { CartItem, MenuItem } from "@/lib/store";
 import { getStoredTableSessionId } from "./table-session";
+import { getDb } from "./firebase";
 
 interface CartContextType {
   cart: CartItem[];
@@ -60,28 +62,33 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const parsedTable = rawTable ? parseInt(rawTable, 10) : NaN;
   const tableNumber = Number.isInteger(parsedTable) && parsedTable > 0 ? parsedTable : null;
 
-  const storageKey = (() => {
+  const sessionId = (() => {
     if (!restaurantId || !tableNumber) return null;
-    const sessionId = getStoredTableSessionId({ restaurantId, table: tableNumber });
-    if (!sessionId) return null;
-    return buildStorageKey(restaurantId, tableNumber, sessionId);
+    return getStoredTableSessionId({ restaurantId, table: tableNumber });
   })();
 
-  // Tracks the last storageKey this effect saw, so we can detect null→value transitions
+  const storageKey = sessionId
+    ? buildStorageKey(restaurantId!, tableNumber!, sessionId)
+    : null;
+
+  // Tracks the last storageKey seen to detect null→value transitions
   const storageKeyRef = useRef<string | null>(storageKey);
+  // JSON of the last cart state synced to/from Firestore — prevents write-back loops
+  const lastFirestoreDataRef = useRef<string>("");
+  const writeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [cart, setCart] = useState<CartItem[]>(() =>
     storageKey ? loadCart(storageKey) : []
   );
 
+  // localStorage persistence with null→value key transition guard
   useEffect(() => {
     if (!storageKey) {
       storageKeyRef.current = null;
       return;
     }
     if (storageKeyRef.current !== storageKey) {
-      // storageKey just became available (new tab, sessionStorage was empty on mount).
-      // Load the existing cart instead of overwriting localStorage with [].
+      // storageKey just became available — load instead of overwriting with []
       storageKeyRef.current = storageKey;
       setCart(loadCart(storageKey));
       return;
@@ -89,16 +96,62 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     saveCart(storageKey, cart);
   }, [cart, storageKey]);
 
-  // Sync cart in real-time when another tab writes to the same localStorage key
+  // Cross-tab sync via localStorage storage event (same browser, different tabs)
   useEffect(() => {
     if (!storageKey) return;
     const handleStorage = (e: StorageEvent) => {
       if (e.key !== storageKey) return;
-      setCart(e.newValue ? (JSON.parse(e.newValue) as CartItem[]) : []);
+      const incoming = e.newValue ? (JSON.parse(e.newValue) as CartItem[]) : [];
+      // Mark as already synced so Effect 4 doesn't write it back to Firestore
+      lastFirestoreDataRef.current = JSON.stringify(incoming);
+      setCart(incoming);
     };
     window.addEventListener("storage", handleStorage);
     return () => window.removeEventListener("storage", handleStorage);
   }, [storageKey]);
+
+  // Cross-device sync via Firestore onSnapshot
+  useEffect(() => {
+    if (!restaurantId || !tableNumber || !sessionId) return;
+    const db = getDb();
+    const cartRef = doc(db, "restaurants", restaurantId, "carts", sessionId);
+    const unsub = onSnapshot(
+      cartRef,
+      (snap) => {
+        if (!snap.exists()) return;
+        const data = snap.data();
+        if (!Array.isArray(data.items)) return;
+        const items = data.items as CartItem[];
+        const serialized = JSON.stringify(items);
+        // Mark as synced so the write effect skips writing back the same data
+        lastFirestoreDataRef.current = serialized;
+        setCart(items);
+      },
+      (err) => console.error("Cart Firestore sync error:", err)
+    );
+    return unsub;
+  }, [restaurantId, tableNumber, sessionId]);
+
+  // Debounced Firestore write when cart changes locally
+  useEffect(() => {
+    if (!restaurantId || !sessionId || !storageKey) return;
+    const serialized = JSON.stringify(cart);
+    // Skip if already synced (came from Firestore or from another tab)
+    if (serialized === lastFirestoreDataRef.current) return;
+
+    if (writeTimerRef.current) clearTimeout(writeTimerRef.current);
+    writeTimerRef.current = setTimeout(() => {
+      const db = getDb();
+      const cartRef = doc(db, "restaurants", restaurantId, "carts", sessionId);
+      lastFirestoreDataRef.current = serialized;
+      setDoc(cartRef, { items: cart, updatedAt: serverTimestamp() }).catch(console.error);
+    }, 400);
+
+    return () => {
+      if (writeTimerRef.current) clearTimeout(writeTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart, restaurantId, sessionId, storageKey]);
 
   const addToCart = (item: MenuItem, quantity = 1) => {
     const safeQuantity =
@@ -182,6 +235,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const clearCart = () => {
     if (storageKey) {
       try { localStorage.removeItem(storageKey); } catch { /* ignore */ }
+    }
+    // Propagate clear to all devices sharing this session
+    if (restaurantId && sessionId) {
+      const db = getDb();
+      const cartRef = doc(db, "restaurants", restaurantId, "carts", sessionId);
+      lastFirestoreDataRef.current = "[]";
+      setDoc(cartRef, { items: [], updatedAt: serverTimestamp() }).catch(console.error);
     }
     setCart([]);
   };
