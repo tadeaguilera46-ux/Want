@@ -82,6 +82,460 @@ function escapeHtml(value: unknown): string {
     .replace(/'/g, "&#039;");
 }
 
+type ReservationSettings = {
+  openTime: string;
+  closeTime: string;
+  slotMinutes: number;
+  capacityPerSlot: number;
+};
+
+const DEFAULT_RESERVATION_SETTINGS: ReservationSettings = {
+  openTime: "12:00",
+  closeTime: "23:00",
+  slotMinutes: 60,
+  capacityPerSlot: 40,
+};
+
+function parseTimeToMinutes(value: unknown): number | null {
+  if (typeof value !== "string" || !/^\d{2}:\d{2}$/.test(value)) return null;
+  const [hours, minutes] = value.split(":").map(Number);
+  if (
+    !Number.isInteger(hours) ||
+    !Number.isInteger(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null;
+  }
+  return hours * 60 + minutes;
+}
+
+function normalizeReservationSettings(value: unknown): ReservationSettings {
+  const settings =
+    value && typeof value === "object"
+      ? (value as Partial<ReservationSettings>)
+      : {};
+  const openMinutes = parseTimeToMinutes(settings.openTime);
+  const closeMinutes = parseTimeToMinutes(settings.closeTime);
+  const slotMinutes = Number(settings.slotMinutes);
+  const capacityPerSlot = Number(settings.capacityPerSlot);
+
+  if (
+    openMinutes === null ||
+    closeMinutes === null ||
+    openMinutes === closeMinutes ||
+    !Number.isInteger(slotMinutes) ||
+    slotMinutes < 15 ||
+    slotMinutes > 240 ||
+    !Number.isInteger(capacityPerSlot) ||
+    capacityPerSlot < 1 ||
+    capacityPerSlot > 1000
+  ) {
+    throw new HttpsError("invalid-argument", "Configuración de reservas inválida");
+  }
+
+  return {
+    openTime: settings.openTime as string,
+    closeTime: settings.closeTime as string,
+    slotMinutes,
+    capacityPerSlot,
+  };
+}
+
+function getReservationSlot(time: unknown, settings: ReservationSettings): string {
+  const timeMinutes = parseTimeToMinutes(time);
+  const openMinutes = parseTimeToMinutes(settings.openTime);
+  const rawCloseMinutes = parseTimeToMinutes(settings.closeTime);
+
+  if (
+    timeMinutes === null ||
+    openMinutes === null ||
+    rawCloseMinutes === null
+  ) {
+    throw new HttpsError("invalid-argument", "Horario de reserva inválido");
+  }
+
+  const closeMinutes =
+    rawCloseMinutes <= openMinutes ? rawCloseMinutes + 24 * 60 : rawCloseMinutes;
+  const adjustedTime =
+    timeMinutes < openMinutes ? timeMinutes + 24 * 60 : timeMinutes;
+  const offset = adjustedTime - openMinutes;
+
+  if (
+    adjustedTime < openMinutes ||
+    adjustedTime >= closeMinutes ||
+    offset % settings.slotMinutes !== 0
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "El horario elegido no corresponde a una franja disponible"
+    );
+  }
+
+  return String(time);
+}
+
+async function requireRestaurantAdmin(
+  restaurantId: string,
+  uid: string
+): Promise<FirebaseFirestore.DocumentData> {
+  const staffSnap = await admin
+    .firestore()
+    .doc(`restaurants/${restaurantId}/staff/${uid}`)
+    .get();
+
+  if (
+    !staffSnap.exists ||
+    staffSnap.data()?.role !== "admin" ||
+    staffSnap.data()?.active === false
+  ) {
+    throw new HttpsError("permission-denied", "No tenés permisos");
+  }
+
+  return staffSnap.data() || {};
+}
+
+function reservationAuditData({
+  restaurantId,
+  action,
+  actorUid,
+  actorEmail,
+  entityId,
+  mesa,
+  description,
+  before,
+  after,
+}: {
+  restaurantId: string;
+  action: string;
+  actorUid: string;
+  actorEmail?: string | null;
+  entityId: string;
+  mesa?: number | null;
+  description: string;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+}) {
+  return {
+    restaurantId,
+    action,
+    actorUid,
+    actorEmail: actorEmail || null,
+    actorRole: "admin",
+    userUid: actorUid,
+    userEmail: actorEmail || null,
+    userRole: "admin",
+    mesa: mesa || null,
+    pedidoId: null,
+    cuentaId: null,
+    sessionId: null,
+    entityType: "reservation",
+    entityId,
+    description,
+    reason: null,
+    changes: { before, after },
+    metadata: {},
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+}
+
+export const saveReservationSettings = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
+
+  const data = request.data as { restaurantId?: unknown; settings?: unknown };
+  const restaurantId =
+    typeof data.restaurantId === "string" ? data.restaurantId.trim() : "";
+  if (!restaurantId) throw new HttpsError("invalid-argument", "Falta restaurantId");
+
+  const staff = await requireRestaurantAdmin(restaurantId, request.auth.uid);
+  const settings = normalizeReservationSettings(data.settings);
+  const db = admin.firestore();
+  const settingsRef = db.doc(
+    `restaurants/${restaurantId}/reservationSettings/main`
+  );
+  const auditRef = db.collection(`restaurants/${restaurantId}/auditLogs`).doc();
+
+  await db.runTransaction(async (transaction) => {
+    const currentSnap = await transaction.get(settingsRef);
+    transaction.set(settingsRef, {
+      ...settings,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    transaction.set(
+      auditRef,
+      reservationAuditData({
+        restaurantId,
+        action: "reserva_capacidad_actualizada",
+        actorUid: request.auth!.uid,
+        actorEmail: staff.email || request.auth!.token.email || null,
+        entityId: "settings",
+        description: "Se actualizó la capacidad de reservas por franja",
+        before: currentSnap.exists ? currentSnap.data() || {} : {},
+        after: settings,
+      })
+    );
+  });
+
+  return { ok: true, settings };
+});
+
+export const createReservation = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
+
+  const input = request.data as Record<string, unknown>;
+  const restaurantId =
+    typeof input.restaurantId === "string" ? input.restaurantId.trim() : "";
+  const name = typeof input.name === "string" ? input.name.trim() : "";
+  const phone = typeof input.phone === "string" ? input.phone.trim() : "";
+  const email =
+    typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
+  const date = typeof input.date === "string" ? input.date.trim() : "";
+  const time = typeof input.time === "string" ? input.time.trim() : "";
+  const notes = typeof input.notes === "string" ? input.notes.trim() : "";
+  const partySize = Number(input.partySize);
+  const mesa = input.mesa ? Number(input.mesa) : null;
+
+  if (
+    !restaurantId ||
+    !name ||
+    !phone ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+    !Number.isInteger(partySize) ||
+    partySize < 1 ||
+    partySize > 100 ||
+    (mesa !== null && (!Number.isInteger(mesa) || mesa < 1))
+  ) {
+    throw new HttpsError("invalid-argument", "Datos de reserva inválidos");
+  }
+
+  const staff = await requireRestaurantAdmin(restaurantId, request.auth.uid);
+  const db = admin.firestore();
+  const settingsRef = db.doc(
+    `restaurants/${restaurantId}/reservationSettings/main`
+  );
+  const reservationRef = db
+    .collection(`restaurants/${restaurantId}/reservations`)
+    .doc();
+  const auditRef = db.collection(`restaurants/${restaurantId}/auditLogs`).doc();
+
+  await db.runTransaction(async (transaction) => {
+    const settingsSnap = await transaction.get(settingsRef);
+    const settings = settingsSnap.exists
+      ? normalizeReservationSettings(settingsSnap.data())
+      : DEFAULT_RESERVATION_SETTINGS;
+    const slot = getReservationSlot(time, settings);
+    const slotRef = db.doc(
+      `restaurants/${restaurantId}/reservationSlots/${date}_${slot.replace(":", "-")}`
+    );
+    const slotSnap = await transaction.get(slotRef);
+    let reservedPersons = Number(slotSnap.data()?.reservedPersons || 0);
+
+    if (!slotSnap.exists) {
+      const existingReservations = await transaction.get(
+        db
+          .collection(`restaurants/${restaurantId}/reservations`)
+          .where("date", "==", date)
+      );
+      reservedPersons = existingReservations.docs.reduce((total, document) => {
+        const existing = document.data();
+        return existing.status === "confirmed" &&
+          (existing.slot || existing.time) === slot
+          ? total + Number(existing.partySize || 0)
+          : total;
+      }, 0);
+    }
+
+    if (reservedPersons + partySize > settings.capacityPerSlot) {
+      throw new HttpsError(
+        "resource-exhausted",
+        `La franja de ${slot} no tiene capacidad suficiente`
+      );
+    }
+
+    transaction.set(slotRef, {
+      restaurantId,
+      date,
+      slot,
+      capacity: settings.capacityPerSlot,
+      reservedPersons: reservedPersons + partySize,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    transaction.set(reservationRef, {
+      restaurantId,
+      name,
+      phone,
+      email,
+      date,
+      time: slot,
+      slot,
+      partySize,
+      mesa,
+      notes: notes || null,
+      status: "confirmed",
+      confirmation: {
+        channel: "email",
+        status: "pending",
+        sentAt: null,
+        error: null,
+      },
+      reminder: {
+        channel: "email",
+        status: "pending",
+        sentAt: null,
+        error: null,
+      },
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    transaction.set(
+      auditRef,
+      reservationAuditData({
+        restaurantId,
+        action: "reserva_creada",
+        actorUid: request.auth!.uid,
+        actorEmail: staff.email || request.auth!.token.email || null,
+        entityId: reservationRef.id,
+        mesa,
+        description: `Se creó reserva para ${name}`,
+        before: { exists: false },
+        after: { date, time: slot, partySize, status: "confirmed" },
+      })
+    );
+  });
+
+  return { ok: true, reservationId: reservationRef.id };
+});
+
+export const updateReservationStatus = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
+
+  const data = request.data as {
+    restaurantId?: unknown;
+    reservationId?: unknown;
+    status?: unknown;
+  };
+  const restaurantId =
+    typeof data.restaurantId === "string" ? data.restaurantId.trim() : "";
+  const reservationId =
+    typeof data.reservationId === "string" ? data.reservationId.trim() : "";
+  const status = data.status;
+
+  if (
+    !restaurantId ||
+    !reservationId ||
+    (status !== "confirmed" && status !== "cancelled")
+  ) {
+    throw new HttpsError("invalid-argument", "Estado de reserva inválido");
+  }
+
+  const staff = await requireRestaurantAdmin(restaurantId, request.auth.uid);
+  const db = admin.firestore();
+  const reservationRef = db.doc(
+    `restaurants/${restaurantId}/reservations/${reservationId}`
+  );
+  const settingsRef = db.doc(
+    `restaurants/${restaurantId}/reservationSettings/main`
+  );
+  const auditRef = db.collection(`restaurants/${restaurantId}/auditLogs`).doc();
+
+  await db.runTransaction(async (transaction) => {
+    const [reservationSnap, settingsSnap] = await Promise.all([
+      transaction.get(reservationRef),
+      transaction.get(settingsRef),
+    ]);
+    if (!reservationSnap.exists) {
+      throw new HttpsError("not-found", "Reserva inexistente");
+    }
+
+    const reservation = reservationSnap.data() || {};
+    const currentStatus = reservation.status;
+    if (currentStatus === status) return;
+
+    const settings = settingsSnap.exists
+      ? normalizeReservationSettings(settingsSnap.data())
+      : DEFAULT_RESERVATION_SETTINGS;
+    const rawSlot = String(reservation.slot || reservation.time || "");
+    const slot =
+      currentStatus !== "confirmed" && status === "confirmed"
+        ? getReservationSlot(rawSlot, settings)
+        : rawSlot;
+    if (!/^\d{2}:\d{2}$/.test(slot)) {
+      throw new HttpsError("failed-precondition", "Horario de reserva inválido");
+    }
+    const slotRef = db.doc(
+      `restaurants/${restaurantId}/reservationSlots/${reservation.date}_${slot.replace(":", "-")}`
+    );
+    const slotSnap = await transaction.get(slotRef);
+    let reservedPersons = Number(slotSnap.data()?.reservedPersons || 0);
+
+    if (!slotSnap.exists) {
+      const existingReservations = await transaction.get(
+        db
+          .collection(`restaurants/${restaurantId}/reservations`)
+          .where("date", "==", reservation.date)
+      );
+      reservedPersons = existingReservations.docs.reduce((total, document) => {
+        const existing = document.data();
+        return existing.status === "confirmed" &&
+          (existing.slot || existing.time) === slot
+          ? total + Number(existing.partySize || 0)
+          : total;
+      }, 0);
+    }
+    const partySize = Number(reservation.partySize || 0);
+    let nextReservedPersons = reservedPersons;
+
+    if (currentStatus === "confirmed" && status === "cancelled") {
+      nextReservedPersons = Math.max(0, reservedPersons - partySize);
+    } else if (currentStatus !== "confirmed" && status === "confirmed") {
+      if (reservedPersons + partySize > settings.capacityPerSlot) {
+        throw new HttpsError(
+          "resource-exhausted",
+          `La franja de ${slot} no tiene capacidad suficiente`
+        );
+      }
+      nextReservedPersons = reservedPersons + partySize;
+    }
+
+    transaction.set(
+      slotRef,
+      {
+        restaurantId,
+        date: reservation.date,
+        slot,
+        capacity: settings.capacityPerSlot,
+        reservedPersons: nextReservedPersons,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    transaction.update(reservationRef, {
+      status,
+      slot,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    transaction.set(
+      auditRef,
+      reservationAuditData({
+        restaurantId,
+        action: "reserva_estado_actualizado",
+        actorUid: request.auth!.uid,
+        actorEmail: staff.email || request.auth!.token.email || null,
+        entityId: reservationId,
+        mesa: reservation.mesa || null,
+        description: `Se actualizó reserva ${reservationId} a ${status}`,
+        before: { status: currentStatus },
+        after: { status },
+      })
+    );
+  });
+
+  return { ok: true };
+});
+
 export const sendReservationConfirmation = onDocumentCreated(
   {
     document: "restaurants/{restaurantId}/reservations/{reservationId}",

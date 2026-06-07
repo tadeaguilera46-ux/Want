@@ -462,10 +462,14 @@ service cloud.firestore {
     // Reservas
     match /restaurants/{restaurantId}/reservations/{reservationId} {
       allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
-      allow create: if isSuperAdmin() || isAdmin(restaurantId)
-        && request.resource.data.restaurantId == restaurantId;
-      allow update: if isSuperAdmin() || isActiveStaff(restaurantId);
-      allow delete: if isSuperAdmin() || isAdmin(restaurantId);
+      // Creación y cambios pasan por Cloud Functions para aplicar capacidad
+      // por franja de forma transaccional.
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    match /restaurants/{restaurantId}/reservationSettings/{docId} {
+      allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
+      allow write: if isSuperAdmin();
     }
 
     // Turnos del personal (clock in/out)

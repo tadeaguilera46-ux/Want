@@ -1,19 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   collection,
   doc,
   onSnapshot,
   orderBy,
   query,
-  serverTimestamp,
-  writeBatch,
   where,
 } from "firebase/firestore";
+import { getApp } from "firebase/app";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { Calendar, Check, Clock, Plus, Users, X } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import { toast } from "sonner";
 import { useAuth } from "../lib/auth-context";
-import { writeAuditLog } from "../lib/audit-logs";
 
 type Reservation = {
   id: string;
@@ -22,6 +21,7 @@ type Reservation = {
   email: string;
   date: string;
   time: string;
+  slot?: string;
   partySize: number;
   mesa?: number;
   status: "pending" | "confirmed" | "cancelled";
@@ -41,9 +41,57 @@ type Reservation = {
   createdAt?: unknown;
 };
 
+type ReservationSettings = {
+  openTime: string;
+  closeTime: string;
+  slotMinutes: number;
+  capacityPerSlot: number;
+};
+
 const db = getDb();
+const functions = getFunctions(getApp(), "us-central1");
 
 const today = () => new Date().toISOString().slice(0, 10);
+const DEFAULT_SETTINGS: ReservationSettings = {
+  openTime: "12:00",
+  closeTime: "23:00",
+  slotMinutes: 60,
+  capacityPerSlot: 40,
+};
+
+const timeToMinutes = (time: string) => {
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours * 60 + minutes;
+};
+
+const minutesToTime = (minutes: number) => {
+  const normalized = minutes % (24 * 60);
+  return `${String(Math.floor(normalized / 60)).padStart(2, "0")}:${String(
+    normalized % 60
+  ).padStart(2, "0")}`;
+};
+
+const buildSlots = (settings: ReservationSettings) => {
+  const open = timeToMinutes(settings.openTime);
+  const rawClose = timeToMinutes(settings.closeTime);
+  const close = rawClose <= open ? rawClose + 24 * 60 : rawClose;
+  const slots: string[] = [];
+
+  for (
+    let minutes = open;
+    minutes < close && slots.length < 96;
+    minutes += settings.slotMinutes
+  ) {
+    slots.push(minutesToTime(minutes));
+  }
+
+  return slots;
+};
+
+const getFunctionErrorMessage = (error: unknown) => {
+  if (error instanceof Error && error.message) return error.message;
+  return "No se pudo completar la operación.";
+};
 
 export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
   const { user } = useAuth();
@@ -51,6 +99,11 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
   const [viewDate, setViewDate] = useState(today());
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settings, setSettings] =
+    useState<ReservationSettings>(DEFAULT_SETTINGS);
+  const [settingsDraft, setSettingsDraft] =
+    useState<ReservationSettings>(DEFAULT_SETTINGS);
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -60,6 +113,45 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
   const [partySize, setPartySize] = useState("2");
   const [mesa, setMesa] = useState("");
   const [notes, setNotes] = useState("");
+
+  const slots = useMemo(() => buildSlots(settings), [settings]);
+  const occupancyBySlot = useMemo(() => {
+    const occupancy = new Map<string, number>();
+    reservations
+      .filter((reservation) => reservation.status === "confirmed")
+      .forEach((reservation) => {
+        const slot = reservation.slot || reservation.time;
+        occupancy.set(
+          slot,
+          (occupancy.get(slot) || 0) + Number(reservation.partySize || 0)
+        );
+      });
+    return occupancy;
+  }, [reservations]);
+  const selectedSlotOccupancy = occupancyBySlot.get(time) || 0;
+  const selectedSlotRemaining = Math.max(
+    0,
+    settings.capacityPerSlot - selectedSlotOccupancy
+  );
+
+  useEffect(() => {
+    return onSnapshot(
+      doc(db, "restaurants", restaurantId, "reservationSettings", "main"),
+      (snapshot) => {
+        const nextSettings = snapshot.exists()
+          ? (snapshot.data() as ReservationSettings)
+          : DEFAULT_SETTINGS;
+        setSettings(nextSettings);
+        setSettingsDraft(nextSettings);
+      }
+    );
+  }, [restaurantId]);
+
+  useEffect(() => {
+    if (slots.length > 0 && !slots.includes(time)) {
+      setTime(slots[0]);
+    }
+  }, [slots, time]);
 
   useEffect(() => {
     const q = query(
@@ -82,10 +174,9 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
     }
     try {
       setSaving(true);
-      const reservationRef = doc(
-        collection(db, "restaurants", restaurantId, "reservations")
-      );
-      const reservationData = {
+      const createReservation = httpsCallable(functions, "createReservation");
+      await createReservation({
+        restaurantId,
         name: name.trim(),
         phone: phone.trim(),
         email: normalizedEmail,
@@ -94,53 +185,13 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
         partySize: Number(partySize) || 2,
         mesa: mesa ? Number(mesa) : null,
         notes: notes.trim() || null,
-        status: "confirmed",
-        confirmation: {
-          channel: "email",
-          status: "pending",
-          sentAt: null,
-          error: null,
-        },
-        reminder: {
-          channel: "email",
-          status: "pending",
-          sentAt: null,
-          error: null,
-        },
-        restaurantId,
-        createdAt: serverTimestamp(),
-      };
-      const batch = writeBatch(db);
-      batch.set(reservationRef, reservationData);
-      writeAuditLog(batch, {
-        restaurantId,
-        action: "reserva_creada",
-        actorUid: user.uid,
-        actorEmail: user.email,
-        actorRole: "admin",
-        entityType: "reservation",
-        entityId: reservationRef.id,
-        mesa: mesa ? Number(mesa) : undefined,
-        description: `Se creo reserva para ${name.trim()}`,
-        changes: {
-          before: { exists: false },
-          after: {
-            date,
-            time,
-            partySize: Number(partySize) || 2,
-            status: "confirmed",
-            confirmationStatus: "pending",
-            reminderStatus: "pending",
-          },
-        },
       });
-      await batch.commit();
       setName(""); setPhone(""); setEmail(""); setDate(today()); setTime("20:00");
       setPartySize("2"); setMesa(""); setNotes("");
       setShowForm(false);
       toast.success("Reserva confirmada. Enviaremos el email automáticamente.");
-    } catch {
-      toast.error("No se pudo guardar.");
+    } catch (error) {
+      toast.error(getFunctionErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -148,27 +199,25 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
 
   const setStatus = async (id: string, status: Reservation["status"]) => {
     if (!user) return;
-    const reservation = reservations.find((current) => current.id === id);
-    const batch = writeBatch(db);
-    batch.update(doc(db, "restaurants", restaurantId, "reservations", id), {
-      status,
-    });
-    writeAuditLog(batch, {
-      restaurantId,
-      action: "reserva_estado_actualizado",
-      actorUid: user.uid,
-      actorEmail: user.email,
-      actorRole: "admin",
-      entityType: "reservation",
-      entityId: id,
-      mesa: reservation?.mesa,
-      description: `Se actualizo reserva ${id} a ${status}`,
-      changes: {
-        before: { status: reservation?.status ?? null },
-        after: { status },
-      },
-    });
-    await batch.commit();
+    try {
+      const updateStatus = httpsCallable(functions, "updateReservationStatus");
+      await updateStatus({ restaurantId, reservationId: id, status });
+    } catch (error) {
+      toast.error(getFunctionErrorMessage(error));
+    }
+  };
+
+  const saveSettings = async () => {
+    try {
+      setSettingsSaving(true);
+      const save = httpsCallable(functions, "saveReservationSettings");
+      await save({ restaurantId, settings: settingsDraft });
+      toast.success("Capacidad por franja guardada.");
+    } catch (error) {
+      toast.error(getFunctionErrorMessage(error));
+    } finally {
+      setSettingsSaving(false);
+    }
   };
 
   const statusStyle: Record<Reservation["status"], string> = {
@@ -204,11 +253,125 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
             className="h-10 rounded-lg border border-zinc-200 px-3 text-sm"
           />
           <button
-            onClick={() => setShowForm((v) => !v)}
+            onClick={() => {
+              setDate(viewDate);
+              setShowForm((v) => !v);
+            }}
             className="flex h-10 items-center gap-1.5 rounded-lg bg-zinc-950 px-4 text-sm font-bold text-white"
           >
             <Plus size={15} /> Nueva
           </button>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-zinc-200 bg-white p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="font-bold text-zinc-900">Capacidad por franja</h3>
+            <p className="text-xs text-zinc-500">
+              Las reservas se aceptan solo dentro de este horario y cupo.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={saveSettings}
+            disabled={settingsSaving}
+            className="rounded-lg bg-zinc-950 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+          >
+            {settingsSaving ? "Guardando..." : "Guardar capacidad"}
+          </button>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-4">
+          <label className="text-xs font-semibold text-zinc-600">
+            Apertura
+            <input
+              type="time"
+              value={settingsDraft.openTime}
+              onChange={(event) =>
+                setSettingsDraft((current) => ({
+                  ...current,
+                  openTime: event.target.value,
+                }))
+              }
+              className="mt-1 h-10 w-full rounded-lg border border-zinc-200 px-3 text-sm"
+            />
+          </label>
+          <label className="text-xs font-semibold text-zinc-600">
+            Cierre
+            <input
+              type="time"
+              value={settingsDraft.closeTime}
+              onChange={(event) =>
+                setSettingsDraft((current) => ({
+                  ...current,
+                  closeTime: event.target.value,
+                }))
+              }
+              className="mt-1 h-10 w-full rounded-lg border border-zinc-200 px-3 text-sm"
+            />
+          </label>
+          <label className="text-xs font-semibold text-zinc-600">
+            Minutos por franja
+            <select
+              value={settingsDraft.slotMinutes}
+              onChange={(event) =>
+                setSettingsDraft((current) => ({
+                  ...current,
+                  slotMinutes: Number(event.target.value),
+                }))
+              }
+              className="mt-1 h-10 w-full rounded-lg border border-zinc-200 px-3 text-sm"
+            >
+              {[15, 30, 45, 60, 90, 120].map((minutes) => (
+                <option key={minutes} value={minutes}>
+                  {minutes} min
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-zinc-600">
+            Personas por franja
+            <input
+              type="number"
+              min={1}
+              max={1000}
+              value={settingsDraft.capacityPerSlot}
+              onChange={(event) =>
+                setSettingsDraft((current) => ({
+                  ...current,
+                  capacityPerSlot: Number(event.target.value),
+                }))
+              }
+              className="mt-1 h-10 w-full rounded-lg border border-zinc-200 px-3 text-sm"
+            />
+          </label>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-zinc-200 bg-white p-4">
+        <p className="mb-3 text-xs font-bold uppercase tracking-wide text-zinc-500">
+          Ocupación del {viewDate}
+        </p>
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {slots.map((slot) => {
+            const used = occupancyBySlot.get(slot) || 0;
+            const full = used >= settings.capacityPerSlot;
+            return (
+              <div
+                key={slot}
+                className={`min-w-[110px] rounded-lg border px-3 py-2 ${
+                  full
+                    ? "border-red-200 bg-red-50 text-red-700"
+                    : "border-zinc-200 bg-zinc-50 text-zinc-700"
+                }`}
+              >
+                <p className="text-sm font-bold">{slot}</p>
+                <p className="text-xs">
+                  {used}/{settings.capacityPerSlot} personas
+                </p>
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -220,14 +383,35 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre *" required className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono *" required className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email *" required className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
-            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
-            <input type="number" min={1} max={30} value={partySize} onChange={(e) => setPartySize(e.target.value)} placeholder="Personas" className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
+            <input type="date" value={date} onChange={(e) => { setDate(e.target.value); setViewDate(e.target.value); }} className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
+            <select value={time} onChange={(e) => setTime(e.target.value)} className="h-10 rounded-lg border border-zinc-200 px-3 text-sm">
+              {slots.map((slot) => {
+                const remaining = Math.max(
+                  0,
+                  settings.capacityPerSlot - (occupancyBySlot.get(slot) || 0)
+                );
+                return (
+                  <option key={slot} value={slot} disabled={remaining === 0}>
+                    {slot} · {remaining} lugares
+                  </option>
+                );
+              })}
+            </select>
+            <input type="number" min={1} max={100} value={partySize} onChange={(e) => setPartySize(e.target.value)} placeholder="Personas" className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
             <input type="number" min={1} value={mesa} onChange={(e) => setMesa(e.target.value)} placeholder="Mesa (opcional)" className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
           </div>
+          <p
+            className={`text-xs font-semibold ${
+              Number(partySize) > selectedSlotRemaining
+                ? "text-red-600"
+                : "text-emerald-600"
+            }`}
+          >
+            Franja {time}: {selectedSlotRemaining} lugares disponibles.
+          </p>
           <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notas (opcional)" className="h-10 w-full rounded-lg border border-zinc-200 px-3 text-sm" />
           <div className="flex gap-2">
-            <button type="submit" disabled={saving} className="rounded-lg bg-zinc-950 px-5 py-2 text-sm font-bold text-white disabled:opacity-50">Guardar</button>
+            <button type="submit" disabled={saving || Number(partySize) > selectedSlotRemaining || slots.length === 0} className="rounded-lg bg-zinc-950 px-5 py-2 text-sm font-bold text-white disabled:opacity-50">Guardar</button>
             <button type="button" onClick={() => setShowForm(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-semibold text-zinc-600">Cancelar</button>
           </div>
         </form>
