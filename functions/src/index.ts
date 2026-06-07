@@ -245,6 +245,7 @@ function reservationAuditData({
   action,
   actorUid,
   actorEmail,
+  actorRole = "admin",
   entityId,
   mesa,
   description,
@@ -255,6 +256,7 @@ function reservationAuditData({
   action: string;
   actorUid: string;
   actorEmail?: string | null;
+  actorRole?: string;
   entityId: string;
   mesa?: number | null;
   description: string;
@@ -266,10 +268,10 @@ function reservationAuditData({
     action,
     actorUid,
     actorEmail: actorEmail || null,
-    actorRole: "admin",
+    actorRole,
     userUid: actorUid,
     userEmail: actorEmail || null,
-    userRole: "admin",
+    userRole: actorRole,
     mesa: mesa || null,
     pedidoId: null,
     cuentaId: null,
@@ -282,6 +284,54 @@ function reservationAuditData({
     metadata: {},
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   };
+}
+
+function isValidReservationCancellationToken(token: unknown): token is string {
+  return typeof token === "string" && /^[a-f0-9]{64}$/.test(token);
+}
+
+function reservationCancellationUrl(
+  restaurantId: string,
+  reservationId: string,
+  token: string
+): string {
+  const appUrl = (process.env.APP_URL || "https://want-livid.vercel.app").replace(
+    /\/+$/,
+    ""
+  );
+  const params = new URLSearchParams({ restaurantId, reservationId, token });
+  return `${appUrl}/reservation/cancel?${params.toString()}`;
+}
+
+function tokensMatch(received: string, expected: unknown): boolean {
+  if (!isValidReservationCancellationToken(expected)) return false;
+  return crypto.timingSafeEqual(
+    Buffer.from(received, "hex"),
+    Buffer.from(expected, "hex")
+  );
+}
+
+async function getOrCreateReservationCancellationToken(
+  restaurantId: string,
+  reservationId: string
+): Promise<string> {
+  const secretRef = admin
+    .firestore()
+    .doc(`restaurants/${restaurantId}/reservationSecrets/${reservationId}`);
+
+  return admin.firestore().runTransaction(async (transaction) => {
+    const secretSnap = await transaction.get(secretRef);
+    const currentToken = secretSnap.data()?.cancellationToken;
+    if (isValidReservationCancellationToken(currentToken)) return currentToken;
+
+    const cancellationToken = crypto.randomBytes(32).toString("hex");
+    transaction.set(secretRef, {
+      cancellationToken,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return cancellationToken;
+  });
 }
 
 export const saveReservationSettings = onCall({ cors: true }, async (request) => {
@@ -362,7 +412,11 @@ export const createReservation = onCall({ cors: true }, async (request) => {
   const reservationRef = db
     .collection(`restaurants/${restaurantId}/reservations`)
     .doc();
+  const reservationSecretRef = db.doc(
+    `restaurants/${restaurantId}/reservationSecrets/${reservationRef.id}`
+  );
   const auditRef = db.collection(`restaurants/${restaurantId}/auditLogs`).doc();
+  const cancellationToken = crypto.randomBytes(32).toString("hex");
 
   await db.runTransaction(async (transaction) => {
     const settingsSnap = await transaction.get(settingsRef);
@@ -434,6 +488,11 @@ export const createReservation = onCall({ cors: true }, async (request) => {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       statusChangedAt: admin.firestore.FieldValue.serverTimestamp(),
       confirmedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    transaction.set(reservationSecretRef, {
+      cancellationToken,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     transaction.set(
       auditRef,
@@ -607,6 +666,205 @@ export const updateReservationStatus = onCall({ cors: true }, async (request) =>
   return { ok: true };
 });
 
+export const getReservationForCancellation = onCall(
+  { cors: true },
+  async (request) => {
+    const data = request.data as {
+      restaurantId?: unknown;
+      reservationId?: unknown;
+      token?: unknown;
+    };
+    const restaurantId =
+      typeof data.restaurantId === "string" ? data.restaurantId.trim() : "";
+    const reservationId =
+      typeof data.reservationId === "string" ? data.reservationId.trim() : "";
+    const token = data.token;
+
+    if (
+      !/^[A-Za-z0-9_-]{1,128}$/.test(restaurantId) ||
+      !/^[A-Za-z0-9_-]{1,128}$/.test(reservationId) ||
+      !isValidReservationCancellationToken(token)
+    ) {
+      throw new HttpsError("invalid-argument", "Enlace de cancelación inválido");
+    }
+
+    const db = admin.firestore();
+    const [reservationSnap, secretSnap, restaurantSnap] = await Promise.all([
+      db.doc(`restaurants/${restaurantId}/reservations/${reservationId}`).get(),
+      db
+        .doc(`restaurants/${restaurantId}/reservationSecrets/${reservationId}`)
+        .get(),
+      db.doc(`restaurants/${restaurantId}`).get(),
+    ]);
+
+    if (
+      !reservationSnap.exists ||
+      !tokensMatch(token, secretSnap.data()?.cancellationToken)
+    ) {
+      throw new HttpsError("permission-denied", "Enlace de cancelación inválido");
+    }
+
+    const reservation = reservationSnap.data() || {};
+    const restaurant = restaurantSnap.data() || {};
+    return {
+      restaurantName:
+        typeof restaurant.name === "string" ? restaurant.name : "Restaurante",
+      name: reservation.name,
+      date: reservation.date,
+      time: reservation.time,
+      partySize: reservation.partySize,
+      status: reservation.status,
+      canCancel:
+        reservation.status === "pending" || reservation.status === "confirmed",
+    };
+  }
+);
+
+export const cancelReservationByCustomer = onCall(
+  { cors: true },
+  async (request) => {
+    const data = request.data as {
+      restaurantId?: unknown;
+      reservationId?: unknown;
+      token?: unknown;
+    };
+    const restaurantId =
+      typeof data.restaurantId === "string" ? data.restaurantId.trim() : "";
+    const reservationId =
+      typeof data.reservationId === "string" ? data.reservationId.trim() : "";
+    const token = data.token;
+
+    if (
+      !/^[A-Za-z0-9_-]{1,128}$/.test(restaurantId) ||
+      !/^[A-Za-z0-9_-]{1,128}$/.test(reservationId) ||
+      !isValidReservationCancellationToken(token)
+    ) {
+      throw new HttpsError("invalid-argument", "Enlace de cancelación inválido");
+    }
+
+    const db = admin.firestore();
+    const reservationRef = db.doc(
+      `restaurants/${restaurantId}/reservations/${reservationId}`
+    );
+    const secretRef = db.doc(
+      `restaurants/${restaurantId}/reservationSecrets/${reservationId}`
+    );
+    const auditRef = db.collection(`restaurants/${restaurantId}/auditLogs`).doc();
+
+    const result = await db.runTransaction(async (transaction) => {
+      const [reservationSnap, secretSnap] = await Promise.all([
+        transaction.get(reservationRef),
+        transaction.get(secretRef),
+      ]);
+      if (
+        !reservationSnap.exists ||
+        !tokensMatch(token, secretSnap.data()?.cancellationToken)
+      ) {
+        throw new HttpsError(
+          "permission-denied",
+          "Enlace de cancelación inválido"
+        );
+      }
+
+      const reservation = reservationSnap.data() || {};
+      const currentStatus = reservation.status as ReservationStatus;
+      if (currentStatus === "cancelled") {
+        return { alreadyCancelled: true };
+      }
+      if (currentStatus !== "pending" && currentStatus !== "confirmed") {
+        throw new HttpsError(
+          "failed-precondition",
+          "Esta reserva ya no puede ser cancelada por el cliente"
+        );
+      }
+
+      const slot = String(reservation.slot || reservation.time || "");
+      if (currentStatus === "confirmed") {
+        if (!/^\d{2}:\d{2}$/.test(slot)) {
+          throw new HttpsError(
+            "failed-precondition",
+            "La reserva no tiene una franja válida"
+          );
+        }
+        const slotRef = db.doc(
+          `restaurants/${restaurantId}/reservationSlots/${reservation.date}_${slot.replace(":", "-")}`
+        );
+        const slotSnap = await transaction.get(slotRef);
+        let reservedPersons = Number(slotSnap.data()?.reservedPersons || 0);
+
+        if (!slotSnap.exists) {
+          const existingReservations = await transaction.get(
+            db
+              .collection(`restaurants/${restaurantId}/reservations`)
+              .where("date", "==", reservation.date)
+          );
+          reservedPersons = existingReservations.docs.reduce((total, document) => {
+            const existing = document.data();
+            return OCCUPYING_RESERVATION_STATUSES.has(existing.status) &&
+              (existing.slot || existing.time) === slot
+              ? total + Number(existing.partySize || 0)
+              : total;
+          }, 0);
+        }
+
+        transaction.set(
+          slotRef,
+          {
+            restaurantId,
+            date: reservation.date,
+            slot,
+            reservedPersons: Math.max(
+              0,
+              reservedPersons - Number(reservation.partySize || 0)
+            ),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+      }
+
+      const customerEmail =
+        typeof reservation.email === "string"
+          ? reservation.email.trim().toLowerCase()
+          : "";
+      const actorUid = `customer:${crypto
+        .createHash("sha256")
+        .update(customerEmail || reservationId)
+        .digest("hex")
+        .slice(0, 24)}`;
+
+      transaction.update(reservationRef, {
+        status: "cancelled",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        statusChangedAt: admin.firestore.FieldValue.serverTimestamp(),
+        cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+        customerCancellation: {
+          source: "email_link",
+          requestedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      });
+      transaction.set(
+        auditRef,
+        reservationAuditData({
+          restaurantId,
+          action: "reserva_cancelada_cliente",
+          actorUid,
+          actorEmail: customerEmail || null,
+          actorRole: "customer",
+          entityId: reservationId,
+          mesa: reservation.mesa || null,
+          description: `El cliente canceló la reserva ${reservationId}`,
+          before: { status: currentStatus },
+          after: { status: "cancelled", source: "email_link" },
+        })
+      );
+      return { alreadyCancelled: false };
+    });
+
+    return { ok: true, ...result };
+  }
+);
+
 export const sendReservationConfirmation = onDocumentCreated(
   {
     document: "restaurants/{restaurantId}/reservations/{reservationId}",
@@ -640,6 +898,15 @@ export const sendReservationConfirmation = onDocumentCreated(
         typeof restaurantSnap.data()?.name === "string"
           ? restaurantSnap.data()?.name
           : "el restaurante";
+      const cancellationToken = await getOrCreateReservationCancellationToken(
+        event.params.restaurantId,
+        event.params.reservationId
+      );
+      const cancellationUrl = reservationCancellationUrl(
+        event.params.restaurantId,
+        event.params.reservationId,
+        cancellationToken
+      );
       const mesa =
         Number.isInteger(reservation.mesa) && reservation.mesa > 0
           ? `<tr><td style="padding:8px 0;color:#71717a">Mesa</td><td style="padding:8px 0;text-align:right;font-weight:700">${escapeHtml(reservation.mesa)}</td></tr>`
@@ -658,7 +925,8 @@ export const sendReservationConfirmation = onDocumentCreated(
              <tr><td style="padding:8px 0;border-bottom:1px solid #f4f4f5;color:#71717a">Personas</td><td style="padding:8px 0;border-bottom:1px solid #f4f4f5;text-align:right;font-weight:700">${escapeHtml(reservation.partySize)}</td></tr>
              ${mesa}
            </table>
-           <p style="margin:0;font-size:13px;color:#71717a">Si necesitás modificar o cancelar la reserva, comunicate directamente con el restaurante.</p>`
+           <p style="margin:24px 0"><a href="${escapeHtml(cancellationUrl)}" style="background:#dc2626;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">Cancelar mi reserva</a></p>
+           <p style="margin:0;font-size:13px;color:#71717a">Usá este enlace únicamente si necesitás cancelar. La cancelación libera tu lugar inmediatamente.</p>`
         )
       );
 
@@ -815,6 +1083,15 @@ export const sendReservationReminders = onSchedule(
               : "el restaurante";
           restaurantNames.set(restaurantRef.id, restaurantName);
         }
+        const cancellationToken = await getOrCreateReservationCancellationToken(
+          restaurantRef.id,
+          reservationSnap.id
+        );
+        const cancellationUrl = reservationCancellationUrl(
+          restaurantRef.id,
+          reservationSnap.id,
+          cancellationToken
+        );
 
         const sent = await sendEmail(
           RESEND_API_KEY.value(),
@@ -827,7 +1104,8 @@ export const sendReservationReminders = onSchedule(
                <tr><td style="padding:8px 0;border-bottom:1px solid #f4f4f5;color:#71717a">Personas</td><td style="padding:8px 0;border-bottom:1px solid #f4f4f5;text-align:right;font-weight:700">${escapeHtml(reservation.partySize)}</td></tr>
                ${Number.isInteger(reservation.mesa) && reservation.mesa > 0 ? `<tr><td style="padding:8px 0;color:#71717a">Mesa</td><td style="padding:8px 0;text-align:right;font-weight:700">${escapeHtml(reservation.mesa)}</td></tr>` : ""}
              </table>
-             <p style="margin:0;font-size:13px;color:#71717a">Si necesitás modificar o cancelar la reserva, comunicate directamente con el restaurante.</p>`
+             <p style="margin:24px 0"><a href="${escapeHtml(cancellationUrl)}" style="background:#dc2626;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">Cancelar mi reserva</a></p>
+             <p style="margin:0;font-size:13px;color:#71717a">Si no podés asistir, cancelá desde este enlace para liberar tu lugar.</p>`
           ),
           undefined,
           `reservation-reminder-${crypto

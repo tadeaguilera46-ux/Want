@@ -472,6 +472,11 @@ service cloud.firestore {
       allow write: if isSuperAdmin();
     }
 
+    // Tokens usados por enlaces públicos de cancelación. Solo Cloud Functions.
+    match /restaurants/{restaurantId}/reservationSecrets/{reservationId} {
+      allow read, write: if false;
+    }
+
     // Turnos del personal (clock in/out)
     match /restaurants/{restaurantId}/shifts/{shiftId} {
       allow read: if isSuperAdmin() || isActiveStaff(restaurantId);

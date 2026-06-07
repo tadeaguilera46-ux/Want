@@ -20,6 +20,9 @@ const Cart = lazy(() => import("./pages/Cart"));
 const OrderConfirmed = lazy(() => import("./pages/OrderConfirmed"));
 const RequestBill = lazy(() => import("./pages/RequestBill"));
 const BillConfirmed = lazy(() => import("./pages/BillConfirmed"));
+const ReservationCancellation = lazy(
+  () => import("./pages/ReservationCancellation")
+);
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const QrEntry = lazy(() => import("./pages/QrEntry"));
 
@@ -145,6 +148,11 @@ const App = () => (
                 <BillConfirmed />
               </ClientApp>
             }
+          />
+
+          <Route
+            path="/reservation/cancel"
+            element={<ReservationCancellation />}
           />
 
           {/* =========================
