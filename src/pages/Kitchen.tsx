@@ -71,6 +71,7 @@ const Kitchen = () => {
   const [togglingById, setTogglingById] = useState<Record<string, boolean>>({});
 
   const notifiedOrderIdsRef = useRef<Set<string>>(new Set());
+  const notifiedModifiedRef = useRef<Set<string>>(new Set());
   const firstLoadRef = useRef(true);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -181,9 +182,15 @@ const Kitchen = () => {
           return estadoValido && tieneComida;
         });
 
+        let shouldPlaySound = false;
+
         if (firstLoadRef.current) {
           pedidosConComida.forEach((pedido) => {
             notifiedOrderIdsRef.current.add(pedido.id);
+            const cancelledCount = pedido.cancelledItems?.length ?? 0;
+            if (cancelledCount > 0) {
+              notifiedModifiedRef.current.add(`${pedido.id}:${cancelledCount}`);
+            }
           });
           firstLoadRef.current = false;
         } else {
@@ -192,12 +199,24 @@ const Kitchen = () => {
           );
 
           if (nuevosPedidos.length > 0) {
-            void playSound();
+            shouldPlaySound = true;
             nuevosPedidos.forEach((pedido) => {
               notifiedOrderIdsRef.current.add(pedido.id);
             });
           }
+
+          pedidosConComida.forEach((pedido) => {
+            const cancelledCount = pedido.cancelledItems?.length ?? 0;
+            if (cancelledCount === 0) return;
+            const modKey = `${pedido.id}:${cancelledCount}`;
+            if (!notifiedModifiedRef.current.has(modKey)) {
+              shouldPlaySound = true;
+              notifiedModifiedRef.current.add(modKey);
+            }
+          });
         }
+
+        if (shouldPlaySound) void playSound();
 
         setPedidos(pedidosConComida);
       },
@@ -710,6 +729,12 @@ const Kitchen = () => {
                                 Nuevo
                               </span>
                             )}
+                            {(p.cancelledItems?.length ?? 0) > 0 && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-amber-400 bg-amber-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+                                <AlertTriangle size={11} />
+                                Modificado
+                              </span>
+                            )}
                             <span className={`inline-flex rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide ${getBadgeStylesByEstado(estadoActual)}`}>
                               {estadoActual === "pendiente" && <Clock3 size={13} className="mr-1.5" />}
                               {estadoActual === "preparando" && <Flame size={13} className="mr-1.5" />}
@@ -720,6 +745,28 @@ const Kitchen = () => {
                               ⏱ {formatElapsedTime(p)}
                             </span>
                           </div>
+
+                          {(p.cancelledItems?.length ?? 0) > 0 && (
+                            <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5">
+                              <div className="mb-1.5 flex items-center gap-1.5">
+                                <AlertTriangle size={12} className="shrink-0 text-amber-700" />
+                                <p className="text-[10px] font-bold uppercase tracking-wide text-amber-800">
+                                  Ítems cancelados por caja
+                                </p>
+                              </div>
+                              <ul className="space-y-0.5">
+                                {p.cancelledItems!.map((ci, i) => (
+                                  <li key={i} className="flex items-baseline gap-1 text-xs">
+                                    <span className="shrink-0 font-bold text-amber-700">×</span>
+                                    <span className="font-semibold text-amber-900">{ci.name}</span>
+                                    {ci.reason && (
+                                      <span className="text-amber-700">— {ci.reason}</span>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
 
                           <div className="space-y-3">
                             {comidaConIdx.map(({ item, idx }) => {
