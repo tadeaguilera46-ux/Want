@@ -34,6 +34,7 @@ import { useRestaurant } from "../lib/restaurant-context";
 import { crearPedido } from "../lib/orders";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import {
+  addPartialPayment,
   createCashierAuditLog,
   createOrRefreshCashierBill,
   markCashierBillPrinted,
@@ -307,6 +308,8 @@ const Cashier = () => {
   const [showInvoiceInline, setShowInvoiceInline] = useState(false);
   const [showSplitBill, setShowSplitBill] = useState(false);
   const [splitParts, setSplitParts] = useState("2");
+  const [splitMode, setSplitMode] = useState<"partes" | "productos">("partes");
+  const [splitProductSelection, setSplitProductSelection] = useState<Record<string, boolean>>({});
   const [cancelItemTarget, setCancelItemTarget] = useState<{ pedidoId: string; itemIndex: number; name: string } | null>(null);
   const [cancelItemReason, setCancelItemReason] = useState("");
 
@@ -667,9 +670,17 @@ const Cashier = () => {
   const currentPaymentAmount = Number(paymentAmount || 0);
 
   const isPaymentAmountInvalid =
-    !Number.isFinite(currentPaymentAmount) ||
-    currentPaymentAmount <= 0 ||
-    currentPaymentAmount < remainingAmount;
+    !Number.isFinite(currentPaymentAmount) || currentPaymentAmount <= 0;
+
+  const splitProductSubtotal = useMemo(() => {
+    return selectedItems
+      .filter(
+        (item) =>
+          !item._cancelled &&
+          splitProductSelection[`${item._pedidoId}:${item._itemIndex}`]
+      )
+      .reduce((sum, item) => sum + getItemSubtotal(item as CashierOrderItem), 0);
+  }, [selectedItems, splitProductSelection]);
 
   const manualTotal = useMemo(() => {
     return manualItems.reduce((sum, item) => {
@@ -968,32 +979,18 @@ const Cashier = () => {
         throw new Error("Monto de pago inválido.");
       }
 
-      if (amount < remainingAmount) {
-        throw new Error(
-          `El monto pagado no puede ser menor al saldo pendiente. Faltan ${formatPriceARS(
-            remainingAmount - amount
-          )}.`
-        );
-      }
-
       const tip = Number(tipAmount || 0);
-      await registerCashierPayment({
+      await addPartialPayment({
         restaurantId,
         cuentaId: selectedCuenta.id,
         mesa: Number(selectedCuenta.mesa),
-        metodo: cashierMethodToMetodoPago(paymentMethod),
+        payment: { id: crypto.randomUUID(), method: paymentMethod, amount },
+        finalTotal,
         actorUid: user.uid,
         actorEmail: user.email,
         tip: tip > 0 ? tip : undefined,
-        payments: [
-          {
-            id: crypto.randomUUID(),
-            method: paymentMethod,
-            amount,
-          },
-        ],
       });
-
+      setSplitProductSelection({});
     } catch (err) {
       console.error("Error registrando pago:", err);
       setError(
@@ -2177,27 +2174,119 @@ ${adjRows ? `<h2>Ajustes de caja</h2><table><thead><tr><th>Monto</th><th>Motivo<
                   </div>
                   {showSplitBill && (
                     <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <label className="text-sm text-zinc-600">Dividir entre</label>
-                        <input
-                          type="number"
-                          min={2}
-                          max={20}
-                          value={splitParts}
-                          onChange={(e) => setSplitParts(e.target.value)}
-                          className="h-9 w-20 rounded-lg border border-zinc-200 px-3 text-center text-sm font-bold"
-                        />
-                        <span className="text-sm text-zinc-600">personas</span>
+                      {/* Mode tabs */}
+                      <div className="flex rounded-lg border border-zinc-200 p-0.5">
+                        {(["partes", "productos"] as const).map((mode) => (
+                          <button
+                            key={mode}
+                            onClick={() => { setSplitMode(mode); setSplitProductSelection({}); }}
+                            className={`flex-1 rounded-md py-1.5 text-xs font-bold transition ${splitMode === mode ? "bg-zinc-950 text-white" : "text-zinc-500 hover:text-zinc-900"}`}
+                          >
+                            {mode === "partes" ? "Por partes iguales" : "Por productos"}
+                          </button>
+                        ))}
                       </div>
-                      {Number(splitParts) >= 2 && (
-                        <div className="rounded-lg bg-zinc-50 px-4 py-3">
-                          <p className="text-xs text-zinc-500">Cada persona paga</p>
-                          <p className="text-2xl font-bold text-zinc-950">
-                            {formatPriceARS(finalTotal / Number(splitParts))}
+
+                      {/* Partial payments progress */}
+                      {(selectedCuenta.payments?.length ?? 0) > 0 && (
+                        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                          <p className="text-xs font-semibold text-emerald-700">
+                            Cobrado hasta ahora: {formatPriceARS(paidTotal)} · Saldo: {formatPriceARS(remainingAmount)}
                           </p>
-                          <p className="mt-1 text-xs text-zinc-400">
-                            {splitParts} partes de {formatPriceARS(finalTotal)} = {formatPriceARS(finalTotal / Number(splitParts))} c/u
-                          </p>
+                          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-emerald-200">
+                            <div
+                              className="h-full rounded-full bg-emerald-600 transition-all"
+                              style={{ width: `${Math.min(100, (paidTotal / finalTotal) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Por partes iguales */}
+                      {splitMode === "partes" && (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-3">
+                            <label className="text-sm text-zinc-600">Dividir entre</label>
+                            <input
+                              type="number"
+                              min={2}
+                              max={20}
+                              value={splitParts}
+                              onChange={(e) => setSplitParts(e.target.value)}
+                              className="h-9 w-20 rounded-lg border border-zinc-200 px-3 text-center text-sm font-bold"
+                            />
+                            <span className="text-sm text-zinc-600">personas</span>
+                          </div>
+                          {Number(splitParts) >= 2 && remainingAmount > 0 && (
+                            <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3">
+                              <p className="text-xs text-zinc-500">Cada persona paga</p>
+                              <p className="text-2xl font-bold text-zinc-950">
+                                {formatPriceARS(Math.ceil(remainingAmount / Number(splitParts)))}
+                              </p>
+                              <p className="mt-1 text-xs text-zinc-400">
+                                Saldo {formatPriceARS(remainingAmount)} ÷ {splitParts} personas
+                              </p>
+                              <button
+                                onClick={() => setPaymentAmount(String(Math.ceil(remainingAmount / Number(splitParts))))}
+                                className="mt-2 w-full rounded-lg border border-zinc-300 bg-white py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-100"
+                              >
+                                Cobrar esta parte ({formatPriceARS(Math.ceil(remainingAmount / Number(splitParts)))})
+                              </button>
+                            </div>
+                          )}
+                          {remainingAmount <= 0 && (
+                            <p className="text-xs font-semibold text-emerald-600">Cuenta completamente cobrada.</p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Por productos */}
+                      {splitMode === "productos" && (
+                        <div className="space-y-2">
+                          <p className="text-xs text-zinc-500">Seleccioná los productos a cobrar en esta parte:</p>
+                          {selectedItems.filter((i) => !i._cancelled).map((item) => {
+                            const key = `${item._pedidoId}:${item._itemIndex}`;
+                            const checked = !!splitProductSelection[key];
+                            const subtotal = getItemSubtotal(item as CashierOrderItem);
+                            return (
+                              <label
+                                key={key}
+                                className="flex cursor-pointer items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={(e) =>
+                                      setSplitProductSelection((prev) => ({ ...prev, [key]: e.target.checked }))
+                                    }
+                                    className="h-4 w-4 rounded accent-zinc-900"
+                                  />
+                                  <span className="text-sm font-semibold text-zinc-800">
+                                    {getItemName(item as CashierOrderItem)} × {getItemQuantity(item as CashierOrderItem)}
+                                  </span>
+                                </div>
+                                <span className="text-sm font-bold">{formatPriceARS(subtotal)}</span>
+                              </label>
+                            );
+                          })}
+                          {splitProductSubtotal > 0 && (
+                            <div className="rounded-lg border border-zinc-200 bg-white px-4 py-3">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm font-semibold text-zinc-700">Subtotal selección</span>
+                                <span className="text-lg font-bold text-zinc-950">{formatPriceARS(splitProductSubtotal)}</span>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setPaymentAmount(String(Math.round(splitProductSubtotal)));
+                                  setSplitProductSelection({});
+                                }}
+                                className="mt-2 w-full rounded-lg bg-zinc-950 py-2 text-xs font-bold text-white hover:bg-zinc-800"
+                              >
+                                Cobrar esta selección ({formatPriceARS(splitProductSubtotal)})
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -2232,7 +2321,7 @@ ${adjRows ? `<h2>Ajustes de caja</h2><table><thead><tr><th>Monto</th><th>Motivo<
                         value={paymentAmount}
                         onChange={(e) => setPaymentAmount(e.target.value)}
                         type="number"
-                        min={remainingAmount}
+                        min={0.01}
                         placeholder="Monto a cobrar"
                         className={`h-12 flex-1 rounded-lg border px-4 ${
                           isPaymentAmountInvalid
@@ -2335,8 +2424,12 @@ ${adjRows ? `<h2>Ajustes de caja</h2><table><thead><tr><th>Monto</th><th>Motivo<
 
                   {isPaymentAmountInvalid && selectedCuenta.estado !== "pagada" && (
                     <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
-                      El monto a cobrar debe ser igual o mayor al saldo pendiente:{" "}
-                      {formatPriceARS(remainingAmount)}.
+                      Ingresá un monto mayor a cero.
+                    </p>
+                  )}
+                  {!isPaymentAmountInvalid && currentPaymentAmount < remainingAmount && selectedCuenta.estado !== "pagada" && (
+                    <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
+                      Pago parcial — quedará un saldo de {formatPriceARS(remainingAmount - currentPaymentAmount)}.
                     </p>
                   )}
 

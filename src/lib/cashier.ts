@@ -200,6 +200,99 @@ export const registerCashierPayment = async ({
   });
 };
 
+export const addPartialPayment = async ({
+  restaurantId,
+  cuentaId,
+  mesa,
+  payment,
+  finalTotal,
+  actorUid,
+  actorEmail,
+  tip,
+}: {
+  restaurantId: string;
+  cuentaId: string;
+  mesa: number;
+  payment: CashierPayment;
+  finalTotal: number;
+  actorUid: string;
+  actorEmail?: string | null;
+  tip?: number;
+}) => {
+  const amount = Number(payment.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("El monto del pago no es válido.");
+  }
+
+  await runTransaction(db, async (transaction) => {
+    const cuentaRef = doc(db, "restaurants", restaurantId, "cuentas", cuentaId);
+    const snapshot = await transaction.get(cuentaRef);
+    if (!snapshot.exists()) throw new Error("La cuenta no existe.");
+
+    const cuenta = snapshot.data();
+    if (cuenta.estado === "pagada" || cuenta.estado === "cerrada") {
+      throw new Error("La cuenta ya está pagada o cerrada.");
+    }
+
+    const existingPayments: CashierPayment[] = Array.isArray(cuenta.payments)
+      ? cuenta.payments
+      : [];
+    const newPayments = [...existingPayments, { ...payment, createdAt: undefined }];
+    const newPaidAmount = newPayments.reduce(
+      (s, p) => s + Number(p.amount || 0),
+      0
+    );
+    const isFullyPaid = newPaidAmount >= finalTotal;
+
+    const toMetodoPago = (method: string): MetodoPago | null => {
+      if (
+        method === "cash" ||
+        method === "debit" ||
+        method === "credit" ||
+        method === "transfer"
+      )
+        return method as MetodoPago;
+      return null;
+    };
+    const uniqueMethods = [...new Set(newPayments.map((p) => toMetodoPago(p.method)))];
+    const resolvedMetodo = uniqueMethods.length === 1 ? uniqueMethods[0] : null;
+
+    const update: Record<string, unknown> = {
+      payments: newPayments,
+      paidAmount: newPaidAmount,
+      updatedAt: serverTimestamp(),
+    };
+    if (tip && tip > 0) update.tip = tip;
+    if (isFullyPaid) {
+      update.estado = "pagada";
+      update.metodo = resolvedMetodo;
+      update.paidAt = serverTimestamp();
+    } else {
+      update.splitBill = true;
+    }
+
+    transaction.update(cuentaRef, update);
+    writeAuditLog(transaction, {
+      restaurantId,
+      action: isFullyPaid ? "cashier_payment_registered" : "cashier_partial_payment",
+      ...cashierActor(actorUid, actorEmail),
+      mesa,
+      cuentaId,
+      description: isFullyPaid
+        ? `Caja registró pago final (${payment.method}) de $${amount} para cuenta ${cuentaId}`
+        : `Caja registró pago parcial (${payment.method}) de $${amount} — acumulado $${newPaidAmount} de $${finalTotal}`,
+      changes: {
+        before: { paidAmount: cuenta.paidAmount ?? 0, estado: cuenta.estado },
+        after: {
+          paidAmount: newPaidAmount,
+          estado: isFullyPaid ? "pagada" : "pendiente",
+        },
+      },
+      metadata: { amount, method: payment.method, newPaidAmount, finalTotal, isFullyPaid },
+    });
+  });
+};
+
 export const markCashierBillAsUnpaid = async ({
   restaurantId,
   cuentaId,
