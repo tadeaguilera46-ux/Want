@@ -47,7 +47,9 @@ const saveCart = (key: string, cart: CartItem[]) => {
     } else {
       localStorage.removeItem(key);
     }
-  } catch {}
+  } catch {
+    // localStorage unavailable — cart won't persist this session
+  }
 };
 
 export const CartProvider = ({ children }: { children: ReactNode }) => {
@@ -152,7 +154,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
   const clearCart = () => {
     if (storageKey) {
-      try { localStorage.removeItem(storageKey); } catch {}
+      try { localStorage.removeItem(storageKey); } catch { /* ignore */ }
     }
     setCart([]);
   };
