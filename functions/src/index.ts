@@ -155,6 +155,12 @@ function parseTimeToMinutes(value: unknown): number | null {
   return hours * 60 + minutes;
 }
 
+function normalizeReservationPhone(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 7 && digits.length <= 15 ? digits : "";
+}
+
 function normalizeReservationSettings(value: unknown): ReservationSettings {
   const settings =
     value && typeof value === "object"
@@ -486,6 +492,7 @@ export const createReservation = onCall({ cors: true }, async (request) => {
     typeof input.restaurantId === "string" ? input.restaurantId.trim() : "";
   const name = typeof input.name === "string" ? input.name.trim() : "";
   const phone = typeof input.phone === "string" ? input.phone.trim() : "";
+  const phoneNormalized = normalizeReservationPhone(phone);
   const email =
     typeof input.email === "string" ? input.email.trim().toLowerCase() : "";
   const date = typeof input.date === "string" ? input.date.trim() : "";
@@ -497,7 +504,7 @@ export const createReservation = onCall({ cors: true }, async (request) => {
   if (
     !restaurantId ||
     !name ||
-    !phone ||
+    !phoneNormalized ||
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
     !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
     !Number.isInteger(partySize) ||
@@ -580,6 +587,7 @@ export const createReservation = onCall({ cors: true }, async (request) => {
       restaurantId,
       name,
       phone,
+      phoneNormalized,
       email,
       date,
       time: slot,
@@ -640,6 +648,81 @@ export const createReservation = onCall({ cors: true }, async (request) => {
 
   return { ok: true, reservationId: reservationRef.id };
 });
+
+export const getReservationHistoryByPhone = onCall(
+  { cors: true },
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
+
+    const data = request.data as {
+      restaurantId?: unknown;
+      phone?: unknown;
+    };
+    const restaurantId =
+      typeof data.restaurantId === "string" ? data.restaurantId.trim() : "";
+    const phoneNormalized = normalizeReservationPhone(data.phone);
+
+    if (!restaurantId || !phoneNormalized) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Ingresá un número telefónico válido"
+      );
+    }
+
+    await requireRestaurantAdmin(restaurantId, request.auth.uid);
+    const reservationsSnap = await admin
+      .firestore()
+      .collection(`restaurants/${restaurantId}/reservations`)
+      .get();
+
+    const matchingReservations = reservationsSnap.docs
+      .filter((document) => {
+        const reservation = document.data();
+        return (
+          normalizeReservationPhone(
+            reservation.phoneNormalized || reservation.phone
+          ) === phoneNormalized
+        );
+      })
+      .map((document) => {
+        const reservation = document.data();
+        return {
+          id: document.id,
+          name: reservation.name || "",
+          phone: reservation.phone || "",
+          email: reservation.email || "",
+          date: reservation.date || "",
+          time: reservation.time || "",
+          partySize: Number(reservation.partySize || 0),
+          mesa: Number.isInteger(reservation.mesa) ? reservation.mesa : null,
+          status: reservation.status || "pending",
+          notes: reservation.notes || null,
+          rescheduleCount: Array.isArray(reservation.rescheduleHistory)
+            ? reservation.rescheduleHistory.length
+            : 0,
+        };
+      })
+      .sort((left, right) =>
+        `${right.date}T${right.time}`.localeCompare(`${left.date}T${left.time}`)
+      );
+    const reservations = matchingReservations.slice(0, 50);
+
+    return {
+      phoneNormalized,
+      total: matchingReservations.length,
+      completed: matchingReservations.filter(
+        (reservation) => reservation.status === "completed"
+      ).length,
+      cancelled: matchingReservations.filter(
+        (reservation) => reservation.status === "cancelled"
+      ).length,
+      noShows: matchingReservations.filter(
+        (reservation) => reservation.status === "no_show"
+      ).length,
+      reservations,
+    };
+  }
+);
 
 export const updateReservationStatus = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
