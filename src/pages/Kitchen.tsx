@@ -534,7 +534,9 @@ const Kitchen = () => {
               const estadoActual = (p.estadoCocina ||
                 "pendiente") as EstadoCocina;
               const next = siguienteEstado(estadoActual);
-              const comida = p.items?.filter(isFoodItem) || [];
+              const comida = (p.items || []).filter(
+                (item, idx) => isFoodItem(item) && !(p.cancelledItems?.some((c) => c.itemIndex === idx))
+              );
               const isLoading = !!loadingById[p.id];
               const isNew = now - getCreatedAtMs(p.createdAt) < NEW_BADGE_MS;
               const urgente = getElapsedMinutes(p) >= WARNING_MINUTES;

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  arrayUnion,
   collection,
   doc,
   onSnapshot,
@@ -1029,39 +1028,26 @@ const Cashier = () => {
     }
     try {
       setProcessing(true);
-      const pedidoRef = doc(db, "restaurants", restaurantId, "pedidos", cancelItemTarget.pedidoId);
-      const entry: CancelledItem = {
-        itemIndex: cancelItemTarget.itemIndex,
-        name: cancelItemTarget.name,
-        reason: cancelItemReason.trim(),
-        cancelledAt: Date.now(),
-      };
-      const batch = writeBatch(db);
-      batch.update(pedidoRef, {
-        cancelledItems: arrayUnion(entry),
-        updatedAt: serverTimestamp(),
+      const res = await fetch("/api/cancel-item", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restaurantId,
+          pedidoId: cancelItemTarget.pedidoId,
+          itemIndex: cancelItemTarget.itemIndex,
+          reason: cancelItemReason.trim(),
+          actorUid: user.uid,
+          actorEmail: user.email ?? "",
+        }),
       });
-      writeAuditLog(batch, {
-        restaurantId,
-        action: "cashier_order_item_cancelled",
-        actorUid: user.uid,
-        actorEmail: user.email,
-        actorRole: "cashier",
-        pedidoId: cancelItemTarget.pedidoId,
-        reason: cancelItemReason,
-        description: `Caja cancelo el item ${cancelItemTarget.name}`,
-        changes: {
-          before: { cancelled: false, itemIndex: cancelItemTarget.itemIndex },
-          after: { cancelled: true, itemIndex: cancelItemTarget.itemIndex },
-        },
-        metadata: { itemName: cancelItemTarget.name },
-      });
-      await batch.commit();
+      const data = await res.json() as { ok: boolean; error?: string };
+      if (!data.ok) throw new Error(data.error ?? "Error desconocido");
       setCancelItemTarget(null);
       setCancelItemReason("");
       toast.success(`"${cancelItemTarget.name}" cancelado.`);
-    } catch {
-      toast.error("No se pudo cancelar el ítem.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "No se pudo cancelar el ítem.";
+      toast.error(msg);
     } finally {
       setProcessing(false);
     }

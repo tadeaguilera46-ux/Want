@@ -50,6 +50,15 @@ export interface PedidoInput extends RestaurantScoped {
   total: number;
 }
 
+export type CancelledItem = {
+  itemIndex: number;
+  name: string;
+  reason: string;
+  cancelledAt: number;
+  actorUid?: string;
+  actorEmail?: string;
+};
+
 export interface PedidoRecord extends PedidoInput {
   id: string;
   sessionId: string;
@@ -57,6 +66,7 @@ export interface PedidoRecord extends PedidoInput {
   estadoBarra?: EstadoCocinaBarra | null;
   cancelado?: boolean;
   stockReturned?: boolean;
+  cancelledItems?: CancelledItem[];
   createdAt?: FirestoreTimestampLike;
   updatedAt?: FirestoreTimestampLike;
 }

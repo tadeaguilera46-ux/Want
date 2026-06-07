@@ -539,7 +539,9 @@ const Bar = () => {
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {visibleOrders.map((order) => {
-              const bebidas = order.items?.filter(isDrinkItem) || [];
+              const bebidas = (order.items || []).filter(
+                (item, idx) => isDrinkItem(item) && !(order.cancelledItems?.some((c) => c.itemIndex === idx))
+              );
               const status = (order.estadoBarra || "pendiente") as EstadoBarra;
               const next = nextStatus(status);
               const isLoading = !!loadingById[order.id];
