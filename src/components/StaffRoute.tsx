@@ -11,6 +11,7 @@ import { getDb } from "../lib/firebase";
 import { useAuth } from "../lib/auth-context";
 import { toast } from "sonner";
 import { useRestaurant } from "../lib/restaurant-context";
+import { UpcomingReservationsWidget } from "./UpcomingReservationsWidget";
 
 type StaffRole = "admin" | "kitchen" | "bar" | "runner" | "cashier";
 
@@ -250,7 +251,21 @@ const StaffRoute = ({ children, allowedRoles }: StaffRouteProps) => {
     );
   }
 
-  return <>{children}</>;
+  const operationalPaths = [
+    "/staff/kitchen",
+    "/staff/bar",
+    "/staff/runner",
+    "/staff/cashier",
+  ];
+
+  return (
+    <>
+      {children}
+      {operationalPaths.includes(location.pathname) && (
+        <UpcomingReservationsWidget restaurantId={restaurantId} />
+      )}
+    </>
+  );
 };
 
 export default StaffRoute;
