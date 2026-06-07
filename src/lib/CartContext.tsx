@@ -1,5 +1,8 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { useLocation, useSearchParams } from "react-router-dom";
 import type { CartItem, MenuItem } from "@/lib/store";
+import { resolveRuntimeContext, parseTableNumber } from "./runtime-context";
+import { getStoredTableSessionId } from "./table-session";
 
 interface CartContextType {
   cart: CartItem[];
@@ -26,8 +29,49 @@ const getCartItemKey = (id: string, observacion?: string) => {
   return `${id}__${normalizeObservation(observacion)}`;
 };
 
+const buildStorageKey = (restaurantId: string, table: number, sessionId: string) =>
+  `want:cart:${restaurantId}:${table}:${sessionId}`;
+
+const loadCart = (key: string): CartItem[] => {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as CartItem[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+const saveCart = (key: string, cart: CartItem[]) => {
+  try {
+    if (cart.length > 0) {
+      localStorage.setItem(key, JSON.stringify(cart));
+    } else {
+      localStorage.removeItem(key);
+    }
+  } catch {}
+};
+
 export const CartProvider = ({ children }: { children: ReactNode }) => {
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [searchParams] = useSearchParams();
+  const location = useLocation();
+
+  const { restaurantId, table } = resolveRuntimeContext({ searchParams, location });
+  const tableNumber = parseTableNumber(table);
+
+  const storageKey = (() => {
+    if (!restaurantId || !tableNumber) return null;
+    const sessionId = getStoredTableSessionId({ restaurantId, table: tableNumber });
+    if (!sessionId) return null;
+    return buildStorageKey(restaurantId, tableNumber, sessionId);
+  })();
+
+  const [cart, setCart] = useState<CartItem[]>(() =>
+    storageKey ? loadCart(storageKey) : []
+  );
+
+  useEffect(() => {
+    if (storageKey) saveCart(storageKey, cart);
+  }, [cart, storageKey]);
 
   const addToCart = (item: MenuItem) => {
     const normalizedObservation = normalizeObservation(item.observacion);
@@ -35,8 +79,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
     setCart((prev) => {
       const existingIndex = prev.findIndex(
-        (cartItem) =>
-          getCartItemKey(cartItem.id, cartItem.observacion) === targetKey
+        (cartItem) => getCartItemKey(cartItem.id, cartItem.observacion) === targetKey
       );
 
       if (existingIndex !== -1) {
@@ -64,8 +107,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
     setCart((prev) => {
       const existingIndex = prev.findIndex(
-        (cartItem) =>
-          getCartItemKey(cartItem.id, cartItem.observacion) === targetKey
+        (cartItem) => getCartItemKey(cartItem.id, cartItem.observacion) === targetKey
       );
 
       if (existingIndex === -1) return prev;
@@ -82,8 +124,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       }
 
       return prev.filter(
-        (cartItem) =>
-          getCartItemKey(cartItem.id, cartItem.observacion) !== targetKey
+        (cartItem) => getCartItemKey(cartItem.id, cartItem.observacion) !== targetKey
       );
     });
   };
@@ -96,12 +137,9 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
   const getItemQuantity = (id: string, observacion?: string) => {
     const targetKey = getCartItemKey(id, observacion);
-
     const found = cart.find(
-      (cartItem) =>
-        getCartItemKey(cartItem.id, cartItem.observacion) === targetKey
+      (cartItem) => getCartItemKey(cartItem.id, cartItem.observacion) === targetKey
     );
-
     return found?.quantity || 0;
   };
 
@@ -112,7 +150,12 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     0
   );
 
-  const clearCart = () => setCart([]);
+  const clearCart = () => {
+    if (storageKey) {
+      try { localStorage.removeItem(storageKey); } catch {}
+    }
+    setCart([]);
+  };
 
   return (
     <CartContext.Provider
