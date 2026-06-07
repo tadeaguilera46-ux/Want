@@ -41,7 +41,11 @@ export type CreateAuditLogInput = AuditActor & {
 
 type AuditWriter = Pick<WriteBatch, "set"> | Pick<Transaction, "set">;
 
-const requireText = (value: string, field: string) => {
+const requireText = (value: unknown, field: string) => {
+  if (typeof value !== "string") {
+    throw new Error(`${field} es obligatorio para auditar.`);
+  }
+
   const normalized = value.trim();
   if (!normalized) throw new Error(`${field} es obligatorio para auditar.`);
   return normalized;
@@ -65,20 +69,28 @@ const getEntity = (input: CreateAuditLogInput) => {
   return { entityType: "restaurant", entityId: input.restaurantId };
 };
 
-const withoutUndefined = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(withoutUndefined);
-  if (
-    value &&
-    typeof value === "object" &&
-    Object.getPrototypeOf(value) === Object.prototype
-  ) {
-    return Object.fromEntries(
-      Object.entries(value)
-        .filter(([, nested]) => nested !== undefined)
-        .map(([key, nested]) => [key, withoutUndefined(nested)])
-    );
+const sanitizeAuditValue = (
+  value: unknown,
+  insideArray = false
+): unknown => {
+  if (value === undefined) return insideArray ? null : undefined;
+
+  if (Array.isArray(value)) {
+    return value.map((nested) => sanitizeAuditValue(nested, true));
   }
-  return value;
+
+  if (!value || typeof value !== "object") return value;
+
+  const prototype = Object.getPrototypeOf(value);
+
+  // Preserve Firestore values such as Timestamp, GeoPoint and FieldValue.
+  if (prototype !== Object.prototype && prototype !== null) return value;
+
+  return Object.fromEntries(
+    Object.entries(value)
+      .map(([key, nested]) => [key, sanitizeAuditValue(nested)] as const)
+      .filter(([, nested]) => nested !== undefined)
+  );
 };
 
 export const buildAuditLogData = (
@@ -112,8 +124,8 @@ export const buildAuditLogData = (
 
     description,
     reason: input.reason?.trim() || null,
-    changes: withoutUndefined(input.changes || { before: {}, after: {} }),
-    metadata: withoutUndefined(input.metadata || {}),
+    changes: sanitizeAuditValue(input.changes || { before: {}, after: {} }),
+    metadata: sanitizeAuditValue(input.metadata || {}),
     createdAt: serverTimestamp(),
   };
 };
