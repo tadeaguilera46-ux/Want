@@ -5,7 +5,7 @@ import { getStoredTableSessionId } from "./table-session";
 
 interface CartContextType {
   cart: CartItem[];
-  addToCart: (item: MenuItem) => void;
+  addToCart: (item: MenuItem, quantity?: number) => void;
   removeFromCart: (id: string, observacion?: string) => void;
   getQuantity: (id: string) => number;
   getItemQuantity: (id: string, observacion?: string) => number;
@@ -75,7 +75,9 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     if (storageKey) saveCart(storageKey, cart);
   }, [cart, storageKey]);
 
-  const addToCart = (item: MenuItem) => {
+  const addToCart = (item: MenuItem, quantity = 1) => {
+    const safeQuantity =
+      Number.isInteger(quantity) && quantity > 0 ? quantity : 1;
     const normalizedObservation = normalizeObservation(item.observacion);
     const targetKey = getCartItemKey(item.id, normalizedObservation);
 
@@ -88,7 +90,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         const updated = [...prev];
         updated[existingIndex] = {
           ...updated[existingIndex],
-          quantity: updated[existingIndex].quantity + 1,
+          quantity: updated[existingIndex].quantity + safeQuantity,
         };
         return updated;
       }
@@ -98,7 +100,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         {
           ...item,
           observacion: normalizedObservation,
-          quantity: 1,
+          quantity: safeQuantity,
         },
       ];
     });

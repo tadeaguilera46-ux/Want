@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, Check, ChevronRight, Receipt, ShoppingCart, X } from "lucide-react";
+import { Bell, Check, ChevronRight, Minus, Plus, Receipt, ShoppingCart, X } from "lucide-react";
 import { collection, doc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { getDb } from "../lib/firebase";
 import { useCart } from "@/lib/CartContext";
@@ -88,6 +88,7 @@ const Menu = () => {
   const hasPromos = promotions.length > 0 || twoForOnePromos.length > 0;
 
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
+  const [selectedQuantity, setSelectedQuantity] = useState(1);
   const [note, setNote] = useState("");
   const [isInitializingSession, setIsInitializingSession] = useState(true);
   const [sessionError, setSessionError] = useState<string | null>(null);
@@ -282,13 +283,26 @@ const Menu = () => {
     return buildMissingOptionalObservation(availability.missingOptionalIngredients);
   };
 
-  const canAddQuantity = (item: MenuItem) => {
-    if (sessionError) { alert(sessionError); return false; }
-    const availability = getMenuItemAvailability({ ingredients: item.ingredients, stockItems });
-    const currentQuantity = getQuantity(item.id);
+  const getAvailableQuantityToAdd = (item: MenuItem) => {
+    const availability = getMenuItemAvailability({
+      ingredients: item.ingredients,
+      stockItems,
+    });
     const maxQuantity = availability.maxQuantity;
-    if (maxQuantity !== null && currentQuantity >= maxQuantity) {
-      toast.error(`Nos quedan ${maxQuantity} ${item.name} en stock.`);
+    const currentQuantity = getQuantity(item.id);
+    if (maxQuantity === null) return Math.max(0, 99 - currentQuantity);
+    return Math.max(0, maxQuantity - currentQuantity);
+  };
+
+  const canAddQuantity = (item: MenuItem, quantity = 1) => {
+    if (sessionError) { alert(sessionError); return false; }
+    const availableQuantity = getAvailableQuantityToAdd(item);
+    if (quantity > availableQuantity) {
+      toast.error(
+        availableQuantity > 0
+          ? `Podés agregar hasta ${availableQuantity} ${item.name}.`
+          : `${item.name} ya no tiene unidades disponibles.`
+      );
       return false;
     }
     return true;
@@ -355,39 +369,34 @@ const Menu = () => {
   const openNoteModal = (item: MenuItem) => {
     if (!canAddQuantity(item)) return;
     setSelectedItem(item);
+    setSelectedQuantity(1);
     setNote("");
   };
 
-  const closeNoteModal = () => { setSelectedItem(null); setNote(""); };
+  const closeNoteModal = () => {
+    setSelectedItem(null);
+    setSelectedQuantity(1);
+    setNote("");
+  };
 
   const handleAddWithoutNote = (item: MenuItem) => {
-    if (!canAddQuantity(item)) return;
-    if (!confirmOptionalMissing(item)) return;
-    const automaticObservation = getAutomaticObservation(item);
-    addToCart({
-      id: item.id, nombre: item.name, name: item.name,
-      precio: item.price, price: item.price, cantidad: 1,
-      category: getItemType(item), displayCategory: getDisplayCategory(item),
-      observacion: automaticObservation,
-      description: item.description || "", image: item.image || "",
-      ingredients: item.ingredients || [],
-    } as any);
+    openNoteModal(item);
   };
 
   const handleAddWithNote = () => {
     if (!selectedItem) return;
-    if (!canAddQuantity(selectedItem)) return;
+    if (!canAddQuantity(selectedItem, selectedQuantity)) return;
     if (!confirmOptionalMissing(selectedItem)) return;
     const automaticObservation = getAutomaticObservation(selectedItem);
     const finalObservation = mergeObservations(note, automaticObservation);
     addToCart({
       id: selectedItem.id, nombre: selectedItem.name, name: selectedItem.name,
-      precio: selectedItem.price, price: selectedItem.price, cantidad: 1,
+      precio: selectedItem.price, price: selectedItem.price, cantidad: selectedQuantity,
       category: getItemType(selectedItem), displayCategory: getDisplayCategory(selectedItem),
       observacion: finalObservation,
       description: selectedItem.description || "", image: selectedItem.image || "",
       ingredients: selectedItem.ingredients || [],
-    } as any);
+    } as any, selectedQuantity);
     closeNoteModal();
   };
 
@@ -1001,7 +1010,7 @@ const Menu = () => {
         )}
       </AnimatePresence>
 
-      {/* Note modal */}
+      {/* Product confirmation modal */}
       <AnimatePresence>
         {selectedItem && (
           <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center">
@@ -1014,10 +1023,10 @@ const Menu = () => {
             >
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Observación</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Agregar producto</p>
                   <h2 className="mt-1 text-2xl font-bold tracking-tight text-zinc-950">{selectedItem.name}</h2>
                   <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-                    Escribí detalles como ingredientes a quitar, punto de cocción o preferencias del pedido.
+                    Elegí cuántas unidades querés y agregá una observación si hace falta.
                   </p>
                 </div>
                 <button
@@ -1028,6 +1037,58 @@ const Menu = () => {
                 </button>
               </div>
 
+              <div className="mb-4 flex items-center justify-between rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                    Cantidad
+                  </p>
+                  <p className="mt-1 text-sm font-bold text-zinc-950">
+                    {formatPriceARS(selectedItem.price * selectedQuantity)}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedQuantity((current) => Math.max(1, current - 1))
+                    }
+                    disabled={selectedQuantity <= 1}
+                    className="flex h-11 w-11 items-center justify-center rounded-full border border-zinc-200 bg-white text-zinc-800 disabled:opacity-35"
+                    aria-label="Restar cantidad"
+                  >
+                    <Minus size={16} />
+                  </button>
+
+                  <span className="min-w-[32px] text-center text-lg font-black text-zinc-950">
+                    {selectedQuantity}
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedQuantity((current) =>
+                        Math.min(
+                          getAvailableQuantityToAdd(selectedItem),
+                          current + 1
+                        )
+                      )
+                    }
+                    disabled={
+                      selectedQuantity >= getAvailableQuantityToAdd(selectedItem)
+                    }
+                    className="flex h-11 w-11 items-center justify-center rounded-full text-white disabled:opacity-35"
+                    style={{ backgroundColor: primaryColor }}
+                    aria-label="Sumar cantidad"
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
+              </div>
+
+              <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Observación opcional
+              </label>
               <textarea
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
@@ -1050,7 +1111,7 @@ const Menu = () => {
                   className="h-12 rounded-lg font-semibold text-white"
                   style={{ backgroundColor: primaryColor }}
                 >
-                  Agregar al pedido
+                  Agregar {selectedQuantity} al pedido
                 </button>
               </div>
             </motion.div>
