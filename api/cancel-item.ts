@@ -119,6 +119,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const pedidoRef = db.doc(`restaurants/${restaurantId}/pedidos/${pedidoId}`);
 
     let cancelledItem: CancelledItem | null = null;
+    let pedidoSessionId: string | null = null;
+    let totalItemsCount = 0;
+    let cancelledItemsCountAfter = 0;
 
     await db.runTransaction(async (transaction) => {
       const pedidoSnap = await transaction.get(pedidoRef);
@@ -127,6 +130,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const pedidoData = pedidoSnap.data()!;
+      pedidoSessionId = typeof pedidoData.sessionId === "string" ? pedidoData.sessionId.trim() : null;
       const items: PedidoItem[] = Array.isArray(pedidoData.items) ? pedidoData.items : [];
       const existingCancelled: CancelledItem[] = Array.isArray(pedidoData.cancelledItems)
         ? pedidoData.cancelledItems
@@ -165,6 +169,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const newCancelledItems = [...existingCancelled, newEntry];
       const cancelledSet = new Set(newCancelledItems.map((c) => c.itemIndex));
 
+      totalItemsCount = items.length;
+      cancelledItemsCountAfter = newCancelledItems.length;
+
       // Recalculate total excluding all cancelled items
       const newTotal = items.reduce((sum, it, idx) => {
         if (cancelledSet.has(idx)) return sum;
@@ -200,6 +207,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
     });
+
+    // If all items in this pedido are now cancelled, check whether the entire session
+    // has no active items left — if so, delete the cuenta and unlock the session.
+    if (cancelledItemsCountAfter === totalItemsCount && pedidoSessionId) {
+      const siblingSnap = await db
+        .collection(`restaurants/${restaurantId}/pedidos`)
+        .where("sessionId", "==", pedidoSessionId)
+        .get();
+
+      const hasActiveItemsElsewhere = siblingSnap.docs.some((docSnap) => {
+        if (docSnap.id === pedidoId) return false; // already fully cancelled above
+        const d = docSnap.data();
+        if (d.cancelado === true) return false;
+        const siblingItems: unknown[] = Array.isArray(d.items) ? d.items : [];
+        const siblingCancelled: { itemIndex: number }[] = Array.isArray(d.cancelledItems) ? d.cancelledItems : [];
+        const cancelledIndices = new Set(siblingCancelled.map((c) => c.itemIndex));
+        return siblingItems.some((_, idx) => !cancelledIndices.has(idx));
+      });
+
+      if (!hasActiveItemsElsewhere) {
+        const cuentaRef = db.doc(`restaurants/${restaurantId}/cuentas/${pedidoSessionId}`);
+        const sessionRef = db.doc(`restaurants/${restaurantId}/sessions/${pedidoSessionId}`);
+        const [cuentaSnap, sessionSnap] = await Promise.all([cuentaRef.get(), sessionRef.get()]);
+
+        const batch = db.batch();
+        if (cuentaSnap.exists) {
+          const estado = cuentaSnap.data()?.estado;
+          if (estado !== "pagada" && estado !== "cerrada") {
+            batch.delete(cuentaRef);
+          }
+        }
+        if (sessionSnap.exists && sessionSnap.data()?.status === "active") {
+          batch.update(sessionRef, {
+            billRequested: false,
+            ordersLocked: false,
+            lockedReason: null,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+        }
+        await batch.commit();
+      }
+    }
 
     // Audit log (best-effort, outside transaction)
     try {
