@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, Check, ChevronRight, Minus, Plus, Receipt, ShoppingCart, X } from "lucide-react";
+import { Bell, Check, ChevronRight, Minus, Plus, Receipt, Search, ShoppingCart, X } from "lucide-react";
 import { collection, doc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { getDb } from "../lib/firebase";
 import { useCart } from "@/lib/CartContext";
@@ -40,6 +40,13 @@ const mergeObservations = (manualNote: string, automaticNote: string) => {
   const parts = [manualNote.trim(), automaticNote.trim()].filter(Boolean);
   return parts.join(" · ");
 };
+
+const normalizeSearchText = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
 
 const MenuSkeleton = () => (
   <div className="animate-pulse space-y-5">
@@ -95,6 +102,7 @@ const Menu = () => {
   const [assistOpen, setAssistOpen] = useState(false);
   const [assistSent, setAssistSent] = useState<string | null>(null);
   const [sendingAssist, setSendingAssist] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { addToCart, getQuantity, totalItems, total } = useCart();
 
@@ -274,8 +282,47 @@ const Menu = () => {
   };
 
   // Items helpers
+  const normalizedSearchQuery = normalizeSearchText(searchQuery);
+  const isSearching = normalizedSearchQuery.length > 0;
+
+  const searchResults = useMemo(() => {
+    if (!normalizedSearchQuery) return allItems;
+
+    const terms = normalizedSearchQuery.split(/\s+/).filter(Boolean);
+
+    return allItems.filter((item) => {
+      const searchableText = normalizeSearchText(
+        [
+          item.name,
+          getDisplayCategory(item),
+          getItemType(item),
+          item.description || "",
+          ...(item.allergens || []),
+          ...(item.ingredients || []).map((ingredient) => ingredient.stockItemName),
+          ...(item.modifierGroups || []).flatMap((group) => [
+            group.name,
+            ...group.options.map((option) => option.name),
+          ]),
+          ...getItemTags(item),
+        ].join(" ")
+      );
+
+      return terms.every((term) => searchableText.includes(term));
+    });
+  }, [allItems, normalizedSearchQuery]);
+
+  const visibleCategories = useMemo(
+    () =>
+      categories.filter((category) =>
+        searchResults.some(
+          (item) => getDisplayCategory(item) === category.key
+        )
+      ),
+    [categories, searchResults]
+  );
+
   const getItemsForCategory = (categoryKey: string) =>
-    allItems.filter((item) => getDisplayCategory(item) === categoryKey);
+    searchResults.filter((item) => getDisplayCategory(item) === categoryKey);
 
   const getAutomaticObservation = (item: MenuItem) => {
     if (stockItems.length === 0) return "";
@@ -509,12 +556,45 @@ const Menu = () => {
           </div>
         </div>
 
+        <div className="px-4 pb-3 pt-3">
+          <div className="relative">
+            <Search
+              size={18}
+              className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400"
+            />
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Buscar producto, categoría o ingrediente"
+              className="h-12 w-full rounded-xl border border-black/10 bg-white pl-11 pr-11 text-sm font-medium text-zinc-950 shadow-sm outline-none transition focus:border-black/20 focus:ring-2 focus:ring-black/5"
+              aria-label="Buscar productos"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-zinc-100 text-zinc-500 transition hover:bg-zinc-200"
+                aria-label="Limpiar búsqueda"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+          {isSearching && (
+            <p className="mt-2 px-1 text-xs font-semibold text-zinc-500">
+              {searchResults.length} resultado(s) para “{searchQuery.trim()}”
+            </p>
+          )}
+        </div>
+
         {/* Sticky category tabs — stick just below the fixed topbar */}
-        <div
-          ref={tabsBarRef}
-          className="sticky top-14 z-40 border-b border-black/5 backdrop-blur"
-          style={{ backgroundColor: `${pageBackground}F2` }}
-        >
+        {!isSearching && (
+          <div
+            ref={tabsBarRef}
+            className="sticky top-14 z-40 border-b border-black/5 backdrop-blur"
+            style={{ backgroundColor: `${pageBackground}F2` }}
+          >
           <div
             ref={tabsContainerRef}
             className="no-scrollbar flex gap-2 overflow-x-auto px-4 py-2"
@@ -563,7 +643,8 @@ const Menu = () => {
               </button>
             ))}
           </div>
-        </div>
+          </div>
+        )}
 
         {/* All items grouped by category */}
         <main className="px-4 py-4">
@@ -574,10 +655,18 @@ const Menu = () => {
               <p className="font-bold text-zinc-950">No hay productos disponibles</p>
               <p className="mt-1 text-sm text-zinc-500">Consultá al staff.</p>
             </div>
+          ) : isSearching && searchResults.length === 0 ? (
+            <div className="rounded-xl border border-black/5 bg-white p-6 text-center shadow-sm">
+              <Search size={24} className="mx-auto text-zinc-400" />
+              <p className="mt-3 font-bold text-zinc-950">No encontramos productos</p>
+              <p className="mt-1 text-sm text-zinc-500">
+                Probá buscando otro nombre, categoría o ingrediente.
+              </p>
+            </div>
           ) : (
             <div className="space-y-8">
               {/* ── Sección Promociones ─────────────────────── */}
-              {hasPromos && (
+              {hasPromos && !isSearching && (
                 <section
                   ref={(el) => { sectionRefs.current[PROMOS_CATEGORY_KEY] = el; }}
                   data-category={PROMOS_CATEGORY_KEY}
@@ -861,7 +950,7 @@ const Menu = () => {
 
               {(() => {
                 const activeTwoForOnePromos = twoForOnePromos.filter(isTwoForOneActive);
-                return categories.map((cat) => {
+                return visibleCategories.map((cat) => {
                   const items = getItemsForCategory(cat.key);
                   if (items.length === 0) return null;
 
