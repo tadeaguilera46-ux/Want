@@ -225,6 +225,16 @@ const cashierMethodToMetodoPago = (
   return null;
 };
 
+function validateCuit(raw: string): boolean {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length !== 11) return false;
+  const weights = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+  const sum = weights.reduce((acc, w, i) => acc + w * parseInt(digits[i], 10), 0);
+  const remainder = 11 - (sum % 11);
+  const check = remainder === 11 ? 0 : remainder;
+  return check !== 10 && check === parseInt(digits[10], 10);
+}
+
 const Cashier = () => {
   const [searchParams] = useSearchParams();
   const { restaurantId: contextRestaurantId, restaurant } = useRestaurant();
@@ -277,6 +287,10 @@ const Cashier = () => {
   const [invoiceDocumentType, setInvoiceDocumentType] =
     useState<"DNI" | "CUIT" | "CUIL" | "PASSPORT">("DNI");
   const [invoiceDocumentNumber, setInvoiceDocumentNumber] = useState("");
+  const cuitError =
+    invoiceDocumentType === "CUIT" &&
+    invoiceDocumentNumber.trim().length > 0 &&
+    !validateCuit(invoiceDocumentNumber);
   const [invoiceEmail, setInvoiceEmail] = useState("");
   const [invoiceIvaCondition, setInvoiceIvaCondition] = useState("");
   const [invoiceFiscalRegime, setInvoiceFiscalRegime] = useState("");
@@ -1155,9 +1169,13 @@ const Cashier = () => {
 
     if (!invoiceCustomerName.trim()) return alert("Ingresá el nombre del cliente.");
     if (!invoiceDocumentNumber.trim()) return alert("Ingresá el documento del cliente.");
+    if (invoiceDocumentType === "CUIT" && !validateCuit(invoiceDocumentNumber))
+      return alert("El CUIT ingresado no es válido. Verificá los 11 dígitos.");
     if (!invoiceIvaCondition.trim()) return alert("Ingresá la condición frente al IVA.");
     if (!invoiceFiscalAddress.trim()) return alert("Ingresá la dirección fiscal.");
     if (!invoicePostalCode.trim()) return alert("Ingresá el código postal.");
+    if (!invoiceEmail.trim()) return alert("El email del cliente es obligatorio para enviar la factura electrónica.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(invoiceEmail.trim())) return alert("Ingresá un email válido.");
 
     try {
       setProcessing(true);
@@ -1212,6 +1230,7 @@ const Cashier = () => {
           customerName: invoiceCustomerName.trim(),
           customerDocType: docType,
           customerDocNumber: invoiceDocumentNumber.trim() || undefined,
+          email: invoiceEmail.trim(),
           invoiceType: arcaInvoiceType,
           total: finalTotal,
         });
@@ -2237,12 +2256,17 @@ ${adjRows ? `<h2>Ajustes de caja</h2><table><thead><tr><th>Monto</th><th>Motivo<
                             <option value="CUIL">CUIL</option>
                             <option value="PASSPORT">Pasaporte</option>
                           </select>
-                          <input
-                            value={invoiceDocumentNumber}
-                            onChange={(e) => setInvoiceDocumentNumber(e.target.value)}
-                            placeholder="Número de documento"
-                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
-                          />
+                          <div className="flex flex-col gap-1">
+                            <input
+                              value={invoiceDocumentNumber}
+                              onChange={(e) => setInvoiceDocumentNumber(e.target.value)}
+                              placeholder="Número de documento"
+                              className={`h-10 rounded-lg border px-3 text-sm bg-white ${cuitError ? "border-red-400 ring-1 ring-red-400" : "border-zinc-200"}`}
+                            />
+                            {cuitError && (
+                              <p className="text-xs text-red-600 font-medium">CUIT inválido — verificá los 11 dígitos</p>
+                            )}
+                          </div>
                           <input
                             value={invoiceIvaCondition}
                             onChange={(e) => setInvoiceIvaCondition(e.target.value)}
@@ -2279,15 +2303,22 @@ ${adjRows ? `<h2>Ajustes de caja</h2><table><thead><tr><th>Monto</th><th>Motivo<
                             placeholder="Localidad"
                             className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
                           />
-                          <input
-                            value={invoiceEmail}
-                            onChange={(e) => setInvoiceEmail(e.target.value)}
-                            placeholder="Email para enviar factura (opcional)"
-                            className="col-span-full h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
-                          />
+                          <div className="col-span-full flex flex-col gap-1">
+                            <label className="text-xs font-bold text-zinc-600">
+                              Email del cliente <span className="text-red-500">*</span>
+                              <span className="ml-1 font-normal text-zinc-400">— se envía la factura electrónica automáticamente</span>
+                            </label>
+                            <input
+                              value={invoiceEmail}
+                              onChange={(e) => setInvoiceEmail(e.target.value)}
+                              type="email"
+                              placeholder="cliente@email.com"
+                              className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm"
+                            />
+                          </div>
                           <button
                             onClick={handleRequestInvoice}
-                            disabled={processing || !isOnline}
+                            disabled={processing || !isOnline || !!cuitError}
                             className="col-span-full h-10 rounded-lg bg-zinc-900 text-sm font-bold text-white disabled:opacity-50"
                           >
                             Guardar solicitud de factura

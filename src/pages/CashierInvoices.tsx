@@ -8,12 +8,15 @@ import {
   query,
   serverTimestamp,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import { toast } from "sonner";
 import {
   AlertTriangle,
   ArrowLeft,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   ExternalLink,
   FileText,
@@ -21,6 +24,7 @@ import {
   Printer,
   Receipt,
   RotateCcw,
+  Search,
   XCircle,
 } from "lucide-react";
 import QRCode from "qrcode";
@@ -134,6 +138,32 @@ const CashierInvoices = () => {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<TabKey>("requested");
 
+  const now = new Date();
+  const [filterYear, setFilterYear] = useState(now.getFullYear());
+  const [filterMonth, setFilterMonth] = useState(now.getMonth());
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const monthLabel = new Intl.DateTimeFormat("es-AR", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(filterYear, filterMonth, 1));
+
+  const isCurrentMonth =
+    filterYear === now.getFullYear() && filterMonth === now.getMonth();
+
+  const goToPrevMonth = () => {
+    setSelectedId(null);
+    if (filterMonth === 0) { setFilterMonth(11); setFilterYear((y) => y - 1); }
+    else setFilterMonth((m) => m - 1);
+  };
+
+  const goToNextMonth = () => {
+    if (isCurrentMonth) return;
+    setSelectedId(null);
+    if (filterMonth === 11) { setFilterMonth(0); setFilterYear((y) => y + 1); }
+    else setFilterMonth((m) => m + 1);
+  };
+
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [cae, setCae] = useState("");
   const [invoiceUrl, setInvoiceUrl] = useState("");
@@ -162,11 +192,17 @@ const CashierInvoices = () => {
   useEffect(() => {
     if (!restaurantId) return;
 
+    const start = new Date(filterYear, filterMonth, 1);
+    const end = new Date(filterYear, filterMonth + 1, 1);
+
     const q = query(
       collection(db, "restaurants", restaurantId, "cuentas"),
+      where("createdAt", ">=", start),
+      where("createdAt", "<", end),
       orderBy("createdAt", "desc")
     );
 
+    setLoading(true);
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
@@ -184,30 +220,38 @@ const CashierInvoices = () => {
     );
 
     return () => unsubscribe();
-  }, [restaurantId]);
+  }, [restaurantId, filterYear, filterMonth]);
+
+  const matchesSearch = (c: Cuenta) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return true;
+    const name = c.invoice?.customerName?.toLowerCase() ?? "";
+    const doc = (c.invoice?.documentNumber ?? "").replace(/\D/g, "");
+    return name.includes(q) || doc.includes(q.replace(/\D/g, ""));
+  };
 
   const invoiceRequests = useMemo(
     () =>
       cuentas
-        .filter((c) => c.invoice?.status === "requested")
+        .filter((c) => c.invoice?.status === "requested" && matchesSearch(c))
         .sort((a, b) => getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt)),
-    [cuentas]
+    [cuentas, searchQuery]
   );
 
   const issuedInvoices = useMemo(
     () =>
       cuentas
-        .filter((c) => c.invoice?.status === "issued")
+        .filter((c) => c.invoice?.status === "issued" && matchesSearch(c))
         .sort((a, b) => getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt)),
-    [cuentas]
+    [cuentas, searchQuery]
   );
 
   const failedInvoices = useMemo(
     () =>
       cuentas
-        .filter((c) => c.invoice?.status === "failed")
+        .filter((c) => c.invoice?.status === "failed" && matchesSearch(c))
         .sort((a, b) => getTimestampMs(b.createdAt) - getTimestampMs(a.createdAt)),
-    [cuentas]
+    [cuentas, searchQuery]
   );
 
   const activeList =
@@ -466,6 +510,37 @@ const CashierInvoices = () => {
             Bandeja manual para emitir facturas en sistema fiscal externo y registrar el resultado.
           </p>
         </header>
+
+        {/* Month navigator + search */}
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={goToPrevMonth}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:bg-zinc-50"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="min-w-[160px] text-center text-sm font-bold capitalize text-zinc-950">
+              {monthLabel}
+            </span>
+            <button
+              onClick={goToNextMonth}
+              disabled={isCurrentMonth}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-600 shadow-sm transition hover:bg-zinc-50 disabled:opacity-30"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+          <div className="relative max-w-xs w-full">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar por nombre o documento..."
+              className="h-9 w-full rounded-lg border border-zinc-200 bg-white pl-8 pr-3 text-sm shadow-sm outline-none focus:ring-2 focus:ring-black/10"
+            />
+          </div>
+        </div>
 
         {/* Summary cards */}
         <div className="mb-6 grid grid-cols-3 gap-3">

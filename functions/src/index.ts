@@ -5,10 +5,12 @@ import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
 import { Resend } from "resend";
+import PDFDocument from "pdfkit";
+import * as forge from "node-forge";
 import { generateKeyPairAndCsr, encryptPrivateKey, decryptPrivateKey } from "./afip/crypto.js";
 import { getAfipToken } from "./afip/wsaa.js";
 import { getLastInvoiceNumber, issueFECAE } from "./afip/wsfe.js";
-import { INVOICE_TYPE_CODES, type InvoiceRequest, type AfipConfig } from "./afip/types.js";
+import { INVOICE_TYPE_CODES, type InvoiceRequest, type AfipConfig, type AfipInvoiceResult } from "./afip/types.js";
 
 admin.initializeApp();
 
@@ -38,11 +40,12 @@ async function sendEmail(
   apiKey: string,
   to: string,
   subject: string,
-  html: string
+  html: string,
+  attachments?: { filename: string; content: Buffer }[]
 ): Promise<void> {
   const resend = new Resend(apiKey);
   const from = process.env.EMAIL_FROM || "WANT <onboarding@resend.dev>";
-  const { error } = await resend.emails.send({ from, to, subject, html });
+  const { error } = await resend.emails.send({ from, to, subject, html, attachments });
   if (error) console.error("sendEmail error:", error);
 }
 
@@ -786,6 +789,108 @@ export const afipSaveCertificate = onCall(
   }
 );
 
+// ─── PDF helper ───────────────────────────────────────────────────────────────
+
+type PdfItem = { description: string; quantity: number; unitPrice: number };
+
+function generateInvoicePdf(
+  result: AfipInvoiceResult,
+  req: InvoiceRequest & { invoiceType: "A" | "B" | "C" },
+  config: AfipConfig & { ivaRate?: number },
+  restaurantName: string,
+  items: PdfItem[] = []
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const pageHeight = Math.max(640, 340 + items.length * 16);
+    const doc = new PDFDocument({ size: [340, pageHeight], margin: 24, compress: true });
+    doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    const W = 340 - 48;
+    const fmt = (n: number) =>
+      new Intl.NumberFormat("es-AR", {
+        style: "currency", currency: "ARS", minimumFractionDigits: 2,
+      }).format(n);
+    const today = new Date();
+    const dateStr = `${String(today.getDate()).padStart(2, "0")}/${String(today.getMonth() + 1).padStart(2, "0")}/${today.getFullYear()}`;
+    const ptoStr = String(result.puntoVenta).padStart(4, "0");
+    const nroStr = String(result.invoiceNumber).padStart(8, "0");
+    const fiscalLabel: Record<string, string> = {
+      responsable_inscripto: "Responsable Inscripto",
+      monotributista: "Monotributista",
+    };
+
+    // ── Header ──
+    doc.font("Helvetica-Bold").fontSize(13).text(restaurantName, { align: "center" });
+    doc.font("Helvetica").fontSize(8).text(`CUIT: ${result.cuit}`, { align: "center" });
+    doc.text(fiscalLabel[config.fiscalCondition] ?? config.fiscalCondition, { align: "center" });
+    doc.moveDown(0.6);
+    doc.moveTo(24, doc.y).lineTo(316, doc.y).dash(3, { space: 3 }).stroke("#aaa").undash();
+    doc.moveDown(0.6);
+
+    // ── Tipo de comprobante ──
+    const boxY = doc.y;
+    doc.rect(130, boxY, 80, 38).stroke("#111");
+    doc.font("Helvetica-Bold").fontSize(22).text(result.invoiceType, 130, boxY + 8, { width: 80, align: "center" });
+    doc.y = boxY + 46;
+    doc.font("Helvetica-Bold").fontSize(8).text(`Pto. Vta: ${ptoStr}   Nro: ${nroStr}`, { align: "center" });
+    doc.font("Helvetica").fontSize(8).text(`Fecha: ${dateStr}`, { align: "center" });
+    doc.moveDown(0.6);
+    doc.moveTo(24, doc.y).lineTo(316, doc.y).dash(3, { space: 3 }).stroke("#aaa").undash();
+    doc.moveDown(0.6);
+
+    // ── Receptor ──
+    doc.font("Helvetica-Bold").fontSize(6.5).fillColor("#888").text("RECEPTOR");
+    doc.fillColor("#000").font("Helvetica-Bold").fontSize(9).text(req.customerName);
+    if (req.customerDocType !== "consumidor_final" && req.customerDocNumber) {
+      doc.font("Helvetica").fontSize(8).text(`${req.customerDocType}: ${req.customerDocNumber}`);
+    }
+    doc.moveDown(0.6);
+    doc.moveTo(24, doc.y).lineTo(316, doc.y).dash(3, { space: 3 }).stroke("#aaa").undash();
+    doc.moveDown(0.6);
+
+    // ── Detalle ──
+    doc.font("Helvetica-Bold").fontSize(6.5).fillColor("#888").text("DETALLE");
+    doc.fillColor("#000");
+    if (items.length > 0) {
+      for (const item of items) {
+        const lineY = doc.y;
+        const desc = item.quantity > 1 ? `${item.quantity}x ${item.description}` : item.description;
+        doc.font("Helvetica").fontSize(8.5).text(desc, 24, lineY, { width: W - 70 });
+        doc.font("Helvetica").fontSize(8.5).text(fmt(item.quantity * item.unitPrice), 24, lineY, { width: W, align: "right" });
+        doc.moveDown(0.25);
+      }
+    } else {
+      const detY = doc.y;
+      doc.font("Helvetica").fontSize(9).text("Consumo en restaurante", 24, detY, { width: W - 70 });
+      doc.font("Helvetica-Bold").fontSize(9).text(fmt(req.total), 24, detY, { width: W, align: "right" });
+    }
+    doc.moveDown(0.4);
+    doc.moveTo(24, doc.y).lineTo(316, doc.y).stroke("#111");
+    doc.moveDown(0.3);
+
+    // ── Total ──
+    const totY = doc.y;
+    doc.font("Helvetica-Bold").fontSize(11).text("TOTAL", 24, totY, { width: W - 70 });
+    doc.text(fmt(req.total), 24, totY, { width: W, align: "right" });
+    doc.moveDown(0.6);
+    doc.moveTo(24, doc.y).lineTo(316, doc.y).dash(3, { space: 3 }).stroke("#aaa").undash();
+    doc.moveDown(0.6);
+
+    // ── CAE ──
+    doc.font("Helvetica-Bold").fontSize(6.5).fillColor("#888").text("CAE");
+    doc.fillColor("#000").font("Courier").fontSize(8.5).text(result.cae);
+    doc.font("Helvetica").fontSize(7.5).text(`Vto. CAE: ${result.caeExpiry}`);
+    doc.moveDown(0.8);
+    doc.font("Helvetica").fontSize(6.5).fillColor("#aaa")
+      .text("Emitido con WANT · want.com.ar", { align: "center" });
+
+    doc.end();
+  });
+}
+
 // ─── AFIP: Emitir comprobante ─────────────────────────────────────────────────
 
 export const afipIssueInvoice = onCall(
@@ -924,6 +1029,82 @@ export const afipIssueInvoice = onCall(
         "invoice.failureReason": admin.firestore.FieldValue.delete(),
       });
 
+      // PDF generation — best-effort, no bloquea si falla
+      try {
+        const [restaurantSnap, pedidosSnap] = await Promise.all([
+          admin.firestore().collection("restaurants").doc(invoiceReq.restaurantId).get(),
+          admin.firestore()
+            .collection("restaurants").doc(invoiceReq.restaurantId)
+            .collection("pedidos")
+            .where("sessionId", "==", invoiceReq.cuentaId)
+            .get(),
+        ]);
+        const restaurantName = (restaurantSnap.data()?.name as string | undefined) ?? invoiceReq.restaurantId;
+
+        // Agregar ítems de todos los pedidos no cancelados
+        const itemMap = new Map<string, { quantity: number; unitPrice: number }>();
+        for (const pedidoDoc of pedidosSnap.docs) {
+          const pedido = pedidoDoc.data();
+          if (pedido.cancelado) continue;
+          for (const item of (pedido.items as Array<{ nombre?: string; name?: string; cantidad?: number; quantity?: number; precio?: number; price?: number }> | undefined ?? [])) {
+            const name = (item.nombre || item.name || "Ítem").trim();
+            const qty = item.cantidad ?? item.quantity ?? 1;
+            const price = item.precio ?? item.price ?? 0;
+            const existing = itemMap.get(name);
+            if (existing) { existing.quantity += qty; }
+            else { itemMap.set(name, { quantity: qty, unitPrice: price }); }
+          }
+        }
+        const invoiceItems: PdfItem[] = Array.from(itemMap.entries()).map(
+          ([description, { quantity, unitPrice }]) => ({ description, quantity, unitPrice })
+        );
+
+        const pdfBuffer = await generateInvoicePdf(
+          result,
+          { ...invoiceReq, invoiceType },
+          config,
+          restaurantName,
+          invoiceItems
+        );
+
+        const bucket = admin.storage().bucket();
+        const filePath = `facturas/${invoiceReq.restaurantId}/${result.invoiceType}${String(result.puntoVenta).padStart(4, "0")}-${String(result.invoiceNumber).padStart(8, "0")}.pdf`;
+        const file = bucket.file(filePath);
+        await file.save(pdfBuffer, {
+          contentType: "application/pdf",
+          public: true,
+          metadata: { cacheControl: "public, max-age=31536000" },
+        });
+        await cuentaRef.update({ "invoice.invoiceUrl": file.publicUrl() });
+
+        // Envío de email con PDF adjunto
+        if (invoiceReq.email) {
+          const resendKey = RESEND_API_KEY.value();
+          const nroComprobante = `${String(result.puntoVenta).padStart(4, "0")}-${String(result.invoiceNumber).padStart(8, "0")}`;
+          await sendEmail(
+            resendKey,
+            invoiceReq.email,
+            `Factura ${result.invoiceType} N° ${nroComprobante} — ${restaurantName}`,
+            emailWrapper(
+              `Tu factura de ${restaurantName}`,
+              `<p style="margin:0 0 12px;font-size:15px;color:#3f3f46">Hola <strong>${invoiceReq.customerName}</strong>,</p>
+               <p style="margin:0 0 12px;font-size:15px;color:#3f3f46">Te adjuntamos tu comprobante fiscal.</p>
+               <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px">
+                 <tr><td style="padding:6px 0;border-bottom:1px solid #f4f4f5;font-size:13px;color:#71717a">Tipo</td><td style="padding:6px 0;border-bottom:1px solid #f4f4f5;font-size:13px;font-weight:700;text-align:right">Factura ${result.invoiceType}</td></tr>
+                 <tr><td style="padding:6px 0;border-bottom:1px solid #f4f4f5;font-size:13px;color:#71717a">Número</td><td style="padding:6px 0;border-bottom:1px solid #f4f4f5;font-size:13px;font-weight:700;text-align:right">${nroComprobante}</td></tr>
+                 <tr><td style="padding:6px 0;border-bottom:1px solid #f4f4f5;font-size:13px;color:#71717a">CAE</td><td style="padding:6px 0;border-bottom:1px solid #f4f4f5;font-size:13px;font-weight:700;font-family:monospace;text-align:right">${result.cae}</td></tr>
+                 <tr><td style="padding:6px 0;font-size:13px;color:#71717a">Vto. CAE</td><td style="padding:6px 0;font-size:13px;font-weight:700;text-align:right">${result.caeExpiry}</td></tr>
+               </table>
+               <p style="margin:0;font-size:13px;color:#71717a">El PDF de la factura está adjunto a este email.</p>`
+            ),
+            [{ filename: `factura-${nroComprobante}.pdf`, content: pdfBuffer }]
+          );
+        }
+      } catch (pdfErr) {
+        console.error("PDF generation failed (non-blocking):", pdfErr);
+        Sentry.captureException(pdfErr);
+      }
+
       return result;
     } catch (err) {
       // Marcar la factura como fallida con el motivo exacto
@@ -937,6 +1118,82 @@ export const afipIssueInvoice = onCall(
     } finally {
       // Liberar lock siempre, independientemente del resultado
       await lockRef.delete().catch(() => {});
+    }
+  }
+);
+
+// ─── Alerta mensual: certificado AFIP por vencer ──────────────────────────────
+
+export const monthlyAfipCertCheck = onSchedule(
+  {
+    schedule: "0 9 1 * *",
+    timeZone: "America/Argentina/Buenos_Aires",
+    secrets: [RESEND_API_KEY],
+  },
+  async () => {
+    const db = admin.firestore();
+    try {
+      const restaurantsSnap = await db.collection("restaurants").get();
+
+      for (const restaurantDoc of restaurantsSnap.docs) {
+        try {
+          const configSnap = await db
+            .collection("restaurants").doc(restaurantDoc.id)
+            .collection("afipConfig").doc("main").get();
+
+          if (!configSnap.exists) continue;
+          const config = configSnap.data() as AfipConfig & { env?: string };
+
+          if (config.status !== "active") continue;
+          if (!config.certificate || config.certificate === "SIMULACION") continue;
+          if (config.env === "simulacion") continue;
+
+          let notAfter: Date;
+          try {
+            const cert = forge.pki.certificateFromPem(config.certificate);
+            notAfter = cert.validity.notAfter;
+          } catch {
+            continue;
+          }
+
+          const daysLeft = Math.ceil((notAfter.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+          if (daysLeft > 30) continue;
+
+          const ownerEmail = restaurantDoc.data().ownerEmail as string | undefined;
+          const restaurantName = (restaurantDoc.data().name as string | undefined) ?? restaurantDoc.id;
+          if (!ownerEmail) continue;
+
+          const expiryStr = notAfter.toLocaleDateString("es-AR", {
+            day: "2-digit", month: "2-digit", year: "numeric",
+          });
+
+          await sendEmail(
+            RESEND_API_KEY.value(),
+            ownerEmail,
+            `Tu certificado AFIP vence en ${daysLeft} días — ${restaurantName}`,
+            emailWrapper(
+              "Certificado AFIP por vencer",
+              `<p style="color:#52525b;line-height:1.6">El certificado digital de <strong>${restaurantName}</strong> para emitir facturas electrónicas vence el <strong>${expiryStr}</strong> (en ${daysLeft} días).</p>
+               <p style="color:#52525b;line-height:1.6">Cuando venza, el sistema <strong>no podrá emitir facturas</strong> hasta que lo renueves.</p>
+               <p style="color:#52525b;line-height:1.6">Para renovarlo:</p>
+               <ol style="color:#52525b;line-height:2;padding-left:20px">
+                 <li>Entrá al panel de WANT → Admin → Configuración ARCA</li>
+                 <li>Hacé clic en <strong>"Reconfigurar"</strong></li>
+                 <li>Seguí los pasos para generar y subir el nuevo certificado</li>
+               </ol>
+               <p style="margin:24px 0"><a href="https://want-livid.vercel.app" style="background:#0a0a0a;color:#fff;padding:12px 24px;border-radius:12px;text-decoration:none;font-weight:700">Ir a WANT →</a></p>`
+            )
+          );
+
+          console.log(`monthlyAfipCertCheck: aviso enviado a ${ownerEmail} — ${restaurantName} — ${daysLeft} días`);
+        } catch (err) {
+          console.error(`monthlyAfipCertCheck: error en restaurante ${restaurantDoc.id}:`, err);
+        }
+      }
+    } catch (error) {
+      console.error("monthlyAfipCertCheck error:", error);
+      Sentry.captureException(error);
+      await Sentry.flush(2000);
     }
   }
 );

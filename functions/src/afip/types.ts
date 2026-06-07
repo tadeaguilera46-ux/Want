@@ -42,6 +42,7 @@ export type InvoiceRequest = {
   customerName: string;
   customerDocType: "DNI" | "CUIT" | "consumidor_final";
   customerDocNumber?: string;
+  email: string;
   invoiceType: "A" | "B" | "C";
   total: number; // total en pesos (ya con IVA para B/C)
   items?: { description: string; quantity: number; unitPrice: number }[];
