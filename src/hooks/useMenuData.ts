@@ -18,6 +18,7 @@ const db = getDb();
 import {
   isPromotionActive,
   isTwoForOneActive,
+  PROMO_CATEGORY_NONE,
   type Promotion,
   type TwoForOnePromo,
 } from "@/components/PromotionsPanel";
@@ -201,11 +202,12 @@ export const useMenuData = (restaurantId: string) => {
 
   const applyPromotion = (item: MenuItem): MenuItem => {
     const activePromos = promotions.filter(isPromotionActive);
-    // productName tiene prioridad; si no, matchea por categoría; si ninguno, aplica a todo
     const promo = activePromos.find((p) => {
       if (p.productName) {
         return p.productName.toLowerCase() === item.name.toLowerCase();
       }
+      // PROMO_CATEGORY_NONE: solo aplica vía productName, nunca por categoría
+      if (p.category === PROMO_CATEGORY_NONE) return false;
       return !p.category || p.category === getDisplayCategory(item);
     });
     if (!promo) return item;

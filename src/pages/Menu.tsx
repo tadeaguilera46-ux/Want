@@ -592,7 +592,7 @@ const Menu = () => {
                                   : `$${promo.discountValue} off`}
                                 {promo.productName
                                   ? ` en "${promo.productName}"`
-                                  : promo.category
+                                  : promo.category && promo.category !== "__none__"
                                     ? ` en ${promo.category}`
                                     : " en todo el menú"}
                               </p>

@@ -191,6 +191,55 @@ function MenuItemPicker({
   );
 }
 
+// Sentinel: el descuento no aplica a ninguna categoría, solo al producto seleccionado
+export const PROMO_CATEGORY_NONE = "__none__";
+
+function CategoryPicker({
+  restaurantId,
+  value,
+  onChange,
+}: {
+  restaurantId: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const [categories, setCategories] = useState<string[]>([]);
+
+  useEffect(() => {
+    void getDocs(
+      query(
+        collection(db, "restaurants", restaurantId, "menu"),
+        where("active", "==", true)
+      )
+    ).then((snap) => {
+      const cats = [
+        ...new Set(
+          snap.docs
+            .map((d) => String(d.data().category || ""))
+            .filter(Boolean)
+        ),
+      ].sort();
+      setCategories(cats);
+    });
+  }, [restaurantId]);
+
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-10 w-full rounded-lg border border-zinc-200 px-3 text-sm"
+    >
+      <option value="">Todas las categorías</option>
+      <option value={PROMO_CATEGORY_NONE}>Solo el producto seleccionado</option>
+      {categories.map((cat) => (
+        <option key={cat} value={cat}>
+          {cat}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 export type Promotion = {
   id: string;
   name: string;
@@ -307,7 +356,7 @@ export function PromotionsPanel({ restaurantId }: { restaurantId: string }) {
         <form onSubmit={handleAdd} className="space-y-3">
           <div className="grid gap-2 sm:grid-cols-2">
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Happy Hour)" required className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
-            <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Categoría (vacío = todas)" className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
+            <CategoryPicker restaurantId={restaurantId} value={category} onChange={setCategory} />
             <div className="sm:col-span-2">
               <MenuItemPicker
                 restaurantId={restaurantId}
@@ -362,9 +411,11 @@ export function PromotionsPanel({ restaurantId }: { restaurantId: string }) {
                     {p.discountType === "percentage" ? `${p.discountValue}% off` : `$${p.discountValue} off`}
                     {p.productName
                       ? ` en "${p.productName}"`
-                      : p.category
-                        ? ` en categoría "${p.category}"`
-                        : " en todo el menú"}
+                      : p.category === PROMO_CATEGORY_NONE
+                        ? " solo en producto específico"
+                        : p.category
+                          ? ` en categoría "${p.category}"`
+                          : " en todo el menú"}
                     {" · "}{p.fromTime}–{p.toTime}
                     {p.days.length > 0 && ` · ${p.days.map(d => DAYS[d]).join(", ")}`}
                   </p>
