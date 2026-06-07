@@ -2,6 +2,12 @@ import * as Sentry from "@sentry/node";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import admin from "firebase-admin";
 import { UserFacingError, toApiErrorMessage } from "./_lib/errors.js";
+import {
+  applyPromotion,
+  applyTwoForOne,
+  type PromoDoc,
+  type TwoForOneDoc,
+} from "./_lib/pricing.js";
 
 // Inicializar una vez por cold start — no lanza si ya está inicializado
 if (!Sentry.isInitialized()) {
@@ -74,6 +80,11 @@ const getAdminDb = () => {
   }
 
   return admin.firestore();
+};
+
+const getItemDisplayCategory = (menuData: MenuItemDoc): string => {
+  if (menuData.type && menuData.category) return menuData.category;
+  return menuData.category || "General";
 };
 
 const toBaseUnit = (quantity: number, unit: StockUnit) => {
@@ -149,6 +160,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const restaurantId = pedido.restaurantId.trim();
     const mesa = Number(pedido.mesa);
+
+    const now = new Date();
+    const [promoSnap, twoForOneSnap] = await Promise.all([
+      db.collection(`restaurants/${restaurantId}/promotions`).get(),
+      db.collection(`restaurants/${restaurantId}/promotions2x1`).get(),
+    ]);
+    const activePromotions = promoSnap.docs.map((d) => d.data() as PromoDoc);
+    const activeTwoForOne = twoForOneSnap.docs.map((d) => d.data() as TwoForOneDoc);
 
     const pedidoId = await db.runTransaction(async (transaction) => {
       const restaurantRef = db.doc(`restaurants/${restaurantId}`);
@@ -419,8 +438,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             : "";
 
         const itemName = menuData.name || rawItem.nombre || "Producto";
-        const itemPrice = Number(
-          menuData.price || rawItem.precio || rawItem.price || 0
+        const basePrice = Number(menuData.price || 0);
+        const itemDisplayCategory = getItemDisplayCategory(menuData);
+        const { price: itemPrice, originalPrice } = applyPromotion(
+          basePrice, itemName, itemDisplayCategory, activePromotions, now
+        );
+        const { subtotal: itemSubtotal, twoForOneApplied } = applyTwoForOne(
+          quantity, itemPrice, itemName, activeTwoForOne, now
         );
 
         normalizedItems.push({
@@ -431,9 +455,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           quantity,
           precio: itemPrice,
           price: itemPrice,
-          subtotal: itemPrice * quantity,
+          ...(originalPrice !== undefined && { originalPrice }),
+          subtotal: itemSubtotal,
+          twoForOneApplied,
           category: itemCategory,
-          displayCategory: rawItem.displayCategory || menuData.category || "",
+          displayCategory: itemDisplayCategory,
           observacion: mergeObservations(
             normalizeObservation(rawItem.observacion || rawItem.note),
             automaticObservation
@@ -505,6 +531,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
+      const auditRef = db
+        .collection(`restaurants/${restaurantId}/auditLogs`)
+        .doc();
+      transaction.set(auditRef, {
+        restaurantId,
+        action: "pedido_creado",
+        actorUid: `customer:${sessionId}`,
+        actorEmail: null,
+        actorRole: "customer",
+        userUid: `customer:${sessionId}`,
+        userEmail: null,
+        userRole: "customer",
+        mesa,
+        pedidoId: pedidoRef.id,
+        cuentaId: null,
+        sessionId,
+        entityType: "pedido",
+        entityId: pedidoRef.id,
+        description: `Cliente creo pedido para mesa ${mesa}`,
+        reason: null,
+        changes: {
+          before: { exists: false },
+          after: {
+            total: normalizedItems.reduce(
+              (sum, item) => sum + Number(item.subtotal || 0),
+              0
+            ),
+            itemCount: normalizedItems.length,
+          },
+        },
+        metadata: {},
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
       return pedidoRef.id;
     });
 
@@ -528,4 +588,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: toApiErrorMessage(error),
     });
   }
-}   
+}
