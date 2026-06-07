@@ -239,6 +239,9 @@ function validateCuit(raw: string): boolean {
   return check !== 10 && check === parseInt(digits[10], 10);
 }
 
+const BILL_WARN_MINUTES = 30;
+const BILL_DANGER_MINUTES = 60;
+
 const Cashier = () => {
   const [searchParams] = useSearchParams();
   const { restaurantId: contextRestaurantId, restaurant } = useRestaurant();
@@ -496,6 +499,28 @@ const Cashier = () => {
       (cuenta) => cuenta.estado !== "pagada" && cuenta.estado !== "cerrada"
     );
   }, [activeBills]);
+
+  const [billsNow, setBillsNow] = useState(Date.now);
+  useEffect(() => {
+    const id = setInterval(() => setBillsNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const getBillAgeMinutes = (cuenta: Cuenta) => {
+    const ts = getTimestampMs(cuenta.createdAt);
+    if (!ts) return 0;
+    return Math.floor((billsNow - ts) / 60_000);
+  };
+
+  const stalePendingBills = useMemo(
+    () =>
+      pendingBills.filter((c) => {
+        const ts = getTimestampMs(c.createdAt);
+        return ts > 0 && billsNow - ts >= BILL_WARN_MINUTES * 60_000;
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pendingBills, billsNow]
+  );
 
   const invoiceRequestsCount = useMemo(() => {
     return cuentas.filter((cuenta) => cuenta.invoice?.status === "requested")
@@ -1816,9 +1841,23 @@ window.onload = () => { window.print(); };
                   </p>
                 </div>
               ) : (
+                <div>
+                  {stalePendingBills.length > 0 && (
+                    <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                      <AlertTriangle size={15} className="shrink-0 text-amber-600" />
+                      <span className="text-sm font-semibold text-amber-800">
+                        {stalePendingBills.length === 1
+                          ? `Mesa ${stalePendingBills[0].mesa} lleva más de ${BILL_WARN_MINUTES} min abierta`
+                          : `${stalePendingBills.length} cuentas llevan más de ${BILL_WARN_MINUTES} min sin cobrar`}
+                      </span>
+                    </div>
+                  )}
                 <div className="space-y-3">
                   {activeBills.map((cuenta) => {
                     const selected = selectedCuenta?.id === cuenta.id;
+                    const ageMins = getBillAgeMinutes(cuenta);
+                    const isStale = cuenta.estado === "pendiente" && ageMins >= BILL_WARN_MINUTES;
+                    const isDangerBill = isStale && ageMins >= BILL_DANGER_MINUTES;
 
                     return (
                       <div key={cuenta.id} className="relative">
@@ -1827,6 +1866,10 @@ window.onload = () => { window.print(); };
                           className={`w-full rounded-xl border p-4 text-left transition ${
                             selected
                               ? "border-zinc-950 bg-zinc-950 text-white"
+                              : isDangerBill
+                              ? "border-red-300 bg-red-50 hover:border-red-400"
+                              : isStale
+                              ? "border-amber-300 bg-amber-50 hover:border-amber-400"
                               : "border-zinc-200 bg-white hover:border-zinc-300"
                           }`}
                         >
@@ -1845,6 +1888,19 @@ window.onload = () => { window.print(); };
                                 Total
                               </p>
                               <p className="text-xl font-bold">{formatPriceARS(cuenta.total)}</p>
+                              {ageMins > 0 && (
+                                <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-bold ${
+                                  selected
+                                    ? "bg-white/20 text-white"
+                                    : isDangerBill
+                                    ? "bg-red-100 text-red-700"
+                                    : isStale
+                                    ? "bg-amber-100 text-amber-700"
+                                    : "bg-zinc-100 text-zinc-500"
+                                }`}>
+                                  {ageMins}m
+                                </span>
+                              )}
                             </div>
                           </div>
                         </button>
@@ -1896,6 +1952,7 @@ window.onload = () => { window.print(); };
                       </div>
                     );
                   })}
+                </div>
                 </div>
               )}
             </section>
