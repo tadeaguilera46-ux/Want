@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addDoc,
   collection,
@@ -318,7 +318,9 @@ const Cashier = () => {
   const [compactMode, setCompactMode] = useState(false);
 
   const [showOpeningDialog, setShowOpeningDialog] = useState(true);
+  const [openingCaja, setOpeningCaja] = useState(false);
   const [openingCashInput, setOpeningCashInput] = useState("");
+  const markPaidLockRef = useRef(false);
   const [cashSession, setCashSession] = useState<{
     openingCash: number;
     openedAt: number;
@@ -342,7 +344,11 @@ const Cashier = () => {
   useEffect(() => {
     if (!restaurantId) return;
 
-    const q = query(collection(db, "restaurants", restaurantId, "sessions"));
+    const q = query(
+      collection(db, "restaurants", restaurantId, "sessions"),
+      where("status", "==", "active"),
+      limit(100)
+    );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map((docSnap) => ({
@@ -988,12 +994,14 @@ const Cashier = () => {
   };
 
   const handleMarkPaid = async () => {
+    if (markPaidLockRef.current) return;
     if (!isOnline) {
       toast.error("Sin conexión.");
       return;
     }
     if (!user || !restaurantId || !selectedCuenta) return;
 
+    markPaidLockRef.current = true;
     try {
       setProcessing(true);
       setError(null);
@@ -1023,6 +1031,7 @@ const Cashier = () => {
       );
     } finally {
       setProcessing(false);
+      markPaidLockRef.current = false;
     }
   };
 
@@ -1086,16 +1095,18 @@ const Cashier = () => {
     }
     try {
       setProcessing(true);
+      const idToken = await user.getIdToken();
       const res = await fetch("/api/cancel-item", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${idToken}`,
+        },
         body: JSON.stringify({
           restaurantId,
           pedidoId: cancelItemTarget.pedidoId,
           itemIndex: cancelItemTarget.itemIndex,
           reason: cancelItemReason.trim(),
-          actorUid: user.uid,
-          actorEmail: user.email ?? "",
         }),
       });
       const data = await res.json() as { ok: boolean; error?: string };
@@ -1353,36 +1364,48 @@ const Cashier = () => {
     }
   };
 
-  const confirmOpeningCash = (forcedAmount?: number) => {
-    if (!sessionKey) return;
+  const confirmOpeningCash = async (forcedAmount?: number) => {
+    if (!sessionKey || !restaurantId || !user?.uid) return;
     const amount =
       forcedAmount !== undefined
         ? forcedAmount
         : Math.max(0, Number(openingCashInput) || 0);
-    const session = {
-      openingCash: amount,
-      openedAt: Date.now(),
-      adjustments: cashSession?.adjustments,
-    };
-    localStorage.setItem(sessionKey, JSON.stringify(session));
-    setCashSession(session);
-    setShowOpeningDialog(false);
 
-    // Persist apertura to Firestore (best-effort)
-    if (restaurantId && user?.uid) {
-      addDoc(collection(db, "restaurants", restaurantId, "cajaTurnos"), {
-        restaurantId,
-        actorUid: user.uid,
-        actorEmail: user.email ?? "",
-        status: "open",
+    setOpeningCaja(true);
+    try {
+      const session = {
         openingCash: amount,
-        openedAt: session.openedAt,
-        adjustments: [],
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-        .then((ref) => setCajaTurnoId(ref.id))
-        .catch(console.error);
+        openedAt: Date.now(),
+        adjustments: cashSession?.adjustments ?? [],
+      };
+
+      // Persist to Firestore first — if this fails, the cashier stays on the dialog
+      const ref = await addDoc(
+        collection(db, "restaurants", restaurantId, "cajaTurnos"),
+        {
+          restaurantId,
+          actorUid: user.uid,
+          actorEmail: user.email ?? "",
+          status: "open",
+          openingCash: amount,
+          openedAt: session.openedAt,
+          adjustments: [],
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        }
+      );
+
+      setCajaTurnoId(ref.id);
+      localStorage.setItem(sessionKey, JSON.stringify(session));
+      setCashSession(session);
+      setShowOpeningDialog(false);
+    } catch (err) {
+      console.error("Error abriendo caja:", err);
+      toast.error(
+        "No se pudo registrar la apertura de caja. Verificá tu conexión y reintentá."
+      );
+    } finally {
+      setOpeningCaja(false);
     }
   };
 
@@ -1664,10 +1687,15 @@ window.onload = () => { window.print(); };
     win.document.close();
   };
 
-  const saveAdjustment = () => {
+  const saveAdjustment = async () => {
     if (!sessionKey || !cashSession || !adjustForm) return;
     const amount = Math.max(0, Number(adjustForm.amount) || 0);
     if (amount <= 0 || !adjustForm.reason.trim()) return;
+
+    if (!cajaTurnoId) {
+      toast.error("No hay turno de caja activo. Abrí la caja antes de registrar movimientos.");
+      return;
+    }
 
     const newAdj: CashAdjustment = {
       id: crypto.randomUUID(),
@@ -1681,16 +1709,20 @@ window.onload = () => { window.print(); };
       ...cashSession,
       adjustments: [...(cashSession.adjustments ?? []), newAdj],
     };
-    localStorage.setItem(sessionKey, JSON.stringify(updated));
-    setCashSession(updated);
-    setAdjustForm(null);
 
-    // Persist movimiento to Firestore (best-effort)
-    if (restaurantId && cajaTurnoId) {
-      updateDoc(doc(db, "restaurants", restaurantId, "cajaTurnos", cajaTurnoId), {
+    try {
+      // Persist to Firestore first — if this fails, local state stays unchanged
+      await updateDoc(doc(db, "restaurants", restaurantId!, "cajaTurnos", cajaTurnoId), {
         adjustments: updated.adjustments,
         updatedAt: serverTimestamp(),
-      }).catch(console.error);
+      });
+
+      localStorage.setItem(sessionKey, JSON.stringify(updated));
+      setCashSession(updated);
+      setAdjustForm(null);
+    } catch (err) {
+      console.error("Error guardando ajuste:", err);
+      toast.error("No se pudo guardar el movimiento. Verificá tu conexión y reintentá.");
     }
   };
 
@@ -2827,17 +2859,20 @@ window.onload = () => { window.print(); };
             placeholder="$0"
             className="mt-4 h-14 w-full rounded-lg border border-zinc-200 px-4 text-xl font-bold outline-none focus:ring-2 focus:ring-black/10"
             autoFocus
-            onKeyDown={(e) => e.key === "Enter" && confirmOpeningCash()}
+            onKeyDown={(e) => e.key === "Enter" && void confirmOpeningCash()}
+            disabled={openingCaja}
           />
           <button
-            onClick={() => confirmOpeningCash()}
-            className="mt-3 h-12 w-full rounded-lg bg-zinc-950 font-bold text-white transition hover:bg-zinc-800"
+            onClick={() => void confirmOpeningCash()}
+            disabled={openingCaja}
+            className="mt-3 h-12 w-full rounded-lg bg-zinc-950 font-bold text-white transition hover:bg-zinc-800 disabled:opacity-50"
           >
-            Abrir caja
+            {openingCaja ? "Abriendo..." : "Abrir caja"}
           </button>
           <button
-            onClick={() => confirmOpeningCash(0)}
-            className="mt-2 w-full rounded-xl py-2 text-sm font-bold text-zinc-400 transition hover:text-zinc-600"
+            onClick={() => void confirmOpeningCash(0)}
+            disabled={openingCaja}
+            className="mt-2 w-full rounded-xl py-2 text-sm font-bold text-zinc-400 transition hover:text-zinc-600 disabled:opacity-50"
           >
             Continuar sin ingresar monto
           </button>
@@ -3050,11 +3085,11 @@ window.onload = () => { window.print(); };
                         setAdjustForm((f) => f && { ...f, reason: e.target.value })
                       }
                       className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold outline-none focus:ring-2 focus:ring-black/10"
-                      onKeyDown={(e) => e.key === "Enter" && saveAdjustment()}
+                      onKeyDown={(e) => e.key === "Enter" && void saveAdjustment()}
                     />
                     <div className="flex gap-2">
                       <button
-                        onClick={saveAdjustment}
+                        onClick={() => void saveAdjustment()}
                         disabled={
                           !adjustForm.amount ||
                           Number(adjustForm.amount) <= 0 ||

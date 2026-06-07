@@ -476,6 +476,25 @@ service cloud.firestore {
       allow delete: if isSuperAdmin() || isAdmin(restaurantId);
     }
 
+    // Turnos de caja
+    match /restaurants/{restaurantId}/cajaTurnos/{turnoId} {
+      allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
+
+      allow create: if isCashierOrAdmin(restaurantId)
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.actorUid == request.auth.uid
+        && request.resource.data.status == "open"
+        && request.resource.data.openingCash is number
+        && request.resource.data.openingCash >= 0;
+
+      allow update: if isCashierOrAdmin(restaurantId)
+        && resource.data.restaurantId == restaurantId
+        && (resource.data.actorUid == request.auth.uid || isAdmin(restaurantId))
+        && request.resource.data.restaurantId == resource.data.restaurantId;
+
+      allow delete: if isSuperAdmin();
+    }
+
     // Promociones y Happy Hour
     match /restaurants/{restaurantId}/promotions/{promoId} {
       allow read: if true;

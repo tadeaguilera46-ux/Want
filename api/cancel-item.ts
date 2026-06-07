@@ -41,8 +41,6 @@ type CancelItemBody = {
   pedidoId: string;
   itemIndex: number;
   reason: string;
-  actorUid: string;
-  actorEmail: string;
 };
 
 const getAdminDb = () => {
@@ -73,15 +71,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ ok: false, error: "Método no permitido" });
   }
 
+  // Verify Firebase ID token
+  const authHeader = (req.headers.authorization ?? "") as string;
+  const rawToken = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
+  if (!rawToken) {
+    return res.status(401).json({ ok: false, error: "Se requiere autenticación" });
+  }
+
+  const db = getAdminDb();
+  const FieldValue = admin.firestore.FieldValue;
+
+  let actorUid: string;
+  let actorEmail: string;
   try {
-    const {
-      restaurantId,
-      pedidoId,
-      itemIndex,
-      reason,
-      actorUid,
-      actorEmail,
-    } = req.body as CancelItemBody;
+    const decoded = await admin.auth().verifyIdToken(rawToken);
+    actorUid = decoded.uid;
+    actorEmail = decoded.email ?? "";
+  } catch {
+    return res.status(401).json({ ok: false, error: "Token inválido o expirado" });
+  }
+
+  try {
+    const { restaurantId, pedidoId, itemIndex, reason } = req.body as CancelItemBody;
 
     if (!restaurantId?.trim() || !pedidoId?.trim()) {
       throw new UserFacingError("Faltan parámetros obligatorios");
@@ -92,12 +103,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!reason?.trim() || reason.trim().length < 3) {
       throw new UserFacingError("El motivo de cancelación es obligatorio (mínimo 3 caracteres)");
     }
-    if (!actorUid?.trim()) {
-      throw new UserFacingError("Se requiere identificación del usuario");
-    }
 
-    const db = getAdminDb();
-    const FieldValue = admin.firestore.FieldValue;
+    // Verify the caller is active staff with cashier or admin role in this restaurant
+    const staffSnap = await db
+      .doc(`restaurants/${restaurantId.trim()}/staff/${actorUid}`)
+      .get();
+    if (!staffSnap.exists || staffSnap.data()?.active !== true) {
+      return res.status(403).json({ ok: false, error: "Sin permisos en este restaurante" });
+    }
+    const staffRole = String(staffSnap.data()?.role ?? "");
+    if (staffRole !== "cashier" && staffRole !== "admin") {
+      return res.status(403).json({ ok: false, error: "Solo caja o administración puede cancelar ítems" });
+    }
 
     const pedidoRef = db.doc(`restaurants/${restaurantId}/pedidos/${pedidoId}`);
 

@@ -55,6 +55,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const db = getAdminDb();
     const FieldValue = admin.firestore.FieldValue;
 
+    // Fast pre-validation: ensure sessionId belongs to this mesa before running
+    // the full transaction. This prevents a caller from locking unrelated sessions
+    // even if they somehow obtained a valid sessionId from another table.
+    // Note: this endpoint is customer-facing (no auth token required) — security
+    // relies on UUID sessionIds being unguessable + this server-side check.
+    const quickMesaSnap = await db
+      .doc(`restaurants/${restaurantId}/mesas/${mesaNumber}`)
+      .get();
+    if (!quickMesaSnap.exists) {
+      return res.status(400).json({ ok: false, error: "La mesa no existe" });
+    }
+    if (quickMesaSnap.data()!.activeSessionId !== sessionId) {
+      return res.status(403).json({ ok: false, error: "La sesión no corresponde a esta mesa" });
+    }
+
     // Calculate total from pedidos (server-side, not trusting client total)
     const pedidosSnap = await db
       .collection(`restaurants/${restaurantId}/pedidos`)
