@@ -952,7 +952,7 @@ const Runner = () => {
 
         {bill.estado === "en_camino" && (
           <p className="mt-3 text-sm font-semibold text-blue-600">
-            Llevar cuenta a la mesa
+            Cuenta entregada — esperando que caja registre el cobro.
           </p>
         )}
 
@@ -974,13 +974,9 @@ const Runner = () => {
           )}
 
           {bill.estado === "en_camino" && (
-            <button
-              onClick={() => updateBill(bill.id, "pagada")}
-              disabled={isLoading || !isOnline}
-              className="flex h-12 items-center justify-center rounded-lg bg-emerald-600 px-4 text-sm font-semibold text-white transition-all duration-200 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isLoading ? "Actualizando..." : "Marcar pagada"}
-            </button>
+            <div className="flex h-12 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 px-4 text-sm font-semibold text-zinc-400">
+              Cobro pendiente de caja
+            </div>
           )}
 
           {bill.estado === "pagada" && (

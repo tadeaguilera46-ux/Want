@@ -337,6 +337,12 @@ export const actualizarEstadoCuenta = async (
   mesa: number | undefined,
   actor: AuditActor
 ) => {
+  if (estado === "pagada" && actor.actorRole === "runner") {
+    throw new Error(
+      "El runner no puede confirmar pagos. Solo la caja puede registrar cobros."
+    );
+  }
+
   const normalizedRestaurantId = normalizeRestaurantId(restaurantId);
   const sessionId = normalizeSessionId(id);
 
