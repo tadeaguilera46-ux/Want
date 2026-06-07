@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { useLocation, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import type { CartItem, MenuItem } from "@/lib/store";
-import { resolveRuntimeContext, parseTableNumber } from "./runtime-context";
 import { getStoredTableSessionId } from "./table-session";
 
 interface CartContextType {
@@ -53,10 +52,11 @@ const saveCart = (key: string, cart: CartItem[]) => {
 
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [searchParams] = useSearchParams();
-  const location = useLocation();
 
-  const { restaurantId, table } = resolveRuntimeContext({ searchParams, location });
-  const tableNumber = parseTableNumber(table);
+  const restaurantId = searchParams.get("restaurantId")?.trim() || null;
+  const rawTable = searchParams.get("table")?.trim() || null;
+  const parsedTable = rawTable ? parseInt(rawTable, 10) : NaN;
+  const tableNumber = Number.isInteger(parsedTable) && parsedTable > 0 ? parsedTable : null;
 
   const storageKey = (() => {
     if (!restaurantId || !tableNumber) return null;
