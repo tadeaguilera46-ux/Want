@@ -366,7 +366,9 @@ const CashierInvoices = () => {
       const afipQrUrl = `https://www.afip.gob.ar/fe/qr/?p=${qrPayload}`;
       const dataUrl = await QRCode.toDataURL(afipQrUrl, { width: 128, margin: 1 });
       qrImgTag = `<img src="${dataUrl}" width="96" height="96" alt="QR AFIP" />`;
-    } catch {}
+    } catch (_) {
+      // QR generation failed — factura se imprime sin QR
+    }
 
     const address = [inv.fiscalAddress, inv.postalCode && "CP " + inv.postalCode, inv.city, inv.province]
       .filter(Boolean).join(" — ");
