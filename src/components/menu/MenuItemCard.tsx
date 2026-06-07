@@ -33,6 +33,8 @@ type Props = {
   formatPrice: (value: number) => string;
   onAdd: (item: MenuCardItem) => void;
   onNote: (item: MenuCardItem) => void;
+  originalPrice?: number;
+  twoForOne?: boolean;
 };
 
 function MenuItemCard({
@@ -44,6 +46,8 @@ function MenuItemCard({
   formatPrice,
   onAdd,
   onNote,
+  originalPrice,
+  twoForOne,
 }: Props) {
   return (
     <motion.div
@@ -77,11 +81,28 @@ function MenuItemCard({
                 Quedan pocas unidades
               </span>
             )}
+
+            {twoForOne && (
+              <span className="rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-black text-white shadow-sm">
+                2×1
+              </span>
+            )}
           </div>
 
-          <div className="shrink-0 rounded-full bg-white/95 px-3 py-1.5 text-sm font-semibold text-zinc-950 shadow-sm backdrop-blur">
-            {formatPrice(item.price)}
-          </div>
+          {originalPrice !== undefined ? (
+            <div className="flex flex-col items-end gap-0.5 rounded-xl bg-white/95 px-2.5 py-1.5 shadow-sm backdrop-blur">
+              <span className="text-[10px] font-medium leading-none text-zinc-400 line-through">
+                {formatPrice(originalPrice)}
+              </span>
+              <span className="text-sm font-bold leading-none text-emerald-600">
+                {formatPrice(item.price)}
+              </span>
+            </div>
+          ) : (
+            <div className="shrink-0 rounded-full bg-white/95 px-3 py-1.5 text-sm font-semibold text-zinc-950 shadow-sm backdrop-blur">
+              {formatPrice(item.price)}
+            </div>
+          )}
         </div>
 
         <div className="absolute bottom-0 left-0 right-0 p-4">

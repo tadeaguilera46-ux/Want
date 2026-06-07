@@ -31,6 +31,7 @@ export type MenuItem = {
   id: string;
   name: string;
   price: number;
+  originalPrice?: number;
   description?: string;
   type?: MenuType;
   category: string;
@@ -215,7 +216,7 @@ export const useMenuData = (restaurantId: string) => {
       promo.discountType === "percentage"
         ? item.price * (promo.discountValue / 100)
         : promo.discountValue;
-    return { ...item, price: Math.max(0, Math.round(item.price - discount)) };
+    return { ...item, originalPrice: item.price, price: Math.max(0, Math.round(item.price - discount)) };
   };
 
   const availableMenuItems = useMemo(() => {

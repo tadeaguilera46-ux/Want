@@ -559,59 +559,169 @@ const Menu = () => {
                     </span>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {/* Descuentos automáticos */}
                     {promotions.map((promo) => {
                       const active = isPromotionActive(promo);
-                      return (
-                        <div
-                          key={promo.id}
-                          className={`rounded-2xl border p-4 transition ${
-                            active
-                              ? "border-emerald-200 bg-emerald-50"
-                              : "border-black/8 bg-white/80"
-                          }`}
-                        >
-                          <div className="flex items-start gap-3">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                                <span className="font-bold text-zinc-950">{promo.name}</span>
+
+                      // Single product promo → full product card
+                      if (promo.productName) {
+                        const matchedItem = allItems.find(
+                          (i) => i.name.toLowerCase() === promo.productName.toLowerCase()
+                        );
+                        if (!matchedItem) return null;
+                        const originalPrice =
+                          active && matchedItem.originalPrice !== undefined
+                            ? matchedItem.originalPrice
+                            : matchedItem.price;
+                        const discountedPrice =
+                          promo.discountType === "percentage"
+                            ? Math.max(0, Math.round(originalPrice * (1 - promo.discountValue / 100)))
+                            : Math.max(0, Math.round(originalPrice - promo.discountValue));
+                        return (
+                          <div
+                            key={promo.id}
+                            className="overflow-hidden rounded-[24px] border border-black/5 bg-white shadow-[0_8px_24px_-14px_rgba(0,0,0,0.18)]"
+                          >
+                            <div className="relative aspect-[16/10] overflow-hidden bg-zinc-100">
+                              {matchedItem.image ? (
+                                <img
+                                  src={matchedItem.image}
+                                  alt={matchedItem.name}
+                                  loading="lazy"
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="h-full w-full" style={{ backgroundColor: primaryColor }} />
+                              )}
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+                              <div className="absolute right-4 top-4">
                                 {active ? (
-                                  <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
-                                    AHORA
+                                  <span className="rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white">
+                                    ACTIVO
                                   </span>
                                 ) : (
-                                  <span className="rounded-full border border-zinc-300 px-2 py-0.5 text-[10px] font-semibold text-zinc-400">
+                                  <span className="rounded-full border border-white/40 bg-black/30 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
                                     PRÓXIMO
                                   </span>
                                 )}
                               </div>
-                              <p className="text-sm text-zinc-600">
-                                {promo.discountType === "percentage"
-                                  ? `${promo.discountValue}% off`
-                                  : `$${promo.discountValue} off`}
-                                {promo.productName
-                                  ? ` en "${promo.productName}"`
-                                  : promo.category && promo.category !== "__none__"
-                                    ? ` en ${promo.category}`
-                                    : " en todo el menú"}
-                              </p>
-                              <p className="mt-0.5 text-xs text-zinc-400">
+                              <div className="absolute bottom-0 left-0 right-0 p-4">
+                                <h3 className="text-xl font-bold leading-tight text-white drop-shadow-sm">
+                                  {matchedItem.name}
+                                </h3>
+                              </div>
+                            </div>
+                            <div className="p-4">
+                              <p className="text-xs text-zinc-500">
                                 {promo.fromTime}–{promo.toTime}
                                 {promo.days.length > 0 &&
                                   ` · ${promo.days.map((d) => DAYS_SHORT[d]).join(", ")}`}
                               </p>
+                              <div className="mt-2 flex items-baseline gap-2">
+                                <span className="text-sm text-zinc-400 line-through">
+                                  {formatPriceARS(originalPrice)}
+                                </span>
+                                <span className="text-xl font-bold text-emerald-600">
+                                  {formatPriceARS(discountedPrice)}
+                                </span>
+                              </div>
                             </div>
-                            {active && promo.category && (
+                          </div>
+                        );
+                      }
+
+                      // Category promo → photo of first item + scroll button
+                      if (promo.category && promo.category !== "__none__") {
+                        const firstItem = allItems.find(
+                          (i) => getDisplayCategory(i) === promo.category
+                        );
+                        return (
+                          <div
+                            key={promo.id}
+                            className="overflow-hidden rounded-[24px] border border-black/5 bg-white shadow-[0_8px_24px_-14px_rgba(0,0,0,0.18)]"
+                          >
+                            <div className="relative aspect-[16/10] overflow-hidden bg-zinc-100">
+                              {firstItem?.image ? (
+                                <img
+                                  src={firstItem.image}
+                                  alt={promo.category}
+                                  loading="lazy"
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="h-full w-full" style={{ backgroundColor: primaryColor }} />
+                              )}
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/65 via-black/20 to-transparent" />
+                              <div className="absolute right-4 top-4">
+                                {active ? (
+                                  <span className="rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white">
+                                    ACTIVO
+                                  </span>
+                                ) : (
+                                  <span className="rounded-full border border-white/40 bg-black/30 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
+                                    PRÓXIMO
+                                  </span>
+                                )}
+                              </div>
+                              <div className="absolute bottom-0 left-0 right-0 p-4">
+                                <h3 className="text-xl font-bold leading-tight text-white drop-shadow-sm">
+                                  {promo.category}{" "}
+                                  {promo.discountType === "percentage"
+                                    ? `${promo.discountValue}% off`
+                                    : `$${promo.discountValue} off`}
+                                </h3>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between gap-3 p-4">
+                              <p className="text-xs text-zinc-500">
+                                {promo.fromTime}–{promo.toTime}
+                                {promo.days.length > 0 &&
+                                  ` · ${promo.days.map((d) => DAYS_SHORT[d]).join(", ")}`}
+                              </p>
                               <button
                                 onClick={() => scrollToCategory(promo.category)}
-                                className="shrink-0 rounded-xl px-3 py-2 text-xs font-bold text-white"
+                                className="shrink-0 rounded-xl px-4 py-2 text-sm font-bold text-white"
                                 style={{ backgroundColor: primaryColor }}
                               >
-                                Ver →
+                                Ver {promo.category}
                               </button>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // "Todo el menú" promo → text card
+                      return (
+                        <div
+                          key={promo.id}
+                          className={`rounded-2xl border p-4 transition ${
+                            active ? "border-emerald-200 bg-emerald-50" : "border-black/8 bg-white/80"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                            <span className="font-bold text-zinc-950">{promo.name}</span>
+                            {active ? (
+                              <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                                ACTIVO
+                              </span>
+                            ) : (
+                              <span className="rounded-full border border-zinc-300 px-2 py-0.5 text-[10px] font-semibold text-zinc-400">
+                                PRÓXIMO
+                              </span>
                             )}
                           </div>
+                          <p className="text-sm text-zinc-600">
+                            {promo.discountType === "percentage"
+                              ? `${promo.discountValue}% off`
+                              : `$${promo.discountValue} off`}{" "}
+                            en todo el menú
+                          </p>
+                          <p className="mt-0.5 text-xs text-zinc-400">
+                            {promo.fromTime}–{promo.toTime}
+                            {promo.days.length > 0 &&
+                              ` · ${promo.days.map((d) => DAYS_SHORT[d]).join(", ")}`}
+                          </p>
                         </div>
                       );
                     })}
@@ -621,25 +731,75 @@ const Menu = () => {
                       const active = isTwoForOneActive(promo);
                       const matchedItem = promo.productName
                         ? allItems.find(
-                            (i) =>
-                              i.name.toLowerCase() ===
-                              promo.productName.toLowerCase()
+                            (i) => i.name.toLowerCase() === promo.productName.toLowerCase()
                           )
                         : null;
+
+                      if (matchedItem) {
+                        return (
+                          <div
+                            key={promo.id}
+                            className="overflow-hidden rounded-[24px] border border-black/5 bg-white shadow-[0_8px_24px_-14px_rgba(0,0,0,0.18)]"
+                          >
+                            <div className="relative aspect-[16/10] overflow-hidden bg-zinc-100">
+                              {matchedItem.image ? (
+                                <img
+                                  src={matchedItem.image}
+                                  alt={matchedItem.name}
+                                  loading="lazy"
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                <div className="h-full w-full" style={{ backgroundColor: primaryColor }} />
+                              )}
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+                              <div className="absolute left-4 right-4 top-4 flex items-start justify-between">
+                                <span className="rounded-full bg-amber-500 px-3 py-1 text-sm font-black text-white shadow-sm">
+                                  2×1
+                                </span>
+                                {active ? (
+                                  <span className="rounded-full bg-emerald-600 px-2.5 py-1 text-[11px] font-bold text-white">
+                                    ACTIVO
+                                  </span>
+                                ) : (
+                                  <span className="rounded-full border border-white/40 bg-black/30 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
+                                    PRÓXIMO
+                                  </span>
+                                )}
+                              </div>
+                              <div className="absolute bottom-0 left-0 right-0 p-4">
+                                <h3 className="text-xl font-bold leading-tight text-white drop-shadow-sm">
+                                  {matchedItem.name}
+                                </h3>
+                              </div>
+                            </div>
+                            <div className="p-4">
+                              <p className="text-base font-semibold text-zinc-950">
+                                {formatPriceARS(matchedItem.originalPrice ?? matchedItem.price)} c/u
+                              </p>
+                              <p className="mt-0.5 text-xs text-zinc-500">
+                                {promo.fromTime}–{promo.toTime}
+                                {promo.days.length > 0 &&
+                                  ` · ${promo.days.map((d) => DAYS_SHORT[d]).join(", ")}`}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // No matched item → text card
                       return (
                         <div
                           key={promo.id}
                           className={`rounded-2xl border p-4 transition ${
-                            active
-                              ? "border-emerald-200 bg-emerald-50"
-                              : "border-black/8 bg-white/80"
+                            active ? "border-emerald-200 bg-emerald-50" : "border-black/8 bg-white/80"
                           }`}
                         >
                           <div className="flex flex-wrap items-center gap-2 mb-1">
                             <span className="font-bold text-zinc-950">{promo.name}</span>
                             {active ? (
                               <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
-                                AHORA
+                                ACTIVO
                               </span>
                             ) : (
                               <span className="rounded-full border border-zinc-300 px-2 py-0.5 text-[10px] font-semibold text-zinc-400">
@@ -650,7 +810,7 @@ const Menu = () => {
                               2×1
                             </span>
                           </div>
-                          <p className="text-xs text-zinc-500 mb-3">
+                          <p className="text-xs text-zinc-500">
                             {promo.productName
                               ? `Pedí 2 "${promo.productName}" y pagás solo 1`
                               : "Pedí 2 iguales de cualquier producto y pagás solo 1"}
@@ -659,52 +819,6 @@ const Menu = () => {
                             {promo.days.length > 0 &&
                               ` · ${promo.days.map((d) => DAYS_SHORT[d]).join(", ")}`}
                           </p>
-
-                          {matchedItem && (
-                            <div
-                              className={`flex items-center gap-3 rounded-xl border p-3 ${
-                                active
-                                  ? "border-emerald-100 bg-white"
-                                  : "border-zinc-100 bg-zinc-50"
-                              }`}
-                            >
-                              {matchedItem.image && (
-                                <img
-                                  src={matchedItem.image}
-                                  alt={matchedItem.name}
-                                  className="h-14 w-14 shrink-0 rounded-lg object-cover"
-                                />
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-sm text-zinc-900 truncate">
-                                  {matchedItem.name}
-                                </p>
-                                <p className="text-xs text-zinc-500">
-                                  {formatPriceARS(matchedItem.price)} c/u
-                                </p>
-                              </div>
-                              <button
-                                onClick={() =>
-                                  active
-                                    ? handleAddWithoutNote(matchedItem)
-                                    : undefined
-                                }
-                                disabled={!active}
-                                className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition ${
-                                  active ? "active:scale-95" : "opacity-40 cursor-not-allowed"
-                                }`}
-                                style={{ backgroundColor: primaryColor }}
-                              >
-                                {active ? "Agregar" : "No disponible"}
-                              </button>
-                            </div>
-                          )}
-
-                          {!matchedItem && !promo.productName && (
-                            <p className="text-xs text-zinc-400 italic">
-                              El descuento se aplica automáticamente en tu cuenta al pedir 2 iguales.
-                            </p>
-                          )}
                         </div>
                       );
                     })}
@@ -712,52 +826,60 @@ const Menu = () => {
                 </section>
               )}
 
-              {categories.map((cat) => {
-                const items = getItemsForCategory(cat.key);
-                if (items.length === 0) return null;
+              {(() => {
+                const activeTwoForOnePromos = twoForOnePromos.filter(isTwoForOneActive);
+                return categories.map((cat) => {
+                  const items = getItemsForCategory(cat.key);
+                  if (items.length === 0) return null;
 
-                return (
-                  <section
-                    key={cat.key}
-                    ref={(el) => { sectionRefs.current[cat.key] = el; }}
-                    data-category={cat.key}
-                  >
-                    {/* Category heading */}
-                    <div className="mb-3 flex items-center gap-3">
-                      <h2 className="text-base font-bold tracking-tight text-zinc-950">
-                        {cat.label}
-                      </h2>
-                      <div className="h-px flex-1 bg-black/8" />
-                      <span className="text-xs font-medium text-zinc-400">{items.length}</span>
-                    </div>
+                  return (
+                    <section
+                      key={cat.key}
+                      ref={(el) => { sectionRefs.current[cat.key] = el; }}
+                      data-category={cat.key}
+                    >
+                      {/* Category heading */}
+                      <div className="mb-3 flex items-center gap-3">
+                        <h2 className="text-base font-bold tracking-tight text-zinc-950">
+                          {cat.label}
+                        </h2>
+                        <div className="h-px flex-1 bg-black/8" />
+                        <span className="text-xs font-medium text-zinc-400">{items.length}</span>
+                      </div>
 
-                    <div className="space-y-5">
-                      {items.map((item) => {
-                        const quantity = getQuantity(item.id);
-                        const tags = getItemTags(item);
-                        const availability = getMenuItemAvailability({
-                          ingredients: item.ingredients,
-                          stockItems,
-                        });
+                      <div className="space-y-5">
+                        {items.map((item) => {
+                          const quantity = getQuantity(item.id);
+                          const tags = getItemTags(item);
+                          const availability = getMenuItemAvailability({
+                            ingredients: item.ingredients,
+                            stockItems,
+                          });
+                          const hasTwoForOne = activeTwoForOnePromos.some(
+                            (p) => p.productName && p.productName.toLowerCase() === item.name.toLowerCase()
+                          );
 
-                        return (
-                          <MenuItemCard
-                            key={item.id}
-                            item={item}
-                            quantity={quantity}
-                            tags={tags}
-                            availability={availability}
-                            primaryColor={primaryColor}
-                            formatPrice={formatPriceARS}
-                            onAdd={handleAddWithoutNote}
-                            onNote={openNoteModal}
-                          />
-                        );
-                      })}
-                    </div>
-                  </section>
-                );
-              })}
+                          return (
+                            <MenuItemCard
+                              key={item.id}
+                              item={item}
+                              quantity={quantity}
+                              tags={tags}
+                              availability={availability}
+                              primaryColor={primaryColor}
+                              formatPrice={formatPriceARS}
+                              onAdd={handleAddWithoutNote}
+                              onNote={openNoteModal}
+                              originalPrice={item.originalPrice}
+                              twoForOne={hasTwoForOne}
+                            />
+                          );
+                        })}
+                      </div>
+                    </section>
+                  );
+                });
+              })()}
             </div>
           )}
         </main>
