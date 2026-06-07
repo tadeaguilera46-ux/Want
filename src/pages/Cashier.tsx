@@ -1449,61 +1449,191 @@ const Cashier = () => {
 
   const handleExportCierre = () => {
     if (!cashSession) return;
+
     const fmt = (v: number) =>
       new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(v);
     const fmtDate = (d: Date) =>
       new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" }).format(d);
+    const fmtTime = (d: Date) =>
+      new Intl.DateTimeFormat("es-AR", { timeStyle: "short" }).format(d);
 
-    const rows = (Object.entries(paymentBreakdown) as [CashierPaymentMethod, { count: number; total: number }][])
+    const now = new Date();
+    const restaurantName = restaurant?.name ?? "Restaurante";
+    const cajero = user?.email ?? "—";
+    const apertura = fmtDate(new Date(cashSession.openedAt));
+    const cierre = fmtDate(now);
+
+    // Cancelled items count from orders paid today
+    const cancelledCount = paidCuentasToday.reduce((sum, c) => {
+      const cOrders = orders.filter((o) =>
+        c.sessionId ? o.sessionId === c.sessionId : Number(o.mesa) === Number(c.mesa)
+      );
+      return sum + cOrders.reduce((s, o) => s + (o.cancelledItems?.length ?? 0), 0);
+    }, 0);
+
+    // Average ticket (excluding tips)
+    const avgTicket = paidCuentasToday.length > 0 ? Math.round(totalRecaudado / paidCuentasToday.length) : 0;
+
+    // Arqueo
+    const arqueoRealValue =
+      cajaArqueoRealInput.trim() !== "" ? Math.max(0, Number(cajaArqueoRealInput) || 0) : undefined;
+    const arqueoEsperado = totalCajaActual;
+    const arqueoDiferencia = arqueoRealValue !== undefined ? arqueoRealValue - arqueoEsperado : undefined;
+
+    // Payment breakdown rows
+    const methodRows = (Object.entries(paymentBreakdown) as [CashierPaymentMethod, { count: number; total: number }][])
       .sort((a, b) => b[1].total - a[1].total)
-      .map(([method, data]) => `<tr><td>${paymentLabels[method] || method}</td><td>${data.count}</td><td>${fmt(data.total)}</td></tr>`)
-      .join("");
+      .map(([method, data]) =>
+        `<tr><td>${paymentLabels[method] || method}</td><td style="text-align:center">${data.count}</td><td style="text-align:right;font-weight:700">${fmt(data.total)}</td></tr>`
+      ).join("");
 
+    // Adjustment rows
     const adjRows = (cashSession.adjustments ?? [])
-      .map((a) => `<tr><td>${a.type === "add" ? "+" : "−"} ${fmt(a.amount)}</td><td>${a.reason}</td><td>${fmtDate(new Date(a.createdAt))}</td></tr>`)
-      .join("");
+      .map((a) =>
+        `<tr><td class="${a.type === "add" ? "pos" : "neg"}">${a.type === "add" ? "+" : "−"} ${fmt(a.amount)}</td><td>${a.reason}</td><td style="text-align:right;color:#999">${fmtTime(new Date(a.createdAt))}</td></tr>`
+      ).join("");
 
+    // Bill detail rows — multi-payment aware
     const cuentaRows = paidCuentasToday
+      .sort((a, b) => Number(a.mesa) - Number(b.mesa))
       .map((c) => {
-        const method = c.payments?.[0]?.method ?? (c.metodo as CashierPaymentMethod) ?? "other";
         const paid = c.paidAmount != null && c.paidAmount > 0 ? c.paidAmount : Number(c.total || 0);
-        return `<tr><td>Mesa ${c.mesa}</td><td>${paymentLabels[method] || method}</td><td>${fmt(paid)}</td>${c.tip ? `<td>${fmt(c.tip)}</td>` : "<td>—</td>"}</tr>`;
-      })
-      .join("");
+        const methodText = c.payments && c.payments.length > 1
+          ? c.payments.map((p) => `${paymentLabels[p.method] || p.method} ${fmt(p.amount)}`).join(" + ")
+          : paymentLabels[(c.payments?.[0]?.method ?? c.metodo ?? "other") as CashierPaymentMethod] || "Otro";
+        const tipCell = c.tip && c.tip > 0 ? `<td style="text-align:right;color:#059669">${fmt(c.tip)}</td>` : "<td style='text-align:right;color:#bbb'>—</td>";
+        return `<tr><td>Mesa <strong>${c.mesa}</strong></td><td>${methodText}</td><td style="text-align:right;font-weight:700">${fmt(paid)}</td>${tipCell}</tr>`;
+      }).join("");
 
-    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
-<title>Cierre de caja · ${fmtDate(new Date())}</title>
+    // Arqueo section HTML
+    const arqueoHtml = arqueoRealValue !== undefined ? `
+<div class="section">
+  <h2>Arqueo de caja</h2>
+  <table>
+    <tr><td>Arqueo esperado</td><td style="text-align:right;font-weight:700">${fmt(arqueoEsperado)}</td></tr>
+    <tr><td>Arqueo real (contado)</td><td style="text-align:right;font-weight:700">${fmt(arqueoRealValue)}</td></tr>
+    <tr class="${arqueoDiferencia! >= 0 ? "pos-row" : "neg-row"}">
+      <td><strong>Diferencia</strong></td>
+      <td style="text-align:right;font-weight:700">${arqueoDiferencia! >= 0 ? "+" : ""}${fmt(arqueoDiferencia!)}</td>
+    </tr>
+  </table>
+</div>` : "";
+
+    const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cierre de caja · ${restaurantName} · ${cierre}</title>
 <style>
-  body{font-family:Arial,sans-serif;font-size:13px;color:#111;padding:24px;max-width:700px;margin:0 auto}
-  h1{font-size:18px;margin-bottom:4px}p.sub{color:#666;font-size:12px;margin-bottom:20px}
-  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
-  .card{border:1px solid #ddd;border-radius:6px;padding:12px}
-  .card .label{font-size:11px;text-transform:uppercase;color:#666;font-weight:700}
-  .card .value{font-size:20px;font-weight:700;margin-top:4px}
-  table{width:100%;border-collapse:collapse;margin-bottom:20px}
-  th{text-align:left;font-size:11px;text-transform:uppercase;color:#666;border-bottom:2px solid #ddd;padding:6px 4px}
-  td{padding:6px 4px;border-bottom:1px solid #eee}
-  h2{font-size:14px;margin:16px 0 6px}
-  .total-row td{font-weight:700}
-  @media print{body{padding:0}}
-</style></head><body>
-<h1>Cierre de caja</h1>
-<p class="sub">Apertura: ${fmtDate(new Date(cashSession.openedAt))} · Cierre: ${fmtDate(new Date())}</p>
-<div class="grid">
-  <div class="card"><div class="label">Monto inicial</div><div class="value">${fmt(cashSession.openingCash)}</div></div>
-  <div class="card"><div class="label">Efectivo en caja</div><div class="value">${fmt(totalCajaActual)}</div></div>
-  <div class="card"><div class="label">Total recaudado</div><div class="value">${fmt(totalRecaudado)}</div></div>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Helvetica Neue',Arial,sans-serif;font-size:13px;color:#111;background:#fff;padding:32px;max-width:760px;margin:0 auto}
+  .header{border-bottom:2px solid #111;padding-bottom:16px;margin-bottom:24px}
+  .header h1{font-size:22px;font-weight:800;letter-spacing:-0.5px}
+  .header .doc-type{font-size:13px;color:#555;margin-top:2px}
+  .meta{display:flex;gap:32px;margin-top:12px;flex-wrap:wrap}
+  .meta-item{font-size:12px;color:#555}.meta-item strong{color:#111;display:block}
+  .summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:24px}
+  .card{border:1px solid #ddd;border-radius:6px;padding:12px 14px}
+  .card .label{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#888;font-weight:700}
+  .card .value{font-size:19px;font-weight:800;margin-top:4px;color:#111}
+  .card.tips .value{color:#059669}
+  .section{margin-bottom:22px}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:#888;font-weight:700;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #eee}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:11px;text-transform:uppercase;color:#aaa;font-weight:700;border-bottom:1px solid #ddd;padding:6px 4px}
+  td{padding:6px 4px;border-bottom:1px solid #f0f0f0;font-size:13px}
+  .pos{color:#059669;font-weight:700}.neg{color:#dc2626;font-weight:700}
+  .pos-row td{background:#f0fdf4;color:#059669}
+  .neg-row td{background:#fef2f2;color:#dc2626}
+  .total-row td{font-weight:800;border-top:2px solid #111;border-bottom:none}
+  .footer{margin-top:32px;padding-top:16px;border-top:1px solid #eee;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#999}
+  .btn{background:#111;color:#fff;border:none;padding:8px 16px;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;margin-left:8px}
+  @media print{
+    body{padding:16px}
+    .btn,.no-print{display:none!important}
+    @page{margin:1.5cm}
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>${restaurantName}</h1>
+  <div class="doc-type">Reporte de cierre de caja</div>
+  <div class="meta">
+    <div class="meta-item"><strong>Apertura</strong>${apertura}</div>
+    <div class="meta-item"><strong>Cierre</strong>${cierre}</div>
+    <div class="meta-item"><strong>Cajero</strong>${cajero}</div>
+    ${cajaTurnoId ? `<div class="meta-item"><strong>Turno ID</strong><span style="font-family:monospace;font-size:11px">${cajaTurnoId.slice(0, 12)}…</span></div>` : ""}
+  </div>
 </div>
-${totalTips > 0 ? `<p style="color:#059669;font-weight:700;margin-bottom:16px">Propinas totales: ${fmt(totalTips)}</p>` : ""}
-<h2>Por forma de pago</h2>
-<table><thead><tr><th>Método</th><th>Cuentas</th><th>Total</th></tr></thead><tbody>${rows}</tbody></table>
-${adjRows ? `<h2>Ajustes de caja</h2><table><thead><tr><th>Monto</th><th>Motivo</th><th>Hora</th></tr></thead><tbody>${adjRows}</tbody></table>` : ""}
-<h2>Cuentas cobradas (${paidCuentasToday.length})</h2>
-<table><thead><tr><th>Mesa</th><th>Método</th><th>Total</th><th>Propina</th></tr></thead><tbody>${cuentaRows}</tbody></table>
-<script>window.onload=()=>{window.print()}</script>
+
+<div class="summary-grid">
+  <div class="card"><div class="label">Monto inicial</div><div class="value">${fmt(cashSession.openingCash)}</div></div>
+  <div class="card"><div class="label">Total recaudado</div><div class="value">${fmt(totalRecaudado)}</div></div>
+  <div class="card"><div class="label">Efectivo en caja</div><div class="value">${fmt(totalCajaActual)}</div></div>
+  <div class="card tips"><div class="label">Propinas</div><div class="value">${fmt(totalTips)}</div></div>
+</div>
+
+<div style="display:flex;gap:24px;margin-bottom:24px;flex-wrap:wrap">
+  <div style="font-size:12px;color:#555">Cuentas cobradas: <strong style="color:#111">${paidCuentasToday.length}</strong></div>
+  <div style="font-size:12px;color:#555">Ticket promedio: <strong style="color:#111">${fmt(avgTicket)}</strong></div>
+  ${cancelledCount > 0 ? `<div style="font-size:12px;color:#dc2626">Ítems cancelados: <strong>${cancelledCount}</strong></div>` : ""}
+</div>
+
+<div class="section">
+  <h2>Recaudación por forma de pago</h2>
+  <table>
+    <thead><tr><th>Método</th><th style="text-align:center">Cuentas</th><th style="text-align:right">Total</th></tr></thead>
+    <tbody>${methodRows}</tbody>
+    <tfoot><tr class="total-row"><td>Total</td><td></td><td style="text-align:right">${fmt(totalRecaudado)}</td></tr></tfoot>
+  </table>
+</div>
+
+${arqueoHtml}
+
+${adjRows ? `<div class="section">
+  <h2>Ajustes de caja</h2>
+  <table>
+    <thead><tr><th>Monto</th><th>Motivo</th><th style="text-align:right">Hora</th></tr></thead>
+    <tbody>${adjRows}</tbody>
+    <tfoot><tr class="total-row">
+      <td class="${totalAjustesAdd - totalAjustesDeduct >= 0 ? "pos" : "neg"}">${totalAjustesAdd - totalAjustesDeduct >= 0 ? "+" : ""}${fmt(totalAjustesAdd - totalAjustesDeduct)}</td>
+      <td colspan="2">Neto ajustes</td>
+    </tr></tfoot>
+  </table>
+</div>` : ""}
+
+${cuentaRows ? `<div class="section">
+  <h2>Detalle de cuentas cobradas (${paidCuentasToday.length})</h2>
+  <table>
+    <thead><tr><th>Mesa</th><th>Forma de pago</th><th style="text-align:right">Total</th><th style="text-align:right">Propina</th></tr></thead>
+    <tbody>${cuentaRows}</tbody>
+  </table>
+</div>` : ""}
+
+<div class="footer">
+  <span>Generado el ${cierre} · Want POS</span>
+  <div class="no-print">
+    <button class="btn" onclick="window.print()">Imprimir</button>
+    <button class="btn" onclick="downloadReport()" style="background:#555">Descargar</button>
+  </div>
+</div>
+
+<script>
+function downloadReport() {
+  const blob = new Blob([document.documentElement.outerHTML], {type:'text/html;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'cierre-caja-${now.toISOString().slice(0,10)}.html';
+  a.click();
+}
+window.onload = () => { window.print(); };
+</script>
 </body></html>`;
 
-    const win = window.open("", "_blank", "width=800,height=600");
+    const win = window.open("", "_blank", "width=860,height=700");
     if (!win) { toast.error("Bloqueado por el navegador. Permitir popups."); return; }
     win.document.write(html);
     win.document.close();
