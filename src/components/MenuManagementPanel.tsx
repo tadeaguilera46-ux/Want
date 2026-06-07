@@ -26,6 +26,7 @@ import {
   type MenuItem,
   type MenuType,
 } from "../lib/menu";
+import { KITCHEN_STATIONS } from "../lib/store";
 import type { MenuIngredient, RecipeUnit } from "../lib/store";
 import type { StockItem } from "../types/stock";
 import { toast } from "sonner";
@@ -52,6 +53,7 @@ type DraftItem = {
   category: string;
   description: string;
   image: string;
+  station?: string;
   ingredients: MenuIngredient[];
   availableFrom?: string;
   availableTo?: string;
@@ -354,6 +356,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
   const [description, setDescription] = useState("");
   const [image, setImage] = useState("");
   const [ingredients, setIngredients] = useState<MenuIngredient[]>([]);
+  const [station, setStation] = useState<string>("");
   const [comboItemIds, setComboItemIds] = useState<string[]>([]);
 
   const [uploadingCreateImage, setUploadingCreateImage] = useState(false);
@@ -551,6 +554,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
         description: description.trim(),
         image: image.trim(),
         active: true,
+        station: station.trim() || undefined,
         ingredients,
         variants: [],
         comboItems: type === "combo" ? comboItemIds : [],
@@ -566,6 +570,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       setCategory("");
       setDescription("");
       setImage("");
+      setStation("");
       setIngredients([]);
       setComboItemIds([]);
     } catch (error) {
@@ -583,6 +588,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       category: getDisplayCategory(item),
       description: item.description || "",
       image: item.image || "",
+      station: item.station || "",
       ingredients: item.ingredients || [],
       availableFrom: item.availableFrom || "",
       availableTo: item.availableTo || "",
@@ -626,6 +632,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
         category: normalizedCategory,
         description: draft.description.trim(),
         image: draft.image.trim(),
+        station: draft.station?.trim() || undefined,
         ingredients: draft.ingredients,
         availableFrom: draft.availableFrom?.trim() || undefined,
         availableTo: draft.availableTo?.trim() || undefined,
@@ -740,6 +747,17 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
           onChange={(e) => setCategory(e.target.value)}
           className="h-11 rounded-lg border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
         />
+
+        <select
+          value={station}
+          onChange={(e) => setStation(e.target.value)}
+          className="h-11 rounded-lg border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10 lg:col-span-2"
+        >
+          <option value="">Estación: sin asignar</option>
+          {KITCHEN_STATIONS.map((s) => (
+            <option key={s.id} value={s.id}>{s.label}</option>
+          ))}
+        </select>
 
         <textarea
           placeholder="Descripción del producto"
@@ -1054,6 +1072,24 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                           }
                           className="mb-3 w-full rounded-xl border border-zinc-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-black/10"
                         />
+
+                        <div className="mb-2">
+                          <select
+                            value={draft?.station || ""}
+                            disabled={isSaving}
+                            onChange={(e) =>
+                              setDraft((prev) =>
+                                prev ? { ...prev, station: e.target.value } : prev
+                              )
+                            }
+                            className="h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:ring-2 focus:ring-black/10"
+                          >
+                            <option value="">Estación de cocina: sin asignar</option>
+                            {KITCHEN_STATIONS.map((s) => (
+                              <option key={s.id} value={s.id}>{s.label}</option>
+                            ))}
+                          </select>
+                        </div>
 
                         {draft && (
                           <IngredientsEditor

@@ -21,6 +21,7 @@ export type MenuItem = {
   description?: string;
   image?: string;
   active: boolean;
+  station?: string;
   ingredients?: MenuIngredient[];
   variants?: MenuVariant[];
   comboItems?: string[];

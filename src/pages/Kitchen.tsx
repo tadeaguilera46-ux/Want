@@ -11,7 +11,7 @@ import {
   serverTimestamp,
   writeBatch,
 } from "firebase/firestore";
-import { ChefHat, Clock3, Flame, CheckCircle2, LogOut, ToggleLeft, ToggleRight, AlertTriangle } from "lucide-react";
+import { ChefHat, Clock3, Flame, CheckCircle2, LogOut, ToggleLeft, ToggleRight, AlertTriangle, Filter } from "lucide-react";
 import { toast } from "sonner";
 import { writeAuditLog } from "../lib/audit-logs";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
@@ -23,6 +23,7 @@ import type {
 } from "../lib/restaurant";
 import { useRestaurant } from "../lib/restaurant-context";
 import { useAuth } from "../lib/auth-context";
+import { KITCHEN_STATIONS } from "../lib/store";
 
 const db = getDb();
 
@@ -69,6 +70,7 @@ const Kitchen = () => {
   const [showDisponibilidad, setShowDisponibilidad] = useState(false);
   const [menuItems, setMenuItems] = useState<{ id: string; nombre: string; category: string; active: boolean }[]>([]);
   const [togglingById, setTogglingById] = useState<Record<string, boolean>>({});
+  const [selectedStation, setSelectedStation] = useState<string | null>(null);
 
   const notifiedOrderIdsRef = useRef<Set<string>>(new Set());
   const notifiedModifiedRef = useRef<Set<string>>(new Set());
@@ -482,6 +484,16 @@ const Kitchen = () => {
     };
   }, [pedidosVisibles, now]);
 
+  const availableStations = useMemo(() => {
+    const stationIds = new Set<string>();
+    for (const p of pedidosVisibles) {
+      for (const item of p.items || []) {
+        if (isFoodItem(item) && item.station) stationIds.add(item.station);
+      }
+    }
+    return KITCHEN_STATIONS.filter((s) => stationIds.has(s.id));
+  }, [pedidosVisibles]);
+
   if (!restaurantId) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100 px-6">
@@ -681,6 +693,35 @@ const Kitchen = () => {
           </div>
         )}
 
+        {availableStations.length > 0 && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <Filter size={14} className="text-slate-500" />
+            <button
+              onClick={() => setSelectedStation(null)}
+              className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
+                selectedStation === null
+                  ? "bg-slate-900 text-white"
+                  : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              Todas
+            </button>
+            {availableStations.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => setSelectedStation(selectedStation === s.id ? null : s.id)}
+                className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${
+                  selectedStation === s.id
+                    ? "bg-slate-900 text-white"
+                    : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {pedidosPorMesa.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white px-8 py-14 text-center shadow-sm">
             <p className="text-lg font-semibold text-slate-700">
@@ -693,7 +734,18 @@ const Kitchen = () => {
         ) : (
           <div className="space-y-6">
             {pedidosPorMesa.map(({ mesa, mesaPedidos }) => {
-              const mesaUrgente = mesaPedidos.some((p) => getElapsedMinutes(p) >= WARNING_MINUTES);
+              const filteredMesaPedidos = selectedStation
+                ? mesaPedidos.filter((p) =>
+                    (p.items || []).some(
+                      (item, idx) =>
+                        isFoodItem(item) &&
+                        !p.cancelledItems?.some((c) => c.itemIndex === idx) &&
+                        item.station === selectedStation
+                    )
+                  )
+                : mesaPedidos;
+              if (filteredMesaPedidos.length === 0) return null;
+              const mesaUrgente = filteredMesaPedidos.some((p) => getElapsedMinutes(p) >= WARNING_MINUTES);
               return (
                 <div key={mesa}>
                   <div className={`mb-3 flex items-center gap-3 rounded-lg px-4 py-2.5 ${mesaUrgente ? "bg-orange-50 border border-orange-200" : "bg-slate-100 border border-slate-200"}`}>
@@ -701,15 +753,19 @@ const Kitchen = () => {
                       Mesa {mesa}
                     </span>
                     <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${mesaUrgente ? "bg-orange-200 text-orange-900" : "bg-slate-200 text-slate-700"}`}>
-                      {mesaPedidos.length} {mesaPedidos.length === 1 ? "pedido" : "pedidos"}
+                      {filteredMesaPedidos.length} {filteredMesaPedidos.length === 1 ? "pedido" : "pedidos"}
                     </span>
                   </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                    {mesaPedidos.map((p) => {
+                    {filteredMesaPedidos.map((p) => {
                       const estadoActual = (p.estadoCocina || "pendiente") as EstadoCocina;
                       const comidaConIdx = (p.items || [])
                         .map((item, idx) => ({ item, idx }))
-                        .filter(({ item, idx }) => isFoodItem(item) && !p.cancelledItems?.some((c) => c.itemIndex === idx));
+                        .filter(({ item, idx }) =>
+                          isFoodItem(item) &&
+                          !p.cancelledItems?.some((c) => c.itemIndex === idx) &&
+                          (selectedStation === null || item.station === selectedStation)
+                        );
                       const isNew = now - getCreatedAtMs(p.createdAt) < NEW_BADGE_MS;
                       const urgente = getElapsedMinutes(p) >= WARNING_MINUTES;
 

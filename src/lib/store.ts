@@ -20,6 +20,14 @@ export type MenuVariant = {
   active: boolean;
 };
 
+export const KITCHEN_STATIONS: { id: string; label: string }[] = [
+  { id: "parrilla", label: "Parrilla" },
+  { id: "frio", label: "Frío" },
+  { id: "freidora", label: "Freidora" },
+  { id: "reposteria", label: "Repostería" },
+  { id: "general", label: "General" },
+];
+
 export type MenuItem = {
   id: string;
   name: string;
@@ -32,6 +40,7 @@ export type MenuItem = {
   tags?: string[];
   type?: MenuOperationalType;
   active?: boolean;
+  station?: string;
   ingredients?: MenuIngredient[];
   variants?: MenuVariant[];
   comboItems?: string[];

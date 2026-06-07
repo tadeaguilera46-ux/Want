@@ -38,6 +38,7 @@ export type PedidoItem = {
   subtotal?: number;
   category: PedidoCategory;
   displayCategory?: string;
+  station?: string | null;
   observacion?: string;
   note?: string;
   stockMovements?: PedidoStockMovement[];

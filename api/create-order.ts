@@ -58,6 +58,7 @@ type MenuItemDoc = {
   type?: "food" | "drinks";
   category?: string;
   active?: boolean;
+  station?: string;
   ingredients?: MenuIngredient[];
 };
 
@@ -498,6 +499,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             normalizeObservation(rawItem.observacion || rawItem.note),
             automaticObservation
           ),
+          station: menuData.station || null,
           stockMovements: itemStockMovements,
         });
       }
