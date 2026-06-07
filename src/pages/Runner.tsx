@@ -482,7 +482,7 @@ const Runner = () => {
       actorUid: user.uid,
       actorEmail: user.email,
       actorRole: "runner",
-      mesa: request?.mesa,
+      mesa: request?.mesa !== undefined ? Number(request.mesa) : undefined,
       entityType: "assistance_request",
       entityId: id,
       description: `Runner resolvio solicitud ${id}`,
