@@ -218,30 +218,29 @@ const Runner = () => {
 
     data.forEach((order) => {
       const foodItems = order.items?.filter(isFoodItem) || [];
-      const drinkItems = order.items?.filter(isDrinkItem) || [];
+      const drinkItemsWithIdx = (order.items || [])
+        .map((item, idx) => ({ item, idx }))
+        .filter(({ item, idx }) =>
+          isDrinkItem(item) && !order.cancelledItems?.some((c) => c.itemIndex === idx)
+        );
+      const drinkItems = drinkItemsWithIdx.map(({ item }) => item);
 
-      if (
-        foodItems.length > 0 &&
-        order.estadoCocina === "listo"
-      ) {
-        tasks.push({
-          id: `${order.id}__food`,
-          type: "food",
-          order,
-          items: foodItems,
-        });
+      if (foodItems.length > 0 && order.estadoCocina === "listo") {
+        tasks.push({ id: `${order.id}__food`, type: "food", order, items: foodItems });
       }
 
-      if (
-        drinkItems.length > 0 &&
-        order.estadoBarra === "listo"
-      ) {
-        tasks.push({
-          id: `${order.id}__drinks`,
-          type: "drinks",
-          order,
-          items: drinkItems,
-        });
+      if (drinkItems.length > 0) {
+        if (order.itemEstadosBarra && Object.keys(order.itemEstadosBarra).length > 0) {
+          // Per-item: show only the "listo" drinks
+          const listoItems = drinkItemsWithIdx
+            .filter(({ idx }) => order.itemEstadosBarra![String(idx)] === "listo")
+            .map(({ item }) => item);
+          if (listoItems.length > 0) {
+            tasks.push({ id: `${order.id}__drinks`, type: "drinks", order, items: listoItems });
+          }
+        } else if (order.estadoBarra === "listo") {
+          tasks.push({ id: `${order.id}__drinks`, type: "drinks", order, items: drinkItems });
+        }
       }
     });
 
@@ -391,7 +390,9 @@ const Runner = () => {
         const pedidosActivos = data.filter(
           (pedido) =>
             pedido.estadoCocina === "listo" ||
-            pedido.estadoBarra === "listo"
+            pedido.estadoBarra === "listo" ||
+            (pedido.itemEstadosBarra &&
+              Object.values(pedido.itemEstadosBarra).some((s) => s === "listo"))
         );
 
         setOrders(pedidosActivos);
@@ -592,6 +593,31 @@ const Runner = () => {
         });
       }
 
+      if (task.type === "drinks" && task.order.itemEstadosBarra && Object.keys(task.order.itemEstadosBarra).length > 0) {
+        const drinkIndices = (task.order.items || [])
+          .map((item, idx) => ({ item, idx }))
+          .filter(({ item, idx }) =>
+            isDrinkItem(item) && !task.order.cancelledItems?.some((c) => c.itemIndex === idx)
+          )
+          .map(({ idx }) => idx);
+
+        const updateData: Record<string, unknown> = { updatedAt: serverTimestamp() };
+        let allDone = true;
+        drinkIndices.forEach((idx) => {
+          const currentEstado = task.order.itemEstadosBarra![String(idx)] ?? "pendiente";
+          if (currentEstado === "listo") {
+            updateData[`itemEstadosBarra.${idx}`] = "entregado";
+          } else if (currentEstado !== "entregado") {
+            allDone = false;
+          }
+        });
+        if (allDone) {
+          updateData.estadoBarra = "entregado";
+          updateData.barraDeliveredAt = serverTimestamp();
+        }
+        batch.update(ref, updateData);
+      }
+
       writeAuditLog(batch, {
         restaurantId,
         action: "pedido_entregado",
@@ -611,7 +637,7 @@ const Runner = () => {
         },
       });
 
-      if (task.type === "drinks") {
+      if (task.type === "drinks" && (!task.order.itemEstadosBarra || Object.keys(task.order.itemEstadosBarra).length === 0)) {
         batch.update(ref, {
           estadoBarra: "entregado",
           barraDeliveredAt: serverTimestamp(),
@@ -872,6 +898,17 @@ const Runner = () => {
                   Entrega parcial
                 </span>
               )}
+              {task.type === "drinks" && (() => {
+                const totalDrinks = (task.order.items || []).filter(isDrinkItem).length;
+                const listoCount = task.items.length;
+                if (listoCount < totalDrinks) {
+                  return (
+                    <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-blue-700">
+                      {listoCount} de {totalDrinks} bebidas listas
+                    </span>
+                  );
+                }
+              })()}
             </div>
           </div>
         </div>
@@ -918,7 +955,12 @@ const Runner = () => {
               ? "Actualizando..."
               : isFood
                 ? "Marcar comida entregada"
-                : "Marcar bebidas entregadas"}
+                : (() => {
+                    const totalDrinks = (task.order.items || []).filter(isDrinkItem).length;
+                    return task.items.length < totalDrinks
+                      ? `Entregar ${task.items.length} bebida${task.items.length !== 1 ? "s" : ""}`
+                      : "Marcar bebidas entregadas";
+                  })()}
           </span>
           {!isLoading && <ChevronRight size={16} />}
         </button>

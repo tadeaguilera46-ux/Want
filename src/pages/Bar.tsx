@@ -67,6 +67,7 @@ const Bar = () => {
   const { isWakeLockActive, isWakeLockSupported } = useWakeLock(true);
   const [orders, setOrders] = useState<Pedido[]>([]);
   const [loadingById, setLoadingById] = useState<Record<string, boolean>>({});
+  const [loadingByItemKey, setLoadingByItemKey] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const [soundEnabled, setSoundEnabled] = useState(false);
@@ -272,6 +273,75 @@ const Bar = () => {
     if (status === "pendiente") return "preparando";
     if (status === "preparando") return "listo";
     return null;
+  };
+
+  const cambiarEstadoBarraItem = async (pedidoId: string, itemIndex: number, nuevoEstado: EstadoBarra) => {
+    const loadKey = `${pedidoId}:${itemIndex}`;
+    if (loadingByItemKey[loadKey] || !restaurantId || !user) return;
+    if (!isOnline) { toast.error("Sin conexión. No se pueden actualizar pedidos ahora."); return; }
+
+    const order = orders.find((o) => o.id === pedidoId);
+    if (!order) return;
+
+    try {
+      setLoadingByItemKey((prev) => ({ ...prev, [loadKey]: true }));
+      setError(null);
+
+      const currentItemEstadosBarra = (order.itemEstadosBarra ?? {}) as Record<string, EstadoBarra>;
+      const newItemEstadosBarra = { ...currentItemEstadosBarra, [String(itemIndex)]: nuevoEstado };
+
+      const drinkIndices = (order.items || [])
+        .map((item, idx) => ({ item, idx }))
+        .filter(({ item, idx }) => isDrinkItem(item) && !order.cancelledItems?.some((c) => c.itemIndex === idx))
+        .map(({ idx }) => idx);
+
+      const baseEstado = (order.estadoBarra || "pendiente") as EstadoBarra;
+      const allStates = drinkIndices.map((idx) =>
+        (newItemEstadosBarra[String(idx)] as EstadoBarra | undefined) ?? baseEstado
+      );
+
+      let derivedEstado: EstadoBarra = "pendiente";
+      if (allStates.every((s) => s === "listo" || s === "entregado")) {
+        derivedEstado = "listo";
+      } else if (allStates.some((s) => s === "preparando" || s === "listo")) {
+        derivedEstado = "preparando";
+      }
+
+      const updateData: Record<string, unknown> = {
+        [`itemEstadosBarra.${itemIndex}`]: nuevoEstado,
+        estadoBarra: derivedEstado,
+        updatedAt: serverTimestamp(),
+      };
+
+      if (nuevoEstado === "preparando") updateData.barraStartedAt = serverTimestamp();
+      if (derivedEstado === "listo") updateData.barraReadyAt = serverTimestamp();
+
+      const ref = doc(db, "restaurants", restaurantId, "pedidos", pedidoId);
+      const batch = writeBatch(db);
+      batch.update(ref, updateData);
+      if (derivedEstado === "listo") {
+        writeAuditLog(batch, {
+          restaurantId,
+          action: "pedido_listo",
+          actorUid: user.uid,
+          actorEmail: user.email,
+          actorRole: "bar",
+          mesa: Number(order.mesa || 0),
+          pedidoId,
+          description: `Barra marcó bebidas listas en mesa ${order.mesa || "-"}`,
+          changes: {
+            before: { estadoBarra: order.estadoBarra ?? "pendiente" },
+            after: { estadoBarra: derivedEstado },
+          },
+        });
+      }
+      await batch.commit();
+    } catch (err) {
+      console.error("Error actualizando estado de ítem de barra:", err);
+      setError("No se pudo actualizar el estado. Reintentá.");
+    } finally {
+      setLoadingByItemKey((prev) => ({ ...prev, [loadKey]: false }));
+    }
   };
 
   const getCreatedAtMs = (value?: FirestoreTimestampLike | null) => {
@@ -539,12 +609,10 @@ const Bar = () => {
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {visibleOrders.map((order) => {
-              const bebidas = (order.items || []).filter(
-                (item, idx) => isDrinkItem(item) && !(order.cancelledItems?.some((c) => c.itemIndex === idx))
-              );
+              const bebidasConIdx = (order.items || [])
+                .map((item, idx) => ({ item, idx }))
+                .filter(({ item, idx }) => isDrinkItem(item) && !order.cancelledItems?.some((c) => c.itemIndex === idx));
               const status = (order.estadoBarra || "pendiente") as EstadoBarra;
-              const next = nextStatus(status);
-              const isLoading = !!loadingById[order.id];
               const isNew = now - getCreatedAtMs(order.createdAt) < NEW_BADGE_MS;
 
               return (
@@ -599,40 +667,57 @@ const Bar = () => {
                   </div>
 
                   <div className="space-y-3">
-                    {bebidas.map((item, index) => {
+                    {bebidasConIdx.map(({ item, idx }) => {
+                      const itemEstado = ((order.itemEstadosBarra?.[String(idx)]) as EstadoBarra | undefined)
+                        ?? (order.estadoBarra || "pendiente") as EstadoBarra;
+                      const siguienteEstado = nextStatus(itemEstado);
+                      const loadKey = `${order.id}:${idx}`;
+                      const isItemLoading = !!loadingByItemKey[loadKey];
                       const observation = normalizeObservation(item.observacion);
                       const hasObservation = observation.length > 0;
 
                       return (
                         <div
-                          key={`${item.nombre}-${observation || "sin-observacion"}-${index}`}
-                          className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3"
+                          key={`${item.nombre}-${observation || "sin-observacion"}-${idx}`}
+                          className={`rounded-lg border px-4 py-3 transition-colors ${itemEstado === "listo" ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-slate-50"}`}
                         >
-                          <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0 flex-1">
                               <div className="flex items-start gap-2">
-                                <Martini
-                                  size={16}
-                                  className="mt-0.5 shrink-0 text-slate-500"
-                                />
-                                <p className="text-base font-semibold leading-tight text-slate-950 break-words">
+                                <Martini size={16} className="mt-0.5 shrink-0 text-slate-500" />
+                                <p className={`text-base font-semibold leading-tight break-words ${itemEstado === "listo" ? "text-emerald-800 line-through opacity-70" : "text-slate-950"}`}>
                                   {item.nombre}
                                 </p>
                               </div>
                             </div>
-
-                            <div className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-bold text-slate-900">
-                              x{item.cantidad}
+                            <div className="flex shrink-0 items-center gap-2">
+                              <span className="rounded-xl border border-slate-200 bg-white px-2.5 py-1 text-sm font-bold text-slate-900">
+                                x{item.cantidad}
+                              </span>
+                              {itemEstado === "listo" ? (
+                                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100">
+                                  <CheckCircle2 size={16} className="text-emerald-600" />
+                                </span>
+                              ) : siguienteEstado && (
+                                <button
+                                  onClick={() => cambiarEstadoBarraItem(order.id, idx, siguienteEstado)}
+                                  disabled={isItemLoading || !isOnline}
+                                  className={`flex h-8 items-center gap-1 rounded-lg px-2.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                                    siguienteEstado === "preparando" ? "bg-slate-800 hover:bg-slate-700" : "bg-emerald-600 hover:bg-emerald-500"
+                                  }`}
+                                >
+                                  {isItemLoading ? "..." : siguienteEstado === "preparando"
+                                    ? <><Flame size={12} /> Iniciar</>
+                                    : <><CheckCircle2 size={12} /> Listo</>}
+                                </button>
+                              )}
                             </div>
                           </div>
 
                           {hasObservation && (
                             <div className="mt-3 rounded-xl border border-amber-300 bg-amber-100 px-3 py-2.5">
                               <div className="flex items-start gap-2">
-                                <MessageSquareText
-                                  size={14}
-                                  className="mt-0.5 shrink-0 text-amber-900"
-                                />
+                                <MessageSquareText size={14} className="mt-0.5 shrink-0 text-amber-900" />
                                 <div className="min-w-0">
                                   <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
                                     OBS
@@ -648,25 +733,6 @@ const Bar = () => {
                       );
                     })}
                   </div>
-
-                  {next && (
-                    <motion.button
-                      whileTap={{ scale: 0.99 }}
-                      onClick={() => updateStatus(order.id, next)}
-                      disabled={isLoading || !isOnline}
-                      className={`mt-5 flex h-12 w-full items-center justify-center rounded-lg px-4 text-sm font-semibold text-white transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
-                        next === "preparando"
-                          ? "bg-slate-950 hover:opacity-90"
-                          : "bg-emerald-600 hover:opacity-90"
-                      }`}
-                    >
-                      {isLoading
-                        ? "Actualizando..." 
-                        : next === "preparando"
-                          ? "Empezar preparación"
-                          : "Marcar como listo"}
-                    </motion.button>
-                  )}
                 </motion.div>
               );
             })}

@@ -70,6 +70,7 @@ export interface PedidoRecord extends PedidoInput {
   stockReturned?: boolean;
   cancelledItems?: CancelledItem[];
   itemEstados?: Record<string, EstadoCocinaBarra>;
+  itemEstadosBarra?: Record<string, EstadoCocinaBarra>;
   createdAt?: FirestoreTimestampLike;
   updatedAt?: FirestoreTimestampLike;
 }
