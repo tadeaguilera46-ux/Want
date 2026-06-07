@@ -477,6 +477,11 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Bloqueos transaccionales para evitar solapamientos de mesa.
+    match /restaurants/{restaurantId}/reservationTableSlots/{slotId} {
+      allow read, write: if false;
+    }
+
     // Turnos del personal (clock in/out)
     match /restaurants/{restaurantId}/shifts/{shiftId} {
       allow read: if isSuperAdmin() || isActiveStaff(restaurantId);

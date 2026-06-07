@@ -63,6 +63,12 @@ type ReservationSettings = {
   capacityPerSlot: number;
 };
 
+type ReservationTable = {
+  id: string;
+  numero: number;
+  active?: boolean;
+};
+
 const db = getDb();
 const functions = getFunctions(getApp(), "us-central1");
 
@@ -173,6 +179,7 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
     useState<ReservationSettings>(DEFAULT_SETTINGS);
   const [settingsDraft, setSettingsDraft] =
     useState<ReservationSettings>(DEFAULT_SETTINGS);
+  const [tables, setTables] = useState<ReservationTable[]>([]);
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -202,6 +209,27 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
     0,
     settings.capacityPerSlot - selectedSlotOccupancy
   );
+  const reservedTablesForSelectedSlot = useMemo(
+    () =>
+      new Set(
+        reservations
+          .filter(
+            (reservation) =>
+              OCCUPYING_STATUSES.includes(reservation.status) &&
+              (reservation.slot || reservation.time) === time &&
+              Number.isInteger(reservation.mesa)
+          )
+          .map((reservation) => Number(reservation.mesa))
+      ),
+    [reservations, time]
+  );
+  const activeTables = useMemo(
+    () =>
+      tables
+        .filter((table) => table.active !== false)
+        .sort((left, right) => left.numero - right.numero),
+    [tables]
+  );
 
   useEffect(() => {
     return onSnapshot(
@@ -217,10 +245,41 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
   }, [restaurantId]);
 
   useEffect(() => {
+    return onSnapshot(
+      collection(db, "restaurants", restaurantId, "mesas"),
+      (snapshot) => {
+        setTables(
+          snapshot.docs
+            .map((tableDoc) => {
+              const data = tableDoc.data();
+              return {
+                id: tableDoc.id,
+                numero: Number(data.numero ?? tableDoc.id),
+                active: data.active,
+              };
+            })
+            .filter((table) => Number.isInteger(table.numero) && table.numero > 0)
+        );
+      }
+    );
+  }, [restaurantId]);
+
+  useEffect(() => {
     if (slots.length > 0 && !slots.includes(time)) {
       setTime(slots[0]);
     }
   }, [slots, time]);
+
+  useEffect(() => {
+    const selectedMesa = Number(mesa);
+    if (
+      mesa &&
+      (!activeTables.some((table) => table.numero === selectedMesa) ||
+        reservedTablesForSelectedSlot.has(selectedMesa))
+    ) {
+      setMesa("");
+    }
+  }, [activeTables, mesa, reservedTablesForSelectedSlot]);
 
   useEffect(() => {
     const q = query(
@@ -513,7 +572,24 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
               })}
             </select>
             <input type="number" min={1} max={100} value={partySize} onChange={(e) => setPartySize(e.target.value)} placeholder="Personas" className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
-            <input type="number" min={1} value={mesa} onChange={(e) => setMesa(e.target.value)} placeholder="Mesa (opcional)" className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
+            <select value={mesa} onChange={(e) => setMesa(e.target.value)} className="h-10 rounded-lg border border-zinc-200 px-3 text-sm">
+              <option value="">Sin mesa asignada</option>
+              {activeTables.map((table) => {
+                const unavailable = reservedTablesForSelectedSlot.has(
+                  table.numero
+                );
+                return (
+                  <option
+                    key={table.id}
+                    value={table.numero}
+                    disabled={unavailable}
+                  >
+                    Mesa {table.numero}
+                    {unavailable ? " · ya reservada" : ""}
+                  </option>
+                );
+              })}
+            </select>
           </div>
           <p
             className={`text-xs font-semibold ${

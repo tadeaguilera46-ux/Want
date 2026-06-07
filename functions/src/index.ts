@@ -334,6 +334,110 @@ async function getOrCreateReservationCancellationToken(
   });
 }
 
+function reservationTableSlotRef(
+  db: FirebaseFirestore.Firestore,
+  restaurantId: string,
+  date: string,
+  slot: string,
+  mesa: number
+): FirebaseFirestore.DocumentReference {
+  return db.doc(
+    `restaurants/${restaurantId}/reservationTableSlots/${date}_${slot.replace(":", "-")}_${mesa}`
+  );
+}
+
+async function requireAvailableReservationTable({
+  transaction,
+  db,
+  restaurantId,
+  reservationId,
+  date,
+  slot,
+  mesa,
+}: {
+  transaction: FirebaseFirestore.Transaction;
+  db: FirebaseFirestore.Firestore;
+  restaurantId: string;
+  reservationId: string;
+  date: string;
+  slot: string;
+  mesa: number;
+}): Promise<FirebaseFirestore.DocumentReference> {
+  const mesaRef = db.doc(`restaurants/${restaurantId}/mesas/${mesa}`);
+  const tableSlotRef = reservationTableSlotRef(
+    db,
+    restaurantId,
+    date,
+    slot,
+    mesa
+  );
+  const reservationsQuery = db
+    .collection(`restaurants/${restaurantId}/reservations`)
+    .where("date", "==", date);
+  const [mesaSnap, tableSlotSnap, reservationsSnap] = await Promise.all([
+    transaction.get(mesaRef),
+    transaction.get(tableSlotRef),
+    transaction.get(reservationsQuery),
+  ]);
+
+  if (!mesaSnap.exists || mesaSnap.data()?.active === false) {
+    throw new HttpsError(
+      "failed-precondition",
+      `La mesa ${mesa} no existe o no está disponible`
+    );
+  }
+  if (
+    tableSlotSnap.exists &&
+    tableSlotSnap.data()?.reservationId !== reservationId
+  ) {
+    throw new HttpsError(
+      "resource-exhausted",
+      `La mesa ${mesa} ya está reservada en la franja de ${slot}`
+    );
+  }
+
+  const overlapsExistingReservation = reservationsSnap.docs.some((document) => {
+    if (document.id === reservationId) return false;
+    const reservation = document.data();
+    return (
+      OCCUPYING_RESERVATION_STATUSES.has(reservation.status) &&
+      Number(reservation.mesa) === mesa &&
+      (reservation.slot || reservation.time) === slot
+    );
+  });
+  if (overlapsExistingReservation) {
+    throw new HttpsError(
+      "resource-exhausted",
+      `La mesa ${mesa} ya está reservada en la franja de ${slot}`
+    );
+  }
+
+  return tableSlotRef;
+}
+
+function reservationTableSlotData({
+  restaurantId,
+  reservationId,
+  date,
+  slot,
+  mesa,
+}: {
+  restaurantId: string;
+  reservationId: string;
+  date: string;
+  slot: string;
+  mesa: number;
+}) {
+  return {
+    restaurantId,
+    reservationId,
+    date,
+    slot,
+    mesa,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+}
+
 export const saveReservationSettings = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
 
@@ -428,6 +532,18 @@ export const createReservation = onCall({ cors: true }, async (request) => {
       `restaurants/${restaurantId}/reservationSlots/${date}_${slot.replace(":", "-")}`
     );
     const slotSnap = await transaction.get(slotRef);
+    const tableSlotRef =
+      mesa === null
+        ? null
+        : await requireAvailableReservationTable({
+            transaction,
+            db,
+            restaurantId,
+            reservationId: reservationRef.id,
+            date,
+            slot,
+            mesa,
+          });
     let reservedPersons = Number(slotSnap.data()?.reservedPersons || 0);
 
     if (!slotSnap.exists) {
@@ -494,6 +610,18 @@ export const createReservation = onCall({ cors: true }, async (request) => {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
+    if (tableSlotRef && mesa !== null) {
+      transaction.set(
+        tableSlotRef,
+        reservationTableSlotData({
+          restaurantId,
+          reservationId: reservationRef.id,
+          date,
+          slot,
+          mesa,
+        })
+      );
+    }
     transaction.set(
       auditRef,
       reservationAuditData({
@@ -579,6 +707,9 @@ export const updateReservationStatus = onCall({ cors: true }, async (request) =>
     const currentOccupies =
       OCCUPYING_RESERVATION_STATUSES.has(currentStatus);
     const nextOccupies = OCCUPYING_RESERVATION_STATUSES.has(nextStatus);
+    const mesa = Number.isInteger(reservation.mesa)
+      ? Number(reservation.mesa)
+      : null;
     let slot = rawSlot;
     let slotRef: FirebaseFirestore.DocumentReference | null = null;
     let nextReservedPersons: number | null = null;
@@ -625,6 +756,36 @@ export const updateReservationStatus = onCall({ cors: true }, async (request) =>
       }
     }
 
+    let tableSlotRef: FirebaseFirestore.DocumentReference | null = null;
+    let shouldSetTableSlot = false;
+    let shouldDeleteTableSlot = false;
+    if (mesa !== null && currentOccupies !== nextOccupies) {
+      tableSlotRef = reservationTableSlotRef(
+        db,
+        restaurantId,
+        String(reservation.date),
+        slot,
+        mesa
+      );
+      if (nextOccupies) {
+        tableSlotRef = await requireAvailableReservationTable({
+          transaction,
+          db,
+          restaurantId,
+          reservationId,
+          date: String(reservation.date),
+          slot,
+          mesa,
+        });
+        shouldSetTableSlot = true;
+      } else {
+        const tableSlotSnap = await transaction.get(tableSlotRef);
+        shouldDeleteTableSlot =
+          tableSlotSnap.exists &&
+          tableSlotSnap.data()?.reservationId === reservationId;
+      }
+    }
+
     if (slotRef && nextReservedPersons !== null) {
       transaction.set(
         slotRef,
@@ -638,6 +799,20 @@ export const updateReservationStatus = onCall({ cors: true }, async (request) =>
         },
         { merge: true }
       );
+    }
+    if (tableSlotRef && mesa !== null && shouldSetTableSlot) {
+      transaction.set(
+        tableSlotRef,
+        reservationTableSlotData({
+          restaurantId,
+          reservationId,
+          date: String(reservation.date),
+          slot,
+          mesa,
+        })
+      );
+    } else if (tableSlotRef && shouldDeleteTableSlot) {
+      transaction.delete(tableSlotRef);
     }
     transaction.update(reservationRef, {
       status: nextStatus,
@@ -796,12 +971,44 @@ export const rescheduleReservation = onCall({ cors: true }, async (request) => {
         ? Number(nextSlotSnap.data()?.reservedPersons || 0)
         : calculateReservedPersons(date, nextSlot);
       const partySize = Number(reservation.partySize || 0);
+      const mesa = Number.isInteger(reservation.mesa)
+        ? Number(reservation.mesa)
+        : null;
 
       if (nextReservedPersons + partySize > settings.capacityPerSlot) {
         throw new HttpsError(
           "resource-exhausted",
           `La franja de ${nextSlot} no tiene capacidad suficiente`
         );
+      }
+
+      let previousTableSlotRef: FirebaseFirestore.DocumentReference | null =
+        null;
+      let shouldDeletePreviousTableSlot = false;
+      let nextTableSlotRef: FirebaseFirestore.DocumentReference | null = null;
+      if (mesa !== null) {
+        previousTableSlotRef = reservationTableSlotRef(
+          db,
+          restaurantId,
+          previousDate,
+          previousSlot,
+          mesa
+        );
+        const previousTableSlotSnap = await transaction.get(
+          previousTableSlotRef
+        );
+        shouldDeletePreviousTableSlot =
+          previousTableSlotSnap.exists &&
+          previousTableSlotSnap.data()?.reservationId === reservationId;
+        nextTableSlotRef = await requireAvailableReservationTable({
+          transaction,
+          db,
+          restaurantId,
+          reservationId,
+          date,
+          slot: nextSlot,
+          mesa,
+        });
       }
 
       transaction.set(
@@ -828,6 +1035,21 @@ export const rescheduleReservation = onCall({ cors: true }, async (request) => {
         },
         { merge: true }
       );
+      if (previousTableSlotRef && shouldDeletePreviousTableSlot) {
+        transaction.delete(previousTableSlotRef);
+      }
+      if (nextTableSlotRef && mesa !== null) {
+        transaction.set(
+          nextTableSlotRef,
+          reservationTableSlotData({
+            restaurantId,
+            reservationId,
+            date,
+            slot: nextSlot,
+            mesa,
+          })
+        );
+      }
     }
 
     const changedAt = admin.firestore.Timestamp.now();
@@ -1011,6 +1233,22 @@ export const cancelReservationByCustomer = onCall(
               : total;
           }, 0);
         }
+        const mesa = Number.isInteger(reservation.mesa)
+          ? Number(reservation.mesa)
+          : null;
+        const tableSlotRef =
+          mesa === null
+            ? null
+            : reservationTableSlotRef(
+                db,
+                restaurantId,
+                String(reservation.date),
+                slot,
+                mesa
+              );
+        const tableSlotSnap = tableSlotRef
+          ? await transaction.get(tableSlotRef)
+          : null;
 
         transaction.set(
           slotRef,
@@ -1026,6 +1264,13 @@ export const cancelReservationByCustomer = onCall(
           },
           { merge: true }
         );
+        if (
+          tableSlotRef &&
+          tableSlotSnap?.exists &&
+          tableSlotSnap.data()?.reservationId === reservationId
+        ) {
+          transaction.delete(tableSlotRef);
+        }
       }
 
       const customerEmail =
