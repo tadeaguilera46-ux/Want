@@ -724,6 +724,100 @@ export const getReservationHistoryByPhone = onCall(
   }
 );
 
+export const getReservationMetrics = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
+
+  const data = request.data as {
+    restaurantId?: unknown;
+    days?: unknown;
+  };
+  const restaurantId =
+    typeof data.restaurantId === "string" ? data.restaurantId.trim() : "";
+  const days = Number(data.days);
+
+  if (!restaurantId || ![7, 30, 90].includes(days)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Seleccioná un rango válido para las métricas"
+    );
+  }
+
+  await requireRestaurantAdmin(restaurantId, request.auth.uid);
+
+  const endDate = getDateInBuenosAires();
+  const startDate = getDateInBuenosAires(-(days - 1));
+  const reservationsSnap = await admin
+    .firestore()
+    .collection(`restaurants/${restaurantId}/reservations`)
+    .where("date", ">=", startDate)
+    .where("date", "<=", endDate)
+    .get();
+
+  const daily = Array.from({ length: days }, (_, index) => {
+    const date = getDateInBuenosAires(index - (days - 1));
+    const [, month, day] = date.split("-");
+    return {
+      date,
+      label: `${day}/${month}`,
+      total: 0,
+      completed: 0,
+      cancelled: 0,
+      noShows: 0,
+    };
+  });
+  const dailyByDate = new Map(daily.map((day) => [day.date, day]));
+  let total = 0;
+  let completed = 0;
+  let cancelled = 0;
+  let noShows = 0;
+  let active = 0;
+
+  reservationsSnap.docs.forEach((document) => {
+    const reservation = document.data();
+    const day = dailyByDate.get(reservation.date);
+    if (!day) return;
+
+    total += 1;
+    day.total += 1;
+
+    if (reservation.status === "completed") {
+      completed += 1;
+      day.completed += 1;
+    } else if (reservation.status === "cancelled") {
+      cancelled += 1;
+      day.cancelled += 1;
+    } else if (reservation.status === "no_show") {
+      noShows += 1;
+      day.noShows += 1;
+    } else if (
+      reservation.status === "pending" ||
+      reservation.status === "confirmed" ||
+      reservation.status === "seated"
+    ) {
+      active += 1;
+    }
+  });
+
+  const percentage = (value: number, base: number) =>
+    base > 0 ? Math.round((value / base) * 1000) / 10 : 0;
+  const attendanceBase = completed + noShows;
+
+  return {
+    days,
+    startDate,
+    endDate,
+    total,
+    completed,
+    cancelled,
+    noShows,
+    active,
+    cancellationRate: percentage(cancelled, total),
+    noShowRate: percentage(noShows, total),
+    attendanceRate: percentage(completed, attendanceBase),
+    daily,
+  };
+});
+
 export const updateReservationStatus = onCall({ cors: true }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
 

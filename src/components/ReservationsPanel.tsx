@@ -10,6 +10,16 @@ import {
 import { getApp } from "firebase/app";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import {
+  BarChart3,
   Calendar,
   CalendarClock,
   Clock,
@@ -97,6 +107,30 @@ type ReservationHistoryResult = {
     status: ReservationStatus;
     notes?: string | null;
     rescheduleCount: number;
+  }[];
+};
+
+type MetricsRange = 7 | 30 | 90;
+
+type ReservationMetrics = {
+  days: MetricsRange;
+  startDate: string;
+  endDate: string;
+  total: number;
+  completed: number;
+  cancelled: number;
+  noShows: number;
+  active: number;
+  cancellationRate: number;
+  noShowRate: number;
+  attendanceRate: number;
+  daily: {
+    date: string;
+    label: string;
+    total: number;
+    completed: number;
+    cancelled: number;
+    noShows: number;
   }[];
 };
 
@@ -215,6 +249,9 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyResult, setHistoryResult] =
     useState<ReservationHistoryResult | null>(null);
+  const [metricsRange, setMetricsRange] = useState<MetricsRange>(30);
+  const [metricsLoading, setMetricsLoading] = useState(true);
+  const [metrics, setMetrics] = useState<ReservationMetrics | null>(null);
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -326,6 +363,30 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
       setReservations(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Reservation));
     });
   }, [restaurantId, viewDate]);
+
+  useEffect(() => {
+    let active = true;
+    setMetricsLoading(true);
+    const getMetrics = httpsCallable<
+      { restaurantId: string; days: MetricsRange },
+      ReservationMetrics
+    >(functions, "getReservationMetrics");
+
+    getMetrics({ restaurantId, days: metricsRange })
+      .then((result) => {
+        if (active) setMetrics(result.data);
+      })
+      .catch((error) => {
+        if (active) toast.error(getFunctionErrorMessage(error));
+      })
+      .finally(() => {
+        if (active) setMetricsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [restaurantId, metricsRange]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -493,6 +554,146 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
           );
         })}
       </div>
+
+      <section className="rounded-xl border border-zinc-200 bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <BarChart3 size={17} className="text-zinc-600" />
+            <div>
+              <h3 className="text-sm font-bold text-zinc-900">
+                Métricas de reservas
+              </h3>
+              <p className="text-xs text-zinc-500">
+                Reservas, cancelaciones y ausencias hasta hoy.
+              </p>
+            </div>
+          </div>
+          <div className="flex rounded-lg border border-zinc-200 bg-zinc-50 p-1">
+            {([7, 30, 90] as MetricsRange[]).map((days) => (
+              <button
+                key={days}
+                type="button"
+                onClick={() => setMetricsRange(days)}
+                className={`rounded-md px-3 py-1.5 text-xs font-bold ${
+                  metricsRange === days
+                    ? "bg-zinc-950 text-white"
+                    : "text-zinc-500 hover:text-zinc-900"
+                }`}
+              >
+                {days} días
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {metricsLoading && !metrics ? (
+          <p className="mt-4 text-sm text-zinc-500">Calculando métricas...</p>
+        ) : metrics ? (
+          <>
+            <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+              {[
+                {
+                  label: "Reservas",
+                  value: metrics.total,
+                  detail: `${metrics.active} activas`,
+                  style: "border-zinc-200 bg-zinc-50 text-zinc-950",
+                },
+                {
+                  label: "Cancelaciones",
+                  value: metrics.cancelled,
+                  detail: `${metrics.cancellationRate}% del total`,
+                  style: "border-red-200 bg-red-50 text-red-700",
+                },
+                {
+                  label: "No-shows",
+                  value: metrics.noShows,
+                  detail: `${metrics.noShowRate}% del total`,
+                  style: "border-orange-200 bg-orange-50 text-orange-700",
+                },
+                {
+                  label: "Asistencia",
+                  value: `${metrics.attendanceRate}%`,
+                  detail: `${metrics.completed} finalizadas`,
+                  style: "border-emerald-200 bg-emerald-50 text-emerald-700",
+                },
+              ].map((metric) => (
+                <div
+                  key={metric.label}
+                  className={`rounded-xl border px-3 py-3 ${metric.style}`}
+                >
+                  <p className="text-xs font-semibold">{metric.label}</p>
+                  <p className="text-2xl font-black">{metric.value}</p>
+                  <p className="text-xs opacity-75">{metric.detail}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-5 h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={metrics.daily}
+                  margin={{ top: 8, right: 8, left: -20, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    stroke="#e4e4e7"
+                    strokeDasharray="3 3"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="label"
+                    stroke="#a1a1aa"
+                    tickLine={false}
+                    axisLine={false}
+                    fontSize={11}
+                    minTickGap={18}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    stroke="#a1a1aa"
+                    tickLine={false}
+                    axisLine={false}
+                    fontSize={11}
+                  />
+                  <Tooltip
+                    formatter={(value: number, name: string) => [
+                      value,
+                      name === "total"
+                        ? "Reservas"
+                        : name === "cancelled"
+                          ? "Canceladas"
+                          : "No-shows",
+                    ]}
+                    contentStyle={{
+                      borderRadius: 12,
+                      border: "1px solid #e4e4e7",
+                      fontSize: 12,
+                    }}
+                  />
+                  <Bar
+                    dataKey="total"
+                    fill="#27272a"
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="cancelled"
+                    fill="#ef4444"
+                    radius={[4, 4, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="noShows"
+                    fill="#f97316"
+                    radius={[4, 4, 0, 0]}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </>
+        ) : (
+          <p className="mt-4 text-sm text-zinc-500">
+            No se pudieron cargar las métricas.
+          </p>
+        )}
+      </section>
 
       <section className="rounded-xl border border-zinc-200 bg-white p-4">
         <div className="flex items-center gap-2">
