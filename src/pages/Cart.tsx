@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useCart } from "@/lib/CartContext";
 import { crearPedido } from "../lib/orders";
+import { rememberCustomerOrderId } from "../lib/customer-orders";
 import { getMesa } from "../lib/mesas";
 import { getSessionById } from "../lib/sessions";
 import type { PedidoInput, PedidoItem } from "../lib/restaurant";
@@ -220,7 +221,13 @@ const Cart = () => {
       setIsSubmittingOrder(true);
 
       const pedido = await buildPedido();
-      await crearPedido(pedido);
+      const pedidoId = await crearPedido(pedido);
+      rememberCustomerOrderId({
+        restaurantId,
+        table: tableNumber,
+        sessionId: pedido.sessionId,
+        orderId: pedidoId,
+      });
 
       clearCart();
 
@@ -249,7 +256,13 @@ const Cart = () => {
       setIsSubmittingOrderAndBill(true);
 
       const pedido = await buildPedido();
-      await crearPedido(pedido);
+      const pedidoId = await crearPedido(pedido);
+      rememberCustomerOrderId({
+        restaurantId,
+        table: tableNumber,
+        sessionId: pedido.sessionId,
+        orderId: pedidoId,
+      });
 
       clearCart();
 

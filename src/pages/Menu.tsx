@@ -15,6 +15,7 @@ import {
 } from "../lib/table-session";
 import { getSessionById } from "../lib/sessions";
 import { writeAuditLog } from "../lib/audit-logs";
+import CustomerOrderStatus from "@/components/menu/CustomerOrderStatus";
 import MenuItemCard from "@/components/menu/MenuItemCard";
 import {
   getDisplayCategory,
@@ -589,6 +590,14 @@ const Menu = () => {
         </div>
 
         {/* Sticky category tabs — stick just below the fixed topbar */}
+        <div className="px-4 pb-3">
+          <CustomerOrderStatus
+            restaurantId={restaurantId}
+            table={tableNumber}
+            primaryColor={primaryColor}
+          />
+        </div>
+
         {!isSearching && (
           <div
             ref={tabsBarRef}

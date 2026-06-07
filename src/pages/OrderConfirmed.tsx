@@ -1,7 +1,11 @@
 import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { CheckCircle } from "lucide-react";
-import { resolveRuntimeContext } from "../lib/runtime-context";
+import CustomerOrderStatus from "../components/menu/CustomerOrderStatus";
+import {
+  parseTableNumber,
+  resolveRuntimeContext,
+} from "../lib/runtime-context";
 
 const OrderConfirmed = () => {
   const navigate = useNavigate();
@@ -14,11 +18,11 @@ const OrderConfirmed = () => {
   });
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 text-center bg-slate-50">
+    <div className="min-h-screen bg-slate-50 px-4 py-8 text-center">
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="max-w-sm w-full"
+        className="mx-auto w-full max-w-lg"
       >
         <div className="flex justify-center mb-6">
           <div className="flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
@@ -37,6 +41,13 @@ const OrderConfirmed = () => {
         <p className="mt-1 text-xs text-muted-foreground">
           Mesa {table}
         </p>
+
+        <div className="mt-6">
+          <CustomerOrderStatus
+            restaurantId={restaurantId}
+            table={parseTableNumber(table)}
+          />
+        </div>
 
         <div className="mt-6 space-y-3">
           <button

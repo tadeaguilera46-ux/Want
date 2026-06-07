@@ -294,7 +294,19 @@ service cloud.firestore {
     match /restaurants/{restaurantId}/pedidos/{pedidoId} {
       // F-03: lectura anónima eliminada. RequestBill.tsx y bill.ts leen
       // pedidos via /api/get-session-bill (Admin SDK, validación server-side).
-      allow read: if isSuperAdmin()
+      allow get: if isSuperAdmin()
+        || isKitchenBarRunnerCashierOrAdmin(restaurantId)
+        || (
+          resource.data.sessionId is string
+          && isValidTableNumber(resource.data.mesa)
+          && sessionExists(restaurantId, resource.data.sessionId)
+          && get(sessionPath(restaurantId, resource.data.sessionId)).data.restaurantId
+               == restaurantId
+          && get(sessionPath(restaurantId, resource.data.sessionId)).data.tableNumber
+               == resource.data.mesa
+        );
+
+      allow list: if isSuperAdmin()
         || isKitchenBarRunnerCashierOrAdmin(restaurantId);
 
       allow create: if request.resource.data.restaurantId == restaurantId
