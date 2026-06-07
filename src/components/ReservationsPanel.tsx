@@ -9,10 +9,18 @@ import {
 } from "firebase/firestore";
 import { getApp } from "firebase/app";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { Calendar, Check, Clock, Plus, Users, X } from "lucide-react";
+import { Calendar, Clock, Plus, Users } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import { toast } from "sonner";
 import { useAuth } from "../lib/auth-context";
+
+type ReservationStatus =
+  | "pending"
+  | "confirmed"
+  | "seated"
+  | "completed"
+  | "cancelled"
+  | "no_show";
 
 type Reservation = {
   id: string;
@@ -24,7 +32,7 @@ type Reservation = {
   slot?: string;
   partySize: number;
   mesa?: number;
-  status: "pending" | "confirmed" | "cancelled";
+  status: ReservationStatus;
   confirmation?: {
     channel: "email";
     status: "pending" | "sent" | "failed";
@@ -58,6 +66,53 @@ const DEFAULT_SETTINGS: ReservationSettings = {
   slotMinutes: 60,
   capacityPerSlot: 40,
 };
+
+const STATUS_ORDER: ReservationStatus[] = [
+  "pending",
+  "confirmed",
+  "seated",
+  "completed",
+  "cancelled",
+  "no_show",
+];
+
+const STATUS_LABEL: Record<ReservationStatus, string> = {
+  pending: "Pendiente",
+  confirmed: "Confirmada",
+  seated: "En mesa",
+  completed: "Finalizada",
+  cancelled: "Cancelada",
+  no_show: "No se presentó",
+};
+
+const STATUS_ACTION_LABEL: Record<ReservationStatus, string> = {
+  pending: "Volver a pendiente",
+  confirmed: "Confirmar / reactivar",
+  seated: "Marcar llegada",
+  completed: "Finalizar atención",
+  cancelled: "Cancelar",
+  no_show: "Marcar ausencia",
+};
+
+const STATUS_STYLE: Record<ReservationStatus, string> = {
+  pending: "border-amber-200 bg-amber-50 text-amber-700",
+  confirmed: "border-emerald-200 bg-emerald-100 text-emerald-700",
+  seated: "border-blue-200 bg-blue-100 text-blue-700",
+  completed: "border-zinc-200 bg-zinc-100 text-zinc-600",
+  cancelled: "border-red-200 bg-red-100 text-red-600",
+  no_show: "border-orange-200 bg-orange-100 text-orange-700",
+};
+
+const STATUS_TRANSITIONS: Record<ReservationStatus, ReservationStatus[]> = {
+  pending: ["confirmed", "cancelled"],
+  confirmed: ["seated", "cancelled", "no_show"],
+  seated: ["completed", "cancelled"],
+  completed: [],
+  cancelled: ["confirmed"],
+  no_show: ["confirmed"],
+};
+
+const OCCUPYING_STATUSES: ReservationStatus[] = ["confirmed", "seated"];
 
 const timeToMinutes = (time: string) => {
   const [hours, minutes] = time.split(":").map(Number);
@@ -99,6 +154,7 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
   const [viewDate, setViewDate] = useState(today());
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settings, setSettings] =
     useState<ReservationSettings>(DEFAULT_SETTINGS);
@@ -118,7 +174,7 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
   const occupancyBySlot = useMemo(() => {
     const occupancy = new Map<string, number>();
     reservations
-      .filter((reservation) => reservation.status === "confirmed")
+      .filter((reservation) => OCCUPYING_STATUSES.includes(reservation.status))
       .forEach((reservation) => {
         const slot = reservation.slot || reservation.time;
         occupancy.set(
@@ -197,13 +253,17 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
     }
   };
 
-  const setStatus = async (id: string, status: Reservation["status"]) => {
+  const setStatus = async (id: string, status: ReservationStatus) => {
     if (!user) return;
     try {
+      setUpdatingId(id);
       const updateStatus = httpsCallable(functions, "updateReservationStatus");
       await updateStatus({ restaurantId, reservationId: id, status });
+      toast.success(`Reserva actualizada a: ${STATUS_LABEL[status]}.`);
     } catch (error) {
       toast.error(getFunctionErrorMessage(error));
+    } finally {
+      setUpdatingId(null);
     }
   };
 
@@ -220,19 +280,15 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
     }
   };
 
-  const statusStyle: Record<Reservation["status"], string> = {
-    pending: "border-amber-200 bg-amber-50 text-amber-700",
-    confirmed: "border-emerald-200 bg-emerald-100 text-emerald-700",
-    cancelled: "border-red-200 bg-red-100 text-red-600",
-  };
-  const statusLabel: Record<Reservation["status"], string> = {
-    pending: "Pendiente",
-    confirmed: "Confirmada",
-    cancelled: "Cancelada",
-  };
-
-  const active = reservations.filter((r) => r.status !== "cancelled");
-  const cancelled = reservations.filter((r) => r.status === "cancelled");
+  const active = reservations.filter((reservation) =>
+    ["pending", "confirmed", "seated"].includes(reservation.status)
+  );
+  const completed = reservations.filter(
+    (reservation) => reservation.status === "completed"
+  );
+  const closed = reservations.filter((reservation) =>
+    ["cancelled", "no_show"].includes(reservation.status)
+  );
 
   return (
     <div className="space-y-5">
@@ -262,6 +318,23 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
             <Plus size={15} /> Nueva
           </button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+        {STATUS_ORDER.map((status) => {
+          const count = reservations.filter(
+            (reservation) => reservation.status === status
+          ).length;
+          return (
+            <div
+              key={status}
+              className={`rounded-xl border px-3 py-2 ${STATUS_STYLE[status]}`}
+            >
+              <p className="text-xs font-semibold">{STATUS_LABEL[status]}</p>
+              <p className="text-xl font-black">{count}</p>
+            </div>
+          );
+        })}
       </div>
 
       <div className="rounded-xl border border-zinc-200 bg-white p-4">
@@ -430,7 +503,7 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-bold text-zinc-950">{r.name}</p>
-                  <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${statusStyle[r.status]}`}>{statusLabel[r.status]}</span>
+                  <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${STATUS_STYLE[r.status]}`}>{STATUS_LABEL[r.status]}</span>
                 </div>
                 <div className="mt-1 flex flex-wrap gap-3 text-xs text-zinc-500">
                   <span className="flex items-center gap-1"><Clock size={11} />{r.time}</span>
@@ -463,28 +536,75 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
                   {r.notes && <span className="italic">{r.notes}</span>}
                 </div>
               </div>
-              <div className="flex gap-1.5 shrink-0">
-                {r.status === "pending" && (
-                  <button onClick={() => setStatus(r.id, "confirmed")} className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" title="Confirmar">
-                    <Check size={14} />
-                  </button>
-                )}
-                <button onClick={() => setStatus(r.id, "cancelled")} className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-500 hover:bg-red-100" title="Cancelar">
-                  <X size={14} />
-                </button>
-              </div>
+              <select
+                value=""
+                onChange={(event) =>
+                  setStatus(r.id, event.target.value as ReservationStatus)
+                }
+                disabled={updatingId === r.id}
+                className="h-9 shrink-0 rounded-lg border border-zinc-200 bg-white px-3 text-xs font-bold text-zinc-700 disabled:opacity-50"
+                aria-label={`Cambiar estado de la reserva de ${r.name}`}
+              >
+                <option value="" disabled>
+                  {updatingId === r.id ? "Actualizando..." : "Cambiar estado"}
+                </option>
+                {STATUS_TRANSITIONS[r.status].map((status) => (
+                  <option key={status} value={status}>
+                    {STATUS_ACTION_LABEL[status]}
+                  </option>
+                ))}
+              </select>
             </div>
           ))}
         </div>
       )}
 
-      {cancelled.length > 0 && (
+      {completed.length > 0 && (
         <div>
-          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-zinc-400">Canceladas ({cancelled.length})</p>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-zinc-400">Finalizadas ({completed.length})</p>
           <div className="space-y-1">
-            {cancelled.map((r) => (
+            {completed.map((r) => (
               <div key={r.id} className="flex items-center justify-between rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-2">
-                <p className="text-sm text-zinc-400 line-through">{r.name} · {r.time} · {r.partySize}p</p>
+                <p className="text-sm text-zinc-500">{r.name} · {r.time} · {r.partySize}p</p>
+                <span className={`rounded-full border px-2 py-0.5 text-xs font-bold ${STATUS_STYLE[r.status]}`}>
+                  {STATUS_LABEL[r.status]}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {closed.length > 0 && (
+        <div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-wide text-zinc-400">Canceladas y ausentes ({closed.length})</p>
+          <div className="space-y-1">
+            {closed.map((r) => (
+              <div key={r.id} className="flex items-center justify-between gap-3 rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <p className="truncate text-sm text-zinc-400 line-through">{r.name} · {r.time} · {r.partySize}p</p>
+                  <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-bold ${STATUS_STYLE[r.status]}`}>
+                    {STATUS_LABEL[r.status]}
+                  </span>
+                </div>
+                <select
+                  value=""
+                  onChange={(event) =>
+                    setStatus(r.id, event.target.value as ReservationStatus)
+                  }
+                  disabled={updatingId === r.id}
+                  className="h-8 shrink-0 rounded-lg border border-zinc-200 bg-white px-2 text-xs font-bold text-zinc-700 disabled:opacity-50"
+                  aria-label={`Reactivar reserva de ${r.name}`}
+                >
+                  <option value="" disabled>
+                    {updatingId === r.id ? "Actualizando..." : "Acciones"}
+                  </option>
+                  {STATUS_TRANSITIONS[r.status].map((status) => (
+                    <option key={status} value={status}>
+                      {STATUS_ACTION_LABEL[status]}
+                    </option>
+                  ))}
+                </select>
               </div>
             ))}
           </div>

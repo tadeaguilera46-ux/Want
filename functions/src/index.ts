@@ -89,6 +89,49 @@ type ReservationSettings = {
   capacityPerSlot: number;
 };
 
+type ReservationStatus =
+  | "pending"
+  | "confirmed"
+  | "seated"
+  | "completed"
+  | "cancelled"
+  | "no_show";
+
+const RESERVATION_STATUSES: ReservationStatus[] = [
+  "pending",
+  "confirmed",
+  "seated",
+  "completed",
+  "cancelled",
+  "no_show",
+];
+
+const OCCUPYING_RESERVATION_STATUSES = new Set<ReservationStatus>([
+  "confirmed",
+  "seated",
+]);
+
+const RESERVATION_STATUS_TRANSITIONS: Record<
+  ReservationStatus,
+  ReservationStatus[]
+> = {
+  pending: ["confirmed", "cancelled"],
+  confirmed: ["seated", "cancelled", "no_show"],
+  seated: ["completed", "cancelled"],
+  completed: [],
+  cancelled: ["confirmed"],
+  no_show: ["confirmed"],
+};
+
+const RESERVATION_STATUS_TIMESTAMP_FIELDS: Record<ReservationStatus, string> = {
+  pending: "pendingAt",
+  confirmed: "confirmedAt",
+  seated: "seatedAt",
+  completed: "completedAt",
+  cancelled: "cancelledAt",
+  no_show: "noShowAt",
+};
+
 const DEFAULT_RESERVATION_SETTINGS: ReservationSettings = {
   openTime: "12:00",
   closeTime: "23:00",
@@ -341,7 +384,7 @@ export const createReservation = onCall({ cors: true }, async (request) => {
       );
       reservedPersons = existingReservations.docs.reduce((total, document) => {
         const existing = document.data();
-        return existing.status === "confirmed" &&
+        return OCCUPYING_RESERVATION_STATUSES.has(existing.status) &&
           (existing.slot || existing.time) === slot
           ? total + Number(existing.partySize || 0)
           : total;
@@ -389,6 +432,8 @@ export const createReservation = onCall({ cors: true }, async (request) => {
       },
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      statusChangedAt: admin.firestore.FieldValue.serverTimestamp(),
+      confirmedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
     transaction.set(
       auditRef,
@@ -426,10 +471,12 @@ export const updateReservationStatus = onCall({ cors: true }, async (request) =>
   if (
     !restaurantId ||
     !reservationId ||
-    (status !== "confirmed" && status !== "cancelled")
+    typeof status !== "string" ||
+    !RESERVATION_STATUSES.includes(status as ReservationStatus)
   ) {
     throw new HttpsError("invalid-argument", "Estado de reserva inválido");
   }
+  const nextStatus = status as ReservationStatus;
 
   const staff = await requireRestaurantAdmin(restaurantId, request.auth.uid);
   const db = admin.firestore();
@@ -451,71 +498,95 @@ export const updateReservationStatus = onCall({ cors: true }, async (request) =>
     }
 
     const reservation = reservationSnap.data() || {};
-    const currentStatus = reservation.status;
-    if (currentStatus === status) return;
+    const currentStatus = reservation.status as ReservationStatus;
+    if (!RESERVATION_STATUSES.includes(currentStatus)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "La reserva tiene un estado inválido"
+      );
+    }
+    if (currentStatus === nextStatus) return;
+    if (!RESERVATION_STATUS_TRANSITIONS[currentStatus].includes(nextStatus)) {
+      throw new HttpsError(
+        "failed-precondition",
+        `No se puede pasar una reserva de ${currentStatus} a ${nextStatus}`
+      );
+    }
 
     const settings = settingsSnap.exists
       ? normalizeReservationSettings(settingsSnap.data())
       : DEFAULT_RESERVATION_SETTINGS;
     const rawSlot = String(reservation.slot || reservation.time || "");
-    const slot =
-      currentStatus !== "confirmed" && status === "confirmed"
-        ? getReservationSlot(rawSlot, settings)
-        : rawSlot;
-    if (!/^\d{2}:\d{2}$/.test(slot)) {
-      throw new HttpsError("failed-precondition", "Horario de reserva inválido");
-    }
-    const slotRef = db.doc(
-      `restaurants/${restaurantId}/reservationSlots/${reservation.date}_${slot.replace(":", "-")}`
-    );
-    const slotSnap = await transaction.get(slotRef);
-    let reservedPersons = Number(slotSnap.data()?.reservedPersons || 0);
+    const currentOccupies =
+      OCCUPYING_RESERVATION_STATUSES.has(currentStatus);
+    const nextOccupies = OCCUPYING_RESERVATION_STATUSES.has(nextStatus);
+    let slot = rawSlot;
+    let slotRef: FirebaseFirestore.DocumentReference | null = null;
+    let nextReservedPersons: number | null = null;
 
-    if (!slotSnap.exists) {
-      const existingReservations = await transaction.get(
-        db
-          .collection(`restaurants/${restaurantId}/reservations`)
-          .where("date", "==", reservation.date)
+    if (currentOccupies !== nextOccupies) {
+      slot = nextOccupies ? getReservationSlot(rawSlot, settings) : rawSlot;
+      if (!/^\d{2}:\d{2}$/.test(slot)) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Horario de reserva inválido"
+        );
+      }
+      slotRef = db.doc(
+        `restaurants/${restaurantId}/reservationSlots/${reservation.date}_${slot.replace(":", "-")}`
       );
-      reservedPersons = existingReservations.docs.reduce((total, document) => {
-        const existing = document.data();
-        return existing.status === "confirmed" &&
-          (existing.slot || existing.time) === slot
-          ? total + Number(existing.partySize || 0)
-          : total;
-      }, 0);
-    }
-    const partySize = Number(reservation.partySize || 0);
-    let nextReservedPersons = reservedPersons;
+      const slotSnap = await transaction.get(slotRef);
+      let reservedPersons = Number(slotSnap.data()?.reservedPersons || 0);
 
-    if (currentStatus === "confirmed" && status === "cancelled") {
-      nextReservedPersons = Math.max(0, reservedPersons - partySize);
-    } else if (currentStatus !== "confirmed" && status === "confirmed") {
-      if (reservedPersons + partySize > settings.capacityPerSlot) {
+      if (!slotSnap.exists) {
+        const existingReservations = await transaction.get(
+          db
+            .collection(`restaurants/${restaurantId}/reservations`)
+            .where("date", "==", reservation.date)
+        );
+        reservedPersons = existingReservations.docs.reduce((total, document) => {
+          const existing = document.data();
+          return OCCUPYING_RESERVATION_STATUSES.has(existing.status) &&
+            (existing.slot || existing.time) === slot
+            ? total + Number(existing.partySize || 0)
+            : total;
+        }, 0);
+      }
+
+      const partySize = Number(reservation.partySize || 0);
+      nextReservedPersons = nextOccupies
+        ? reservedPersons + partySize
+        : Math.max(0, reservedPersons - partySize);
+
+      if (nextOccupies && nextReservedPersons > settings.capacityPerSlot) {
         throw new HttpsError(
           "resource-exhausted",
           `La franja de ${slot} no tiene capacidad suficiente`
         );
       }
-      nextReservedPersons = reservedPersons + partySize;
     }
 
-    transaction.set(
-      slotRef,
-      {
-        restaurantId,
-        date: reservation.date,
-        slot,
-        capacity: settings.capacityPerSlot,
-        reservedPersons: nextReservedPersons,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
+    if (slotRef && nextReservedPersons !== null) {
+      transaction.set(
+        slotRef,
+        {
+          restaurantId,
+          date: reservation.date,
+          slot,
+          capacity: settings.capacityPerSlot,
+          reservedPersons: nextReservedPersons,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
     transaction.update(reservationRef, {
-      status,
+      status: nextStatus,
       slot,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      statusChangedAt: admin.firestore.FieldValue.serverTimestamp(),
+      [RESERVATION_STATUS_TIMESTAMP_FIELDS[nextStatus]]:
+        admin.firestore.FieldValue.serverTimestamp(),
     });
     transaction.set(
       auditRef,
@@ -526,9 +597,9 @@ export const updateReservationStatus = onCall({ cors: true }, async (request) =>
         actorEmail: staff.email || request.auth!.token.email || null,
         entityId: reservationId,
         mesa: reservation.mesa || null,
-        description: `Se actualizó reserva ${reservationId} a ${status}`,
+        description: `Se actualizó reserva ${reservationId} a ${nextStatus}`,
         before: { status: currentStatus },
-        after: { status },
+        after: { status: nextStatus },
       })
     );
   });
