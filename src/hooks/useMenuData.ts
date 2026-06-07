@@ -15,7 +15,14 @@ import { getMenuItemAvailability } from "@/lib/stock-availability";
 
 const db = getDb();
 
-import { isPromotionActive, type Promotion } from "@/components/PromotionsPanel";
+import {
+  isPromotionActive,
+  isTwoForOneActive,
+  type Promotion,
+  type TwoForOnePromo,
+} from "@/components/PromotionsPanel";
+
+export const PROMOS_CATEGORY_KEY = "promociones";
 
 export type MenuType = "food" | "drinks" | "combo";
 
@@ -63,6 +70,7 @@ export const useMenuData = (restaurantId: string) => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
+  const [twoForOnePromos, setTwoForOnePromos] = useState<TwoForOnePromo[]>([]);
   const [loadingMenu, setLoadingMenu] = useState(true);
   const [loadingStock, setLoadingStock] = useState(true);
   // Stock solo se carga para usuarios autenticados (staff).
@@ -162,6 +170,17 @@ export const useMenuData = (restaurantId: string) => {
     );
   }, [restaurantId]);
 
+  useEffect(() => {
+    if (!restaurantId) return;
+    return onSnapshot(
+      collection(db, "restaurants", restaurantId, "promotions2x1"),
+      (snap) =>
+        setTwoForOnePromos(
+          snap.docs.map((d) => ({ id: d.id, ...d.data() }) as TwoForOnePromo)
+        )
+    );
+  }, [restaurantId]);
+
   const isItemAvailableNow = (item: MenuItem): boolean => {
     const now = new Date();
     const day = now.getDay();
@@ -228,6 +247,7 @@ export const useMenuData = (restaurantId: string) => {
     if (
       categories.length > 0 &&
       activeCategory &&
+      activeCategory !== PROMOS_CATEGORY_KEY &&
       !categories.some((category) => category.key === activeCategory)
     ) {
       setActiveCategory(categories[0].key);
@@ -248,5 +268,9 @@ export const useMenuData = (restaurantId: string) => {
     setActiveCategory,
     filteredItems,
     allItems: availableMenuItems,
+    promotions,
+    twoForOnePromos,
+    isPromotionActive,
+    isTwoForOneActive,
   };
 };

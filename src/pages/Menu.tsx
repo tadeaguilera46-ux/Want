@@ -20,6 +20,7 @@ import {
   getItemTags,
   getItemType,
   useMenuData,
+  PROMOS_CATEGORY_KEY,
   type MenuItem,
 } from "@/hooks/useMenuData";
 import {
@@ -76,7 +77,14 @@ const Menu = () => {
     activeCategory,
     setActiveCategory,
     allItems,
+    promotions,
+    twoForOnePromos,
+    isPromotionActive,
+    isTwoForOneActive,
   } = useMenuData(restaurantId);
+
+  const DAYS_SHORT = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+  const hasPromos = promotions.length > 0 || twoForOnePromos.length > 0;
 
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [note, setNote] = useState("");
@@ -201,13 +209,25 @@ const Menu = () => {
       const tabsH = tabsBarRef.current?.offsetHeight ?? 48;
       const triggerY = window.scrollY + topbarH + tabsH + 24;
 
-      let current = categories[0].key;
+      let current = "";
+
+      // Check promo section (always first if rendered)
+      const promoEl = sectionRefs.current[PROMOS_CATEGORY_KEY];
+      if (promoEl && promoEl.offsetTop <= triggerY) {
+        current = PROMOS_CATEGORY_KEY;
+      }
+
+      // Real categories override as user scrolls past them
       for (const cat of categories) {
         const el = sectionRefs.current[cat.key];
         if (!el) continue;
         if (el.offsetTop <= triggerY) {
           current = cat.key;
         }
+      }
+
+      if (!current) {
+        current = promoEl ? PROMOS_CATEGORY_KEY : (categories[0]?.key ?? "");
       }
 
       setActiveCategory(current);
@@ -466,6 +486,27 @@ const Menu = () => {
             ref={tabsContainerRef}
             className="no-scrollbar flex gap-2 overflow-x-auto px-4 py-2"
           >
+            {hasPromos && (
+              <button
+                ref={(el) => { tabRefs.current[PROMOS_CATEGORY_KEY] = el; }}
+                onClick={() => scrollToCategory(PROMOS_CATEGORY_KEY)}
+                className={`relative inline-flex h-9 shrink-0 items-center rounded-full px-4 text-sm font-semibold transition-colors ${
+                  activeCategory === PROMOS_CATEGORY_KEY
+                    ? "text-white"
+                    : "border border-black/10 bg-white text-zinc-700 shadow-sm"
+                }`}
+              >
+                {activeCategory === PROMOS_CATEGORY_KEY && (
+                  <motion.div
+                    layoutId="active-category"
+                    className="absolute inset-0 rounded-full shadow-sm"
+                    style={{ backgroundColor: primaryColor }}
+                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                  />
+                )}
+                <span className="relative z-10">Promociones</span>
+              </button>
+            )}
             {categories.map((category) => (
               <button
                 key={category.key}
@@ -502,6 +543,171 @@ const Menu = () => {
             </div>
           ) : (
             <div className="space-y-8">
+              {/* ── Sección Promociones ─────────────────────── */}
+              {hasPromos && (
+                <section
+                  ref={(el) => { sectionRefs.current[PROMOS_CATEGORY_KEY] = el; }}
+                  data-category={PROMOS_CATEGORY_KEY}
+                >
+                  <div className="mb-3 flex items-center gap-3">
+                    <h2 className="text-base font-bold tracking-tight text-zinc-950">
+                      Promociones
+                    </h2>
+                    <div className="h-px flex-1 bg-black/8" />
+                    <span className="text-xs font-medium text-zinc-400">
+                      {promotions.length + twoForOnePromos.length}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3">
+                    {/* Descuentos automáticos */}
+                    {promotions.map((promo) => {
+                      const active = isPromotionActive(promo);
+                      return (
+                        <div
+                          key={promo.id}
+                          className={`rounded-2xl border p-4 transition ${
+                            active
+                              ? "border-emerald-200 bg-emerald-50"
+                              : "border-black/8 bg-white/80"
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                                <span className="font-bold text-zinc-950">{promo.name}</span>
+                                {active ? (
+                                  <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                                    AHORA
+                                  </span>
+                                ) : (
+                                  <span className="rounded-full border border-zinc-300 px-2 py-0.5 text-[10px] font-semibold text-zinc-400">
+                                    PRÓXIMO
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-sm text-zinc-600">
+                                {promo.discountType === "percentage"
+                                  ? `${promo.discountValue}% off`
+                                  : `$${promo.discountValue} off`}
+                                {promo.category ? ` en ${promo.category}` : " en todo el menú"}
+                              </p>
+                              <p className="mt-0.5 text-xs text-zinc-400">
+                                {promo.fromTime}–{promo.toTime}
+                                {promo.days.length > 0 &&
+                                  ` · ${promo.days.map((d) => DAYS_SHORT[d]).join(", ")}`}
+                              </p>
+                            </div>
+                            {active && promo.category && (
+                              <button
+                                onClick={() => scrollToCategory(promo.category)}
+                                className="shrink-0 rounded-xl px-3 py-2 text-xs font-bold text-white"
+                                style={{ backgroundColor: primaryColor }}
+                              >
+                                Ver →
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* 2x1 */}
+                    {twoForOnePromos.map((promo) => {
+                      const active = isTwoForOneActive(promo);
+                      const matchedItem = promo.productName
+                        ? allItems.find(
+                            (i) =>
+                              i.name.toLowerCase() ===
+                              promo.productName.toLowerCase()
+                          )
+                        : null;
+                      return (
+                        <div
+                          key={promo.id}
+                          className={`rounded-2xl border p-4 transition ${
+                            active
+                              ? "border-emerald-200 bg-emerald-50"
+                              : "border-black/8 bg-white/80"
+                          }`}
+                        >
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <span className="font-bold text-zinc-950">{promo.name}</span>
+                            {active ? (
+                              <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                                AHORA
+                              </span>
+                            ) : (
+                              <span className="rounded-full border border-zinc-300 px-2 py-0.5 text-[10px] font-semibold text-zinc-400">
+                                PRÓXIMO
+                              </span>
+                            )}
+                            <span className="rounded-full border border-zinc-300 px-2 py-0.5 text-[10px] font-bold text-zinc-600">
+                              2×1
+                            </span>
+                          </div>
+                          <p className="text-xs text-zinc-500 mb-3">
+                            {promo.productName
+                              ? `Pedí 2 "${promo.productName}" y pagás solo 1`
+                              : "Pedí 2 iguales de cualquier producto y pagás solo 1"}
+                            {" · "}
+                            {promo.fromTime}–{promo.toTime}
+                            {promo.days.length > 0 &&
+                              ` · ${promo.days.map((d) => DAYS_SHORT[d]).join(", ")}`}
+                          </p>
+
+                          {matchedItem && (
+                            <div
+                              className={`flex items-center gap-3 rounded-xl border p-3 ${
+                                active
+                                  ? "border-emerald-100 bg-white"
+                                  : "border-zinc-100 bg-zinc-50"
+                              }`}
+                            >
+                              {matchedItem.image && (
+                                <img
+                                  src={matchedItem.image}
+                                  alt={matchedItem.name}
+                                  className="h-14 w-14 shrink-0 rounded-lg object-cover"
+                                />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-sm text-zinc-900 truncate">
+                                  {matchedItem.name}
+                                </p>
+                                <p className="text-xs text-zinc-500">
+                                  {formatPriceARS(matchedItem.price)} c/u
+                                </p>
+                              </div>
+                              <button
+                                onClick={() =>
+                                  active
+                                    ? handleAddWithoutNote(matchedItem)
+                                    : undefined
+                                }
+                                disabled={!active}
+                                className={`shrink-0 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition ${
+                                  active ? "active:scale-95" : "opacity-40 cursor-not-allowed"
+                                }`}
+                                style={{ backgroundColor: primaryColor }}
+                              >
+                                {active ? "Agregar" : "No disponible"}
+                              </button>
+                            </div>
+                          )}
+
+                          {!matchedItem && !promo.productName && (
+                            <p className="text-xs text-zinc-400 italic">
+                              El descuento se aplica automáticamente en tu cuenta al pedir 2 iguales.
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+
               {categories.map((cat) => {
                 const items = getItemsForCategory(cat.key);
                 if (items.length === 0) return null;
