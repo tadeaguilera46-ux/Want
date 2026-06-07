@@ -7,7 +7,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  updateDoc,
+  writeBatch,
   where,
 } from "firebase/firestore";
 import { toast } from "sonner";
@@ -31,6 +31,8 @@ import QRCode from "qrcode";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getDb } from "../lib/firebase";
 import { useRestaurant } from "../lib/restaurant-context";
+import { useAuth } from "../lib/auth-context";
+import { writeAuditLog } from "../lib/audit-logs";
 
 const db = getDb();
 
@@ -128,6 +130,7 @@ const CashierInvoices = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { restaurantId: contextRestaurantId, restaurant } = useRestaurant();
+  const { user } = useAuth();
 
   const restaurantId =
     contextRestaurantId || searchParams.get("restaurantId") || "";
@@ -280,14 +283,15 @@ const CashierInvoices = () => {
   };
 
   const markIssued = async () => {
-    if (!restaurantId || !selectedCuenta) return;
+    if (!restaurantId || !selectedCuenta || !user) return;
     if (!invoiceNumber.trim()) {
       toast.error("Ingresá el número de factura o comprobante.");
       return;
     }
     try {
       setSaving(true);
-      await updateDoc(
+      const batch = writeBatch(db);
+      batch.update(
         doc(db, "restaurants", restaurantId, "cuentas", selectedCuenta.id),
         {
           "invoice.status": "issued",
@@ -299,6 +303,21 @@ const CashierInvoices = () => {
           updatedAt: serverTimestamp(),
         }
       );
+      writeAuditLog(batch, {
+        restaurantId,
+        action: "cashier_invoice_issued",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "cashier",
+        mesa: selectedCuenta.mesa,
+        cuentaId: selectedCuenta.id,
+        description: `Caja marco emitida la factura de cuenta ${selectedCuenta.id}`,
+        changes: {
+          before: { invoiceStatus: selectedCuenta.invoice?.status ?? "requested" },
+          after: { invoiceStatus: "issued", invoiceNumber: invoiceNumber.trim() },
+        },
+      });
+      await batch.commit();
       toast.success("Factura marcada como emitida.");
       setSelectedId(null);
     } catch (error) {
@@ -310,14 +329,15 @@ const CashierInvoices = () => {
   };
 
   const markFailed = async () => {
-    if (!restaurantId || !selectedCuenta) return;
+    if (!restaurantId || !selectedCuenta || !user) return;
     if (!failureReason.trim()) {
       toast.error("Ingresá el motivo del fallo.");
       return;
     }
     try {
       setSaving(true);
-      await updateDoc(
+      const batch = writeBatch(db);
+      batch.update(
         doc(db, "restaurants", restaurantId, "cuentas", selectedCuenta.id),
         {
           "invoice.status": "failed",
@@ -326,6 +346,22 @@ const CashierInvoices = () => {
           updatedAt: serverTimestamp(),
         }
       );
+      writeAuditLog(batch, {
+        restaurantId,
+        action: "cashier_invoice_failed",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "cashier",
+        mesa: selectedCuenta.mesa,
+        cuentaId: selectedCuenta.id,
+        reason: failureReason,
+        description: `Caja marco fallida la factura de cuenta ${selectedCuenta.id}`,
+        changes: {
+          before: { invoiceStatus: selectedCuenta.invoice?.status ?? "requested" },
+          after: { invoiceStatus: "failed" },
+        },
+      });
+      await batch.commit();
       toast.success("Factura marcada como fallida.");
       setSelectedId(null);
     } catch (error) {
@@ -337,15 +373,31 @@ const CashierInvoices = () => {
   };
 
   const reopenRequest = async (cuenta: Cuenta) => {
-    if (!restaurantId) return;
+    if (!restaurantId || !user) return;
     try {
-      await updateDoc(
+      const batch = writeBatch(db);
+      batch.update(
         doc(db, "restaurants", restaurantId, "cuentas", cuenta.id),
         {
           "invoice.status": "requested",
           updatedAt: serverTimestamp(),
         }
       );
+      writeAuditLog(batch, {
+        restaurantId,
+        action: "cashier_invoice_reopened",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "cashier",
+        mesa: cuenta.mesa,
+        cuentaId: cuenta.id,
+        description: `Caja reabrio solicitud de factura de cuenta ${cuenta.id}`,
+        changes: {
+          before: { invoiceStatus: cuenta.invoice?.status ?? "failed" },
+          after: { invoiceStatus: "requested" },
+        },
+      });
+      await batch.commit();
       toast.success("Solicitud reabierta como pendiente.");
       setSelectedId(null);
       setActiveTab("requested");

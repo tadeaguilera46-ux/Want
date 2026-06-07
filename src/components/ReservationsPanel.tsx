@@ -1,18 +1,19 @@
 import { useEffect, useState } from "react";
 import {
-  addDoc,
   collection,
   doc,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
-  updateDoc,
+  writeBatch,
   where,
 } from "firebase/firestore";
 import { Calendar, Check, Clock, Plus, Users, X } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import { toast } from "sonner";
+import { useAuth } from "../lib/auth-context";
+import { writeAuditLog } from "../lib/audit-logs";
 
 type Reservation = {
   id: string;
@@ -32,6 +33,7 @@ const db = getDb();
 const today = () => new Date().toISOString().slice(0, 10);
 
 export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
+  const { user } = useAuth();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [viewDate, setViewDate] = useState(today());
   const [showForm, setShowForm] = useState(false);
@@ -58,10 +60,13 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !phone.trim()) return;
+    if (!name.trim() || !phone.trim() || !user) return;
     try {
       setSaving(true);
-      await addDoc(collection(db, "restaurants", restaurantId, "reservations"), {
+      const reservationRef = doc(
+        collection(db, "restaurants", restaurantId, "reservations")
+      );
+      const reservationData = {
         name: name.trim(),
         phone: phone.trim(),
         date,
@@ -72,7 +77,30 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
         status: "pending",
         restaurantId,
         createdAt: serverTimestamp(),
+      };
+      const batch = writeBatch(db);
+      batch.set(reservationRef, reservationData);
+      writeAuditLog(batch, {
+        restaurantId,
+        action: "reserva_creada",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
+        entityType: "reservation",
+        entityId: reservationRef.id,
+        mesa: mesa ? Number(mesa) : undefined,
+        description: `Se creo reserva para ${name.trim()}`,
+        changes: {
+          before: { exists: false },
+          after: {
+            date,
+            time,
+            partySize: Number(partySize) || 2,
+            status: "pending",
+          },
+        },
       });
+      await batch.commit();
       setName(""); setPhone(""); setDate(today()); setTime("20:00");
       setPartySize("2"); setMesa(""); setNotes("");
       setShowForm(false);
@@ -85,7 +113,28 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
   };
 
   const setStatus = async (id: string, status: Reservation["status"]) => {
-    await updateDoc(doc(db, "restaurants", restaurantId, "reservations", id), { status });
+    if (!user) return;
+    const reservation = reservations.find((current) => current.id === id);
+    const batch = writeBatch(db);
+    batch.update(doc(db, "restaurants", restaurantId, "reservations", id), {
+      status,
+    });
+    writeAuditLog(batch, {
+      restaurantId,
+      action: "reserva_estado_actualizado",
+      actorUid: user.uid,
+      actorEmail: user.email,
+      actorRole: "admin",
+      entityType: "reservation",
+      entityId: id,
+      mesa: reservation?.mesa,
+      description: `Se actualizo reserva ${id} a ${status}`,
+      changes: {
+        before: { status: reservation?.status ?? null },
+        after: { status },
+      },
+    });
+    await batch.commit();
   };
 
   const statusStyle: Record<Reservation["status"], string> = {

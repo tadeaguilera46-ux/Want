@@ -1,19 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   collection,
-  deleteDoc,
   doc,
   onSnapshot,
   query,
   serverTimestamp,
-  updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { Plus, Trash2, UserCog } from "lucide-react";
 import { toast } from "sonner";
 import { getDb } from "../lib/firebase";
 import { createStaffMember as createAuthStaffMember, type StaffRole } from "../lib/staff";
 import { useAuth } from "../lib/auth-context";
-import { createAuditLog } from "../lib/audit-logs";
+import { writeAuditLog } from "../lib/audit-logs";
 import {
   canCreateStaff,
   getPlanLimits,
@@ -158,6 +157,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
   };
 
   const createStaffMember = async () => {
+    if (!user) return;
     const normalizedEmail = newEmail.trim().toLowerCase();
 
     if (!normalizedEmail) {
@@ -189,20 +189,16 @@ export function StaffManagementPanel({ restaurantId }: Props) {
     try {
       setCreating(true);
 
-      const createdStaff = await createAuthStaffMember({
+      await createAuthStaffMember({
         restaurantId,
         email: normalizedEmail,
         password: newPassword,
         role: newRole,
-      });
-
-      await createAuditLog({
-        restaurantId,
-        action: "empleado_actualizado",
-        userUid: user?.uid,
-        userEmail: user?.email || "",
-        userRole: "admin",
-        description: `Admin creó empleado ${createdStaff.email} (${createdStaff.role})`,
+        actor: {
+          actorUid: user.uid,
+          actorEmail: user.email,
+          actorRole: "admin",
+        },
       });
 
       setNewEmail("");
@@ -220,6 +216,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
   };
 
   const updateStaffRole = async (member: StaffMember, role: StaffRole) => {
+    if (!user) return;
     if (isLastActiveAdmin(member) && role !== "admin") {
       toast.error("No podés quitarle el rol admin al último admin activo.");
       return;
@@ -228,19 +225,26 @@ export function StaffManagementPanel({ restaurantId }: Props) {
     try {
       setUpdatingId(member.id);
 
-      await updateDoc(doc(db, "restaurants", restaurantId, "staff", member.id), {
+      const batch = writeBatch(db);
+      batch.update(doc(db, "restaurants", restaurantId, "staff", member.id), {
         role,
         updatedAt: serverTimestamp(),
       });
-
-      await createAuditLog({
+      writeAuditLog(batch, {
         restaurantId,
         action: "empleado_actualizado",
-        userUid: user?.uid,
-        userEmail: user?.email || "",
-        userRole: "admin",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
+        entityType: "staff",
+        entityId: member.id,
         description: `Admin cambió rol de ${member.email || member.id} a ${roleLabel[role]}`,
+        changes: {
+          before: { role: member.role ?? null },
+          after: { role },
+        },
       });
+      await batch.commit();
 
       toast.success("Rol actualizado.");
     } catch (error) {
@@ -252,6 +256,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
   };
 
   const updateStaffEmail = async (staffId: string, email: string) => {
+    if (!user) return;
     const normalizedEmail = email.trim().toLowerCase();
 
     if (!normalizedEmail) {
@@ -262,19 +267,27 @@ export function StaffManagementPanel({ restaurantId }: Props) {
     try {
       setUpdatingId(staffId);
 
-      await updateDoc(doc(db, "restaurants", restaurantId, "staff", staffId), {
+      const member = staff.find((current) => current.id === staffId);
+      const batch = writeBatch(db);
+      batch.update(doc(db, "restaurants", restaurantId, "staff", staffId), {
         email: normalizedEmail,
         updatedAt: serverTimestamp(),
       });
-
-      await createAuditLog({
+      writeAuditLog(batch, {
         restaurantId,
         action: "empleado_actualizado",
-        userUid: user?.uid,
-        userEmail: user?.email || "",
-        userRole: "admin",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
+        entityType: "staff",
+        entityId: staffId,
         description: `Admin actualizó email visible de empleado a ${normalizedEmail}`,
+        changes: {
+          before: { email: member?.email ?? null },
+          after: { email: normalizedEmail },
+        },
       });
+      await batch.commit();
 
       toast.success("Email actualizado.");
     } catch (error) {
@@ -286,6 +299,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
   };
 
   const toggleStaffActive = async (member: StaffMember) => {
+    if (!user) return;
     const nextActive = member.active !== true;
 
     if (isLastActiveAdmin(member)) {
@@ -303,19 +317,26 @@ export function StaffManagementPanel({ restaurantId }: Props) {
     try {
       setUpdatingId(member.id);
 
-      await updateDoc(doc(db, "restaurants", restaurantId, "staff", member.id), {
+      const batch = writeBatch(db);
+      batch.update(doc(db, "restaurants", restaurantId, "staff", member.id), {
         active: nextActive,
         updatedAt: serverTimestamp(),
       });
-
-      await createAuditLog({
+      writeAuditLog(batch, {
         restaurantId,
         action: "empleado_actualizado",
-        userUid: user?.uid,
-        userEmail: user?.email || "",
-        userRole: "admin",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
+        entityType: "staff",
+        entityId: member.id,
         description: `Admin ${nextActive ? "activó" : "desactivó"} empleado ${member.email || member.id}`,
+        changes: {
+          before: { active: member.active ?? false },
+          after: { active: nextActive },
+        },
       });
+      await batch.commit();
 
       toast.success(nextActive ? "Empleado activado." : "Empleado desactivado.");
     } catch (error) {
@@ -327,6 +348,7 @@ export function StaffManagementPanel({ restaurantId }: Props) {
   };
 
   const deleteStaffAccess = async (member: StaffMember) => {
+    if (!user) return;
     if (isLastActiveAdmin(member)) {
       toast.error("No podés eliminar el último admin activo.");
       return;
@@ -341,16 +363,27 @@ export function StaffManagementPanel({ restaurantId }: Props) {
     try {
       setUpdatingId(member.id);
 
-      await deleteDoc(doc(db, "restaurants", restaurantId, "staff", member.id));
-
-      await createAuditLog({
+      const batch = writeBatch(db);
+      batch.delete(doc(db, "restaurants", restaurantId, "staff", member.id));
+      writeAuditLog(batch, {
         restaurantId,
-        action: "empleado_actualizado",
-        userUid: user?.uid,
-        userEmail: user?.email || "",
-        userRole: "admin",
+        action: "empleado_eliminado",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
+        entityType: "staff",
+        entityId: member.id,
         description: `Admin eliminó acceso de empleado ${member.email || member.id}`,
+        changes: {
+          before: {
+            email: member.email ?? null,
+            role: member.role ?? null,
+            active: member.active ?? false,
+          },
+          after: { exists: false },
+        },
       });
+      await batch.commit();
 
       toast.success("Acceso eliminado.");
     } catch (error) {

@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  addDoc,
   collection,
   doc,
   getDocs,
   onSnapshot,
   serverTimestamp,
   Timestamp,
-  updateDoc,
   writeBatch,
 } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 import {
   BadgeDollarSign,
   Ban,
@@ -26,8 +25,10 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { getDb } from "@/lib/firebase";
+import { writeAuditLog } from "@/lib/audit-logs";
 
 const db = getDb();
+const auth = getAuth();
 
 type RestaurantPlan = "starter" | "pro" | "premium";
 type SubscriptionStatus = "trial" | "active" | "past_due" | "blocked";
@@ -451,12 +452,31 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
     restaurantId: string,
     data: Record<string, unknown>
   ) => {
-    await addDoc(collection(db, "restaurants", restaurantId, "payments"), {
+    const user = auth.currentUser;
+    if (!user) throw new Error("Superadmin no autenticado.");
+    const paymentRef = doc(collection(db, "restaurants", restaurantId, "payments"));
+    const batch = writeBatch(db);
+    batch.set(paymentRef, {
       restaurantId,
       ...data,
       createdAt: serverTimestamp(),
       paidAt: serverTimestamp(),
     });
+    writeAuditLog(batch, {
+      restaurantId,
+      action: "saas_payment_registered",
+      actorUid: user.uid,
+      actorEmail: user.email,
+      actorRole: "superadmin",
+      entityType: "payment",
+      entityId: paymentRef.id,
+      description: `Superadmin registro pago ${paymentRef.id}`,
+      changes: {
+        before: { exists: false },
+        after: data,
+      },
+    });
+    await batch.commit();
   };
 
   const updateRestaurantBilling = async (
@@ -466,11 +486,26 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
   ) => {
     try {
       setSavingId(restaurantId);
+      const user = auth.currentUser;
+      if (!user) throw new Error("Superadmin no autenticado.");
 
-      await updateDoc(doc(db, "restaurants", restaurantId), {
+      const batch = writeBatch(db);
+      batch.update(doc(db, "restaurants", restaurantId), {
         ...data,
         updatedAt: serverTimestamp(),
       });
+      writeAuditLog(batch, {
+        restaurantId,
+        action: "saas_billing_updated",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "superadmin",
+        entityType: "restaurant_billing",
+        entityId: restaurantId,
+        description: "Superadmin actualizo billing",
+        changes: { before: {}, after: data },
+      });
+      await batch.commit();
 
       onMessage?.(successMessage);
     } catch (error) {
@@ -503,13 +538,31 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
 
     try {
       setSavingId(restaurant.id);
+      const user = auth.currentUser;
+      if (!user) throw new Error("Superadmin no autenticado.");
 
-      await updateDoc(doc(db, "restaurants", restaurant.id), {
+      const batch = writeBatch(db);
+      batch.update(doc(db, "restaurants", restaurant.id), {
         subscriptionStatus: "active",
         nextBillingDate: Timestamp.fromDate(nextDate),
         blockedAt: null,
         updatedAt: serverTimestamp(),
       });
+      writeAuditLog(batch, {
+        restaurantId: restaurant.id,
+        action: "saas_monthly_payment_applied",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "superadmin",
+        entityType: "restaurant_billing",
+        entityId: restaurant.id,
+        description: "Superadmin aplico pago mensual",
+        changes: {
+          before: { subscriptionStatus: restaurant.subscriptionStatus ?? "trial" },
+          after: { subscriptionStatus: "active", nextBillingDate: nextDate.toISOString() },
+        },
+      });
+      await batch.commit();
 
       await createPaymentRecord(restaurant.id, {
         type: "monthly",
@@ -537,11 +590,29 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
 
     try {
       setSavingId(restaurant.id);
+      const user = auth.currentUser;
+      if (!user) throw new Error("Superadmin no autenticado.");
 
-      await updateDoc(doc(db, "restaurants", restaurant.id), {
+      const batch = writeBatch(db);
+      batch.update(doc(db, "restaurants", restaurant.id), {
         setupFeePaid: true,
         updatedAt: serverTimestamp(),
       });
+      writeAuditLog(batch, {
+        restaurantId: restaurant.id,
+        action: "saas_setup_payment_applied",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "superadmin",
+        entityType: "restaurant_billing",
+        entityId: restaurant.id,
+        description: "Superadmin marco setup pagado",
+        changes: {
+          before: { setupFeePaid: restaurant.setupFeePaid ?? false },
+          after: { setupFeePaid: true },
+        },
+      });
+      await batch.commit();
 
       await createPaymentRecord(restaurant.id, {
         type: "setup",
@@ -576,6 +647,22 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
           subscriptionStatus: effectiveStatus,
           blockedAt: effectiveStatus === "blocked" ? serverTimestamp() : null,
           updatedAt: serverTimestamp(),
+        });
+        const user = auth.currentUser;
+        if (!user) throw new Error("Superadmin no autenticado.");
+        writeAuditLog(batch, {
+          restaurantId: restaurant.id,
+          action: "saas_subscription_synced",
+          actorUid: user.uid,
+          actorEmail: user.email,
+          actorRole: "superadmin",
+          entityType: "restaurant_billing",
+          entityId: restaurant.id,
+          description: "Superadmin sincronizo vencimiento",
+          changes: {
+            before: { subscriptionStatus: storedStatus },
+            after: { subscriptionStatus: effectiveStatus },
+          },
         });
 
         updates += 1;
@@ -615,8 +702,11 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
 
     try {
       setSavingId(restaurant.id);
+      const user = auth.currentUser;
+      if (!user) throw new Error("Superadmin no autenticado.");
 
-      await updateDoc(doc(db, "restaurants", restaurant.id), {
+      const batch = writeBatch(db);
+      batch.update(doc(db, "restaurants", restaurant.id), {
         plan,
         subscriptionStatus,
         setupFeePaid,
@@ -628,6 +718,25 @@ const SuperAdminBillingPanel = ({ restaurants, onMessage }: Props) => {
         blockedAt: subscriptionStatus === "blocked" ? serverTimestamp() : null,
         updatedAt: serverTimestamp(),
       });
+      writeAuditLog(batch, {
+        restaurantId: restaurant.id,
+        action: "saas_billing_updated",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "superadmin",
+        entityType: "restaurant_billing",
+        entityId: restaurant.id,
+        description: "Superadmin guardo billing manual",
+        changes: {
+          before: {
+            plan: restaurant.plan ?? "pro",
+            subscriptionStatus: restaurant.subscriptionStatus ?? "trial",
+            setupFeePaid: restaurant.setupFeePaid ?? false,
+          },
+          after: { plan, subscriptionStatus, setupFeePaid, monthlyPrice, setupPrice, billingDay },
+        },
+      });
+      await batch.commit();
 
       const limitsResult = await enforcePlanLimits(restaurant.id, plan);
 

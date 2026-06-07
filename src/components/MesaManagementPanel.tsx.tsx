@@ -13,6 +13,7 @@ import {
   PLAN_LABELS,
   type RestaurantPlan,
 } from "../lib/plan";
+import { useAuth } from "../lib/auth-context";
 
 type MesaAdmin = {
   id: string;
@@ -48,6 +49,7 @@ export function MesaManagementPanel({
   restaurantId,
   qrBasePath = "/menu",
 }: Props) {
+  const { user } = useAuth();
   const [mesas, setMesas] = useState<MesaAdmin[]>([]);
   const [restaurantPlan, setRestaurantPlan] = useState<RestaurantPlan>("starter");
   const [newMesaNumber, setNewMesaNumber] = useState("");
@@ -144,11 +146,15 @@ export function MesaManagementPanel({
   };
 
   const handleSaveZona = async (mesa: MesaAdmin) => {
-    if (!editingZona || editingZona.mesaId !== mesa.id) return;
+    if (!editingZona || editingZona.mesaId !== mesa.id || !user) return;
     const numero = Number(mesa.numero ?? mesa.id);
     try {
       setSaving(true);
-      await setMesaZona(restaurantId, numero, editingZona.value);
+      await setMesaZona(restaurantId, numero, editingZona.value, {
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
+      });
       setEditingZona(null);
       toast.success("Zona actualizada.");
     } catch {
@@ -168,6 +174,7 @@ export function MesaManagementPanel({
 
   const handleCreateMesa = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!user) return;
 
     const numero = Number(newMesaNumber);
 
@@ -185,7 +192,16 @@ export function MesaManagementPanel({
 
     try {
       setSaving(true);
-      await createMesaIfNotExists(restaurantId, numero, newMesaZona.trim() || undefined);
+      await createMesaIfNotExists(
+        restaurantId,
+        numero,
+        newMesaZona.trim() || undefined,
+        {
+          actorUid: user.uid,
+          actorEmail: user.email,
+          actorRole: "admin",
+        }
+      );
       setNewMesaNumber("");
       setNewMesaZona("");
     } catch (error) {
@@ -197,6 +213,7 @@ export function MesaManagementPanel({
   };
 
   const handleToggleActive = async (mesa: MesaAdmin) => {
+    if (!user) return;
     const numero = Number(mesa.numero ?? mesa.id);
 
     if (!Number.isInteger(numero) || numero <= 0) return;
@@ -217,7 +234,11 @@ export function MesaManagementPanel({
 
     try {
       setSaving(true);
-      await setMesaActive(restaurantId, numero, nextActive);
+      await setMesaActive(restaurantId, numero, nextActive, {
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
+      });
     } catch (error) {
       console.error("Error actualizando mesa:", error);
       toast.error("No se pudo actualizar la mesa");

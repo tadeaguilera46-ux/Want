@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
 import {
-  addDoc,
   collection,
   doc,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
-  updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { Bell, Check, Clock, Plus, Users, X } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import { toast } from "sonner";
+import { useAuth } from "../lib/auth-context";
+import { writeAuditLog } from "../lib/audit-logs";
 
 type WaitlistEntry = {
   id: string;
@@ -49,6 +50,7 @@ const waitMins = (entry: WaitlistEntry) => {
 };
 
 export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
+  const { user } = useAuth();
   const [entries, setEntries] = useState<WaitlistEntry[]>([]);
   const [name, setName] = useState("");
   const [partySize, setPartySize] = useState("2");
@@ -72,17 +74,38 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || !user) return;
     try {
       setSaving(true);
-      await addDoc(collection(db, "restaurants", restaurantId, "waitlist"), {
+      const entryRef = doc(collection(db, "restaurants", restaurantId, "waitlist"));
+      const entryData = {
         name: name.trim(),
         partySize: Number(partySize) || 2,
         phone: phone.trim() || null,
         status: "waiting",
         arrivedAt: serverTimestamp(),
         restaurantId,
+      };
+      const batch = writeBatch(db);
+      batch.set(entryRef, entryData);
+      writeAuditLog(batch, {
+        restaurantId,
+        action: "waitlist_creada",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
+        entityType: "waitlist",
+        entityId: entryRef.id,
+        description: `Se agrego ${name.trim()} a lista de espera`,
+        changes: {
+          before: { exists: false },
+          after: {
+            partySize: Number(partySize) || 2,
+            status: "waiting",
+          },
+        },
       });
+      await batch.commit();
       setName("");
       setPhone("");
       setPartySize("2");
@@ -94,7 +117,25 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
   };
 
   const setStatus = async (id: string, status: WaitlistEntry["status"]) => {
-    await updateDoc(doc(db, "restaurants", restaurantId, "waitlist", id), { status });
+    if (!user) return;
+    const entry = entries.find((current) => current.id === id);
+    const batch = writeBatch(db);
+    batch.update(doc(db, "restaurants", restaurantId, "waitlist", id), { status });
+    writeAuditLog(batch, {
+      restaurantId,
+      action: "waitlist_estado_actualizado",
+      actorUid: user.uid,
+      actorEmail: user.email,
+      actorRole: "admin",
+      entityType: "waitlist",
+      entityId: id,
+      description: `Se actualizo entrada ${id} a ${status}`,
+      changes: {
+        before: { status: entry?.status ?? null },
+        after: { status },
+      },
+    });
+    await batch.commit();
     if (status === "notified") toast.success("Mesa avisada.");
     if (status === "cancelled") toast.success("Entrada cancelada.");
   };

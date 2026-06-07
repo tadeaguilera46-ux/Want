@@ -1,18 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  addDoc,
   collection,
-  deleteDoc,
   doc,
   getDocs,
   onSnapshot,
   query,
   serverTimestamp,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import { ChevronDown, Plus, Search, Tag, Trash2, X } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import { toast } from "sonner";
+import { useAuth } from "../lib/auth-context";
+import { writeAuditLog } from "../lib/audit-logs";
 
 type MenuItemOption = {
   id: string;
@@ -291,6 +292,7 @@ export const isTwoForOneActive = (promo: TwoForOnePromo): boolean =>
   isActiveSchedule(promo);
 
 export function PromotionsPanel({ restaurantId }: { restaurantId: string }) {
+  const { user } = useAuth();
   const [promos, setPromos] = useState<Promotion[]>([]);
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
@@ -315,13 +317,14 @@ export function PromotionsPanel({ restaurantId }: { restaurantId: string }) {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !discountValue) return;
+    if (!name.trim() || !discountValue || !user) return;
     try {
       setSaving(true);
       const savedProductName = productMode === "specific" ? productName.trim() : "";
       const savedCategory =
         productMode === "all" ? "" : productMode === "specific" ? PROMO_CATEGORY_NONE : category.trim();
-      await addDoc(collection(db, "restaurants", restaurantId, "promotions"), {
+      const promoRef = doc(collection(db, "restaurants", restaurantId, "promotions"));
+      const promoData = {
         name: name.trim(),
         category: savedCategory,
         productName: savedProductName,
@@ -333,7 +336,29 @@ export function PromotionsPanel({ restaurantId }: { restaurantId: string }) {
         active: true,
         restaurantId,
         createdAt: serverTimestamp(),
+      };
+      const batch = writeBatch(db);
+      batch.set(promoRef, promoData);
+      writeAuditLog(batch, {
+        restaurantId,
+        action: "promocion_creada",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
+        entityType: "promotion",
+        entityId: promoRef.id,
+        description: `Se creo promocion ${name.trim()}`,
+        changes: {
+          before: { exists: false },
+          after: {
+            name: name.trim(),
+            discountType,
+            discountValue: Number(discountValue),
+            active: true,
+          },
+        },
       });
+      await batch.commit();
       setName(""); setCategory(""); setProductName(""); setProductMode("all"); setDiscountValue("10");
       setFromTime("18:00"); setToTime("20:00"); setDays([]);
       toast.success("Promoción creada.");
@@ -345,7 +370,25 @@ export function PromotionsPanel({ restaurantId }: { restaurantId: string }) {
   };
 
   const handleDelete = async (id: string) => {
-    await deleteDoc(doc(db, "restaurants", restaurantId, "promotions", id));
+    if (!user) return;
+    const promo = promos.find((current) => current.id === id);
+    const batch = writeBatch(db);
+    batch.delete(doc(db, "restaurants", restaurantId, "promotions", id));
+    writeAuditLog(batch, {
+      restaurantId,
+      action: "promocion_eliminada",
+      actorUid: user.uid,
+      actorEmail: user.email,
+      actorRole: "admin",
+      entityType: "promotion",
+      entityId: id,
+      description: `Se elimino promocion ${promo?.name || id}`,
+      changes: {
+        before: { name: promo?.name || id, active: promo?.active ?? true },
+        after: { exists: false },
+      },
+    });
+    await batch.commit();
     toast.success("Promoción eliminada.");
   };
 
@@ -462,6 +505,7 @@ export function PromotionsPanel({ restaurantId }: { restaurantId: string }) {
 }
 
 export function TwoForOnePanel({ restaurantId }: { restaurantId: string }) {
+  const { user } = useAuth();
   const [promos, setPromos] = useState<TwoForOnePromo[]>([]);
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
@@ -487,12 +531,14 @@ export function TwoForOnePanel({ restaurantId }: { restaurantId: string }) {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || !user) return;
     try {
       setSaving(true);
-      await addDoc(
-        collection(db, "restaurants", restaurantId, "promotions2x1"),
-        {
+      const promoRef = doc(
+        collection(db, "restaurants", restaurantId, "promotions2x1")
+      );
+      const batch = writeBatch(db);
+      batch.set(promoRef, {
           name: name.trim(),
           productName: productName.trim(),
           fromTime,
@@ -503,6 +549,21 @@ export function TwoForOnePanel({ restaurantId }: { restaurantId: string }) {
           createdAt: serverTimestamp(),
         }
       );
+      writeAuditLog(batch, {
+        restaurantId,
+        action: "promocion_2x1_creada",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
+        entityType: "promotion2x1",
+        entityId: promoRef.id,
+        description: `Se creo promocion 2x1 ${name.trim()}`,
+        changes: {
+          before: { exists: false },
+          after: { name: name.trim(), productName: productName.trim(), active: true },
+        },
+      });
+      await batch.commit();
       setName("");
       setProductName("");
       setFromTime("00:00");
@@ -517,9 +578,25 @@ export function TwoForOnePanel({ restaurantId }: { restaurantId: string }) {
   };
 
   const handleDelete = async (id: string) => {
-    await deleteDoc(
-      doc(db, "restaurants", restaurantId, "promotions2x1", id)
-    );
+    if (!user) return;
+    const promo = promos.find((current) => current.id === id);
+    const batch = writeBatch(db);
+    batch.delete(doc(db, "restaurants", restaurantId, "promotions2x1", id));
+    writeAuditLog(batch, {
+      restaurantId,
+      action: "promocion_2x1_eliminada",
+      actorUid: user.uid,
+      actorEmail: user.email,
+      actorRole: "admin",
+      entityType: "promotion2x1",
+      entityId: id,
+      description: `Se elimino promocion 2x1 ${promo?.name || id}`,
+      changes: {
+        before: { name: promo?.name || id, active: promo?.active ?? true },
+        after: { exists: false },
+      },
+    });
+    await batch.commit();
     toast.success("Promoción 2x1 eliminada.");
   };
 

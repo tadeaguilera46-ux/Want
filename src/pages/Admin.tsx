@@ -17,7 +17,6 @@ import {
   Sparkles,
   Wifi,
 } from "lucide-react";
-import { createAuditLog } from "../lib/audit-logs";
 import { getDb } from "../lib/firebase";
 import { toast } from "sonner";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
@@ -578,7 +577,7 @@ const Admin = () => {
   const handleCreateStaff = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!restaurantId) return;
+    if (!restaurantId || !user) return;
 
     try {
       setCreatingStaff(true);
@@ -589,15 +588,11 @@ const Admin = () => {
         email: staffEmail,
         password: staffPassword,
         role: staffRole,
-      });
-
-      await createAuditLog({
-        restaurantId,
-        action: "empleado_actualizado",
-        userUid: user?.uid,
-        userEmail: user?.email || "",
-        userRole: "admin",
-        description: `Admin creó empleado ${staffEmail} (${staffRole})`,
+        actor: {
+          actorUid: user.uid,
+          actorEmail: user.email,
+          actorRole: "admin",
+        },
       });
 
       setStaffEmail("");
@@ -613,7 +608,7 @@ const Admin = () => {
   };
 
   const avanzarCuenta = async (cuenta: Cuenta) => {
-    if (!restaurantId) return;
+    if (!restaurantId || !user) return;
 
     try {
       if (cuenta.estado === "pendiente") {
@@ -621,7 +616,12 @@ const Admin = () => {
           restaurantId,
           cuenta.id,
           "en_camino",
-          Number(cuenta.mesa)
+          Number(cuenta.mesa),
+          {
+            actorUid: user.uid,
+            actorEmail: user.email,
+            actorRole: "admin",
+          }
         );
         return;
       }
@@ -631,7 +631,12 @@ const Admin = () => {
           restaurantId,
           cuenta.id,
           "pagada",
-          Number(cuenta.mesa)
+          Number(cuenta.mesa),
+          {
+            actorUid: user.uid,
+            actorEmail: user.email,
+            actorRole: "admin",
+          }
         );
       }
     } catch (error) {
@@ -641,7 +646,7 @@ const Admin = () => {
   };
 
   const marcarMesaLista = async (numeroMesa: number) => {
-    if (!restaurantId) return;
+    if (!restaurantId || !user) return;
 
     const ok = window.confirm(
       `¿Confirmás que la mesa ${numeroMesa} ya está preparada para nuevos clientes?`
@@ -649,15 +654,10 @@ const Admin = () => {
     if (!ok) return;
 
     try {
-      await markMesaAvailable(restaurantId, numeroMesa);
-      await createAuditLog({
-        restaurantId,
-        action: "mesa_limpiada",
-        userUid: user?.uid,
-        userEmail: user?.email || "",
-        userRole: "admin",
-        mesa: numeroMesa,
-        description: `Admin marcó mesa ${numeroMesa} como disponible`,
+      await markMesaAvailable(restaurantId, numeroMesa, {
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
       });
       toast.success("Mesa marcada como disponible");
     } catch (error) {
@@ -667,7 +667,7 @@ const Admin = () => {
   };
 
   const marcarMesaParaLimpieza = async (numeroMesa: number) => {
-    if (!restaurantId) return;
+    if (!restaurantId || !user) return;
 
     const ok = window.confirm(
       `¿Querés marcar la mesa ${numeroMesa} como pendiente de limpieza?`
@@ -675,15 +675,10 @@ const Admin = () => {
     if (!ok) return;
 
     try {
-      await markMesaNeedsCleaning(restaurantId, numeroMesa);
-      await createAuditLog({
-        restaurantId,
-        action: "mesa_limpiada",
-        userUid: user?.uid,
-        userEmail: user?.email || "",
-        userRole: "admin",
-        mesa: numeroMesa,
-        description: `Admin envió mesa ${numeroMesa} a limpieza`,
+      await markMesaNeedsCleaning(restaurantId, numeroMesa, {
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
       });
       toast.success("Mesa marcada como pendiente de limpieza");
     } catch (error) {

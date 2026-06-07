@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  addDoc,
   collection,
   doc,
   getDocs,
@@ -9,13 +8,14 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  updateDoc,
+  writeBatch,
   where,
 } from "firebase/firestore";
 import { Clock, LogIn, LogOut, Users } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import { toast } from "sonner";
 import { useAuth } from "../lib/auth-context";
+import { writeAuditLog } from "../lib/audit-logs";
 
 type Shift = {
   id: string;
@@ -88,7 +88,9 @@ export function ShiftsPanel({ restaurantId }: { restaurantId: string }) {
     if (!user) return;
     try {
       setStarting(true);
-      await addDoc(collection(db, "restaurants", restaurantId, "shifts"), {
+      const shiftRef = doc(collection(db, "restaurants", restaurantId, "shifts"));
+      const batch = writeBatch(db);
+      batch.set(shiftRef, {
         staffId: user.uid,
         staffEmail: user.email ?? "",
         role: "staff",
@@ -96,6 +98,21 @@ export function ShiftsPanel({ restaurantId }: { restaurantId: string }) {
         endedAt: null,
         restaurantId,
       });
+      writeAuditLog(batch, {
+        restaurantId,
+        action: "turno_iniciado",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "staff",
+        entityType: "shift",
+        entityId: shiftRef.id,
+        description: `Se inicio turno de ${user.email || user.uid}`,
+        changes: {
+          before: { exists: false },
+          after: { staffId: user.uid, endedAt: null },
+        },
+      });
+      await batch.commit();
       toast.success("Turno iniciado.");
     } catch {
       toast.error("No se pudo iniciar el turno.");
@@ -105,12 +122,28 @@ export function ShiftsPanel({ restaurantId }: { restaurantId: string }) {
   };
 
   const handleEnd = async () => {
-    if (!myOpenShift) return;
+    if (!myOpenShift || !user) return;
     try {
       setEnding(true);
-      await updateDoc(doc(db, "restaurants", restaurantId, "shifts", myOpenShift.id), {
+      const batch = writeBatch(db);
+      batch.update(doc(db, "restaurants", restaurantId, "shifts", myOpenShift.id), {
         endedAt: serverTimestamp(),
       });
+      writeAuditLog(batch, {
+        restaurantId,
+        action: "turno_finalizado",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "staff",
+        entityType: "shift",
+        entityId: myOpenShift.id,
+        description: `Se finalizo turno de ${myOpenShift.staffEmail}`,
+        changes: {
+          before: { endedAt: null },
+          after: { ended: true },
+        },
+      });
+      await batch.commit();
       toast.success("Turno cerrado.");
     } catch {
       toast.error("No se pudo cerrar el turno.");
@@ -120,9 +153,26 @@ export function ShiftsPanel({ restaurantId }: { restaurantId: string }) {
   };
 
   const handleEndOther = async (shift: Shift) => {
-    await updateDoc(doc(db, "restaurants", restaurantId, "shifts", shift.id), {
+    if (!user) return;
+    const batch = writeBatch(db);
+    batch.update(doc(db, "restaurants", restaurantId, "shifts", shift.id), {
       endedAt: serverTimestamp(),
     });
+    writeAuditLog(batch, {
+      restaurantId,
+      action: "turno_finalizado_por_admin",
+      actorUid: user.uid,
+      actorEmail: user.email,
+      actorRole: "admin",
+      entityType: "shift",
+      entityId: shift.id,
+      description: `Se finalizo turno de ${shift.staffEmail}`,
+      changes: {
+        before: { endedAt: null },
+        after: { ended: true },
+      },
+    });
+    await batch.commit();
     toast.success(`Turno de ${shift.staffEmail} cerrado.`);
   };
 

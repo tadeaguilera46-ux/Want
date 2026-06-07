@@ -11,7 +11,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { getDb } from "../lib/firebase";
-import { createAuditLog } from "../lib/audit-logs";
+import { writeAuditLog } from "../lib/audit-logs";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
 import { useWakeLock } from "../hooks/useWakeLock";
 import {
@@ -19,9 +19,9 @@ import {
   onSnapshot,
   query,
   orderBy,
-  updateDoc,
   doc,
   serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
 import { toast } from "sonner";
 import type {
@@ -213,7 +213,7 @@ const Bar = () => {
   }, [restaurantId]);
 
   const updateStatus = async (id: string, newStatus: EstadoBarra) => {
-    if (loadingById[id] || !restaurantId) return;
+    if (loadingById[id] || !restaurantId || !user) return;
 
     if (!isOnline) {
       toast.error("Sin conexión. No se pueden actualizar pedidos ahora.");
@@ -239,21 +239,27 @@ const Bar = () => {
         updateData.barraReadyAt = serverTimestamp();
       }
 
-      await updateDoc(ref, updateData);
+      const batch = writeBatch(db);
+      batch.update(ref, updateData);
       if (newStatus === "listo") {
         const order = orders.find((currentOrder) => currentOrder.id === id);
 
-        await createAuditLog({
+        writeAuditLog(batch, {
           restaurantId,
           action: "pedido_listo",
-          userUid: user?.uid,
-          userEmail: user?.email || "",
-          userRole: "bar",
+          actorUid: user.uid,
+          actorEmail: user.email,
+          actorRole: "bar",
           mesa: Number(order?.mesa || 0),
           pedidoId: id,
           description: `Barra marcó bebidas listas en mesa ${order?.mesa || "-"}`,
+          changes: {
+            before: { estadoBarra: order?.estadoBarra ?? "pendiente" },
+            after: { estadoBarra: newStatus },
+          },
         });
       }
+      await batch.commit();
     } catch (err) {
       console.error("Error actualizando estado de barra:", err);
       setError("No se pudo actualizar el estado. Reintentá.");

@@ -15,7 +15,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth-context";
 import { toast } from "sonner";
 import { getDb } from "../lib/firebase";
-import { createAuditLog } from "../lib/audit-logs";
+import { writeAuditLog } from "../lib/audit-logs";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
 import { useWakeLock } from "../hooks/useWakeLock";
 import {
@@ -23,10 +23,10 @@ import {
   onSnapshot,
   query,
   orderBy,
-  updateDoc,
   doc,
   serverTimestamp,
   limit,
+  writeBatch,
 } from "firebase/firestore";
 import { actualizarEstadoCuenta } from "../lib/bill";
 import { markMesaAvailable } from "../lib/mesas";
@@ -469,11 +469,29 @@ const Runner = () => {
   }, [restaurantId, soundEnabled]);
 
   const markResolved = async (id: string) => {
-    if (!restaurantId) return;
-    await updateDoc(doc(db, "restaurants", restaurantId, "assistanceRequests", id), {
+    if (!restaurantId || !user) return;
+    const request = assistanceRequests.find((current) => current.id === id);
+    const batch = writeBatch(db);
+    batch.update(doc(db, "restaurants", restaurantId, "assistanceRequests", id), {
       status: "resolved",
       resolvedAt: serverTimestamp(),
     });
+    writeAuditLog(batch, {
+      restaurantId,
+      action: "asistencia_resuelta",
+      actorUid: user.uid,
+      actorEmail: user.email,
+      actorRole: "runner",
+      mesa: request?.mesa,
+      entityType: "assistance_request",
+      entityId: id,
+      description: `Runner resolvio solicitud ${id}`,
+      changes: {
+        before: { status: request?.status ?? "pending" },
+        after: { status: "resolved" },
+      },
+    });
+    await batch.commit();
   };
 
   const ASSIST_LABELS: Record<string, { emoji: string; label: string }> = {
@@ -522,7 +540,7 @@ const Runner = () => {
   };
 
   const markDelivered = async (task: ReadyTask) => {
-    if (loadingOrdersById[task.id] || !restaurantId) return;
+    if (loadingOrdersById[task.id] || !restaurantId || !user) return;
     if (!isOnline) {
       toast.error("Sin conexión. No se pueden entregar pedidos.");
       return;
@@ -533,34 +551,43 @@ const Runner = () => {
       setError(null);
 
       const ref = doc(db, "restaurants", restaurantId, "pedidos", task.order.id);
+      const batch = writeBatch(db);
 
       if (task.type === "food") {
-        await updateDoc(ref, {
+        batch.update(ref, {
           estadoCocina: "entregado",
           cocinaDeliveredAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
-          
         });
       }
 
-     await createAuditLog({
+      writeAuditLog(batch, {
         restaurantId,
         action: "pedido_entregado",
-        userUid: user?.uid,
-        userEmail: user?.email || "",
-        userRole: "runner",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "runner",
         mesa: Number(task.order.mesa),
         pedidoId: task.order.id,
-        description: `Runner entregó la comida de mesa ${task.order.mesa}`,
+        description: `Runner entregó ${task.type === "food" ? "comida" : "bebidas"} de mesa ${task.order.mesa}`,
+        changes: {
+          before: {
+            [task.type === "food" ? "estadoCocina" : "estadoBarra"]: "listo",
+          },
+          after: {
+            [task.type === "food" ? "estadoCocina" : "estadoBarra"]: "entregado",
+          },
+        },
       });
 
       if (task.type === "drinks") {
-        await updateDoc(ref, {
+        batch.update(ref, {
           estadoBarra: "entregado",
           barraDeliveredAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         });
       }
+      await batch.commit();
     } catch (err) {
       console.error("Error marcando pedido como entregado:", err);
       setError("No se pudo marcar el pedido como entregado.");
@@ -570,7 +597,7 @@ const Runner = () => {
   };
 
   const updateBill = async (id: string, estado: EstadoCuenta) => {
-    if (loadingBillsById[id] || !restaurantId) return;
+    if (loadingBillsById[id] || !restaurantId || !user) return;
     if (!isOnline) {
       toast.error("Sin conexión. No se pueden actualizar cuentas.");
       return;
@@ -590,28 +617,13 @@ const Runner = () => {
         restaurantId,
         id,
         estado,
-        Number(bill.mesa)
+        Number(bill.mesa),
+        {
+          actorUid: user.uid,
+          actorEmail: user.email,
+          actorRole: "runner",
+        }
       );
-
-      await createAuditLog({
-        restaurantId,
-        action:
-          estado === "pagada"
-            ? "cuenta_pagada"
-            : "cuenta_solicitada",
-
-        userUid: user?.uid,
-        userEmail: user?.email || "",
-        userRole: "runner",
-
-        mesa: Number(bill.mesa),
-        cuentaId: bill.id,
-
-        description:
-          estado === "pagada"
-            ? `Runner marcó cuenta pagada mesa ${bill.mesa}`
-            : `Runner llevó cuenta a mesa ${bill.mesa}`,
-      });
 
     } catch (err) {
       console.error("Error actualizando cuenta:", err);
@@ -622,7 +634,7 @@ const Runner = () => {
   };
 
   const handleMesaLimpia = async (bill: CuentaRecord) => {
-    if (loadingBillsById[bill.id] || !restaurantId) return;
+    if (loadingBillsById[bill.id] || !restaurantId || !user) return;
     if (!isOnline) {
       toast.error("Sin conexión. No se puede actualizar la mesa.");
       return;
@@ -639,7 +651,11 @@ const Runner = () => {
       setError(null);
 
       try {
-        await markMesaAvailable(restaurantId, Number(bill.mesa));
+        await markMesaAvailable(restaurantId, Number(bill.mesa), {
+          actorUid: user.uid,
+          actorEmail: user.email,
+          actorRole: "runner",
+        });
       } catch (mesaErr) {
         // La mesa puede tener datos inconsistentes (mesas viejas), pero igual cerramos la cuenta
         console.warn("markMesaAvailable falló, cerrando solo la cuenta:", mesaErr);
@@ -649,18 +665,13 @@ const Runner = () => {
         restaurantId,
         bill.id,
         "cerrada",
-        Number(bill.mesa)
+        Number(bill.mesa),
+        {
+          actorUid: user.uid,
+          actorEmail: user.email,
+          actorRole: "runner",
+        }
       );
-      await createAuditLog({
-        restaurantId,
-        action: "mesa_limpiada",
-        userUid: user?.uid,
-        userEmail: user?.email || "",
-        userRole: "runner",
-        mesa: Number(bill.mesa),
-        cuentaId: bill.id,
-        description: `Runner marcó mesa ${bill.mesa} como limpia`,
-      });
     } catch (err) {
       console.error("Error marcando mesa limpia:", err);
       setError("No se pudo marcar la mesa como limpia.");

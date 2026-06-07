@@ -25,6 +25,7 @@ import {
 } from "../lib/stock";
 
 import type { StockItem, StockUnit } from "../types/stock";
+import { useAuth } from "../lib/auth-context";
 
 const db = getDb();
 
@@ -36,6 +37,7 @@ type Props = {
 const units: StockUnit[] = ["kg", "g", "l", "ml", "unit"];
 
 export const StockPanel = ({ restaurantId, plan }: Props) => {
+  const { user } = useAuth();
   const stockEnabled = canUseStock(plan);
 
   const [items, setItems] = useState<StockItem[]>([]);
@@ -82,7 +84,7 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!stockEnabled) return;
+    if (!stockEnabled || !user) return;
 
     try {
       setSaving(true);
@@ -97,6 +99,10 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
         costPerUnit: costPerUnit ? Number(costPerUnit) : undefined,
         supplier,
         notes,
+      }, {
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
       });
 
       setName("");
@@ -351,7 +357,14 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
 
                     <button
                       disabled={!stockEnabled}
-                      onClick={() => addStock(restaurantId, item, 1)}
+                      onClick={() =>
+                        user &&
+                        addStock(restaurantId, item, 1, {
+                          actorUid: user.uid,
+                          actorEmail: user.email,
+                          actorRole: "admin",
+                        })
+                      }
                       className="h-10 rounded-lg border border-zinc-200 px-4 font-semibold text-zinc-900 disabled:opacity-50"
                     >
                       +1
@@ -359,7 +372,14 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
 
                     <button
                       disabled={!stockEnabled}
-                      onClick={() => removeStock(restaurantId, item, 1)}
+                      onClick={() =>
+                        user &&
+                        removeStock(restaurantId, item, 1, {
+                          actorUid: user.uid,
+                          actorEmail: user.email,
+                          actorRole: "admin",
+                        })
+                      }
                       className="h-10 rounded-lg border border-zinc-200 px-4 font-semibold text-zinc-900 disabled:opacity-50"
                     >
                       -1
@@ -370,8 +390,13 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
                       onClick={() =>
                         toggleStockItem(
                           restaurantId,
-                          item.id,
-                          !item.active
+                          item,
+                          !item.active,
+                          {
+                            actorUid: user?.uid || "",
+                            actorEmail: user?.email,
+                            actorRole: "admin",
+                          }
                         )
                       }
                       className="flex h-10 items-center gap-2 rounded-lg bg-zinc-950 px-4 font-semibold text-white disabled:opacity-50"

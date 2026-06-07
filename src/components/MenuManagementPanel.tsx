@@ -29,6 +29,7 @@ import {
 import type { MenuIngredient, RecipeUnit } from "../lib/store";
 import type { StockItem } from "../types/stock";
 import { toast } from "sonner";
+import { useAuth } from "../lib/auth-context";
 
 const db = getDb();
 const storage = getStorageService();
@@ -336,6 +337,7 @@ const IngredientsEditor = ({
 };
 
 export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) {
+  const { user } = useAuth();
   const [items, setItems] = useState<MenuItem[]>([]);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -524,6 +526,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
   };
 
   const handleCreate = async () => {
+    if (!user) return;
     const normalizedName = name.trim();
     const normalizedPrice = Number(price);
     const normalizedCategory =
@@ -551,6 +554,10 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
         ingredients,
         variants: [],
         comboItems: type === "combo" ? comboItemIds : [],
+      }, {
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
       });
 
       setName("");
@@ -592,7 +599,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
   };
 
   const saveEditing = async (item: MenuItem) => {
-    if (!draft) return;
+    if (!draft || !user) return;
 
     const normalizedName = draft.name.trim();
     const normalizedPrice = Number(draft.price);
@@ -626,6 +633,10 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
         allergens: draft.allergens?.length ? draft.allergens : undefined,
         modifierGroups: draft.modifierGroups?.length ? draft.modifierGroups : undefined,
         comboItems: draft.type === "combo" ? (draft.comboItems || []) : [],
+      }, {
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
       });
 
       cancelEditing();
@@ -638,11 +649,16 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
   };
 
   const toggleActive = async (item: MenuItem) => {
+    if (!user) return;
     try {
       setSavingId(item.id);
 
       await updateMenuItem(restaurantId, item.id, {
         active: !item.active,
+      }, {
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
       });
     } catch (error) {
       console.error("Error pausando/activando producto:", error);
@@ -653,6 +669,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
   };
 
   const handleDelete = async (item: MenuItem) => {
+    if (!user) return;
     const ok = window.confirm(
       `¿Seguro que querés eliminar "${item.name}" del menú?`
     );
@@ -661,7 +678,11 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
 
     try {
       setSavingId(item.id);
-      await deleteMenuItem(restaurantId, item.id);
+      await deleteMenuItem(restaurantId, item, {
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
+      });
     } catch (error) {
       console.error("Error eliminando producto:", error);
       toast.error("No se pudo eliminar el producto");

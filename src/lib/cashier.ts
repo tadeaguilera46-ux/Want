@@ -1,13 +1,12 @@
-import {
-  addDoc,
-  collection,
-  doc,
-  getDoc,
-  serverTimestamp,
-  updateDoc,
-} from "firebase/firestore";
+import { doc, runTransaction, serverTimestamp } from "firebase/firestore";
 import { getDb } from "./firebase";
 import { pedirCuenta } from "./bill";
+import {
+  createAuditLog,
+  writeAuditLog,
+  type AuditActor,
+  type CreateAuditLogInput,
+} from "./audit-logs";
 import type { CuentaInput, EstadoCuenta, MetodoPago } from "./restaurant";
 import type {
   CashierAuditAction,
@@ -22,55 +21,30 @@ const normalizeReason = (reason: string) => reason.trim();
 
 const assertReason = (reason: string) => {
   if (normalizeReason(reason).length < 4) {
-    throw new Error("Tenés que ingresar un motivo claro.");
+    throw new Error("Tenes que ingresar un motivo claro.");
   }
 };
 
-export const createCashierAuditLog = async ({
-  restaurantId,
-  action,
+const cashierActor = (
+  actorUid: string,
+  actorEmail?: string | null
+): AuditActor => ({
   actorUid,
   actorEmail,
-  mesa,
-  cuentaId,
-  pedidoId,
-  reason,
-  metadata,
-}: {
-  restaurantId: string;
-  action: CashierAuditAction;
-  actorUid: string;
-  actorEmail?: string | null;
-  mesa?: number;
-  cuentaId?: string;
-  pedidoId?: string;
-  reason?: string;
-  metadata?: Record<string, unknown>;
-}) => {
-  await addDoc(collection(db, "restaurants", restaurantId, "auditLogs"), {
-      restaurantId,
-      action,
+  actorRole: "cashier",
+});
 
-      actorUid,
-      actorEmail: actorEmail || null,
-
-      userUid: actorUid,
-      userEmail: actorEmail || null,
-      userRole: "cashier",
-
-      mesa: typeof mesa === "number" ? mesa : null,
-      cuentaId: cuentaId || null,
-      pedidoId: pedidoId || null,
-
-      reason: reason?.trim() || null,
-      description: reason?.trim() || action,
-
-      metadata: metadata || {},
-
-      createdAt: serverTimestamp(),
-    }
-  )};
-
+export const createCashierAuditLog = async (
+  input: Omit<CreateAuditLogInput, "actorRole" | "description"> & {
+    action: CashierAuditAction | string;
+    description?: string;
+  }
+) =>
+  createAuditLog({
+    ...input,
+    actorRole: "cashier",
+    description: input.description || input.reason?.trim() || input.action,
+  });
 
 export const createOrRefreshCashierBill = async ({
   data,
@@ -80,25 +54,12 @@ export const createOrRefreshCashierBill = async ({
   data: CuentaInput;
   actorUid: string;
   actorEmail?: string | null;
-}) => {
-  const cuentaId = await pedirCuenta(data);
-
-  await createCashierAuditLog({
-    restaurantId: data.restaurantId,
+}) =>
+  pedirCuenta(data, {
+    ...cashierActor(actorUid, actorEmail),
     action: "cashier_bill_created",
-    actorUid,
-    actorEmail,
-    mesa: data.mesa,
-    cuentaId,
-    metadata: {
-      total: data.total,
-      metodo: data.metodo,
-      splitBill: data.splitBill,
-    },
+    description: `Caja creo o actualizo la cuenta de mesa ${data.mesa}`,
   });
-
-  return cuentaId;
-};
 
 export const updateCashierBillAdjustments = async ({
   restaurantId,
@@ -127,43 +88,45 @@ export const updateCashierBillAdjustments = async ({
   if (hasDiscount) assertReason(discountReason);
   if (hasExtra) assertReason(manualExtraReason);
 
-  const cuentaRef = doc(db, "restaurants", restaurantId, "cuentas", cuentaId);
-  const snapshot = await getDoc(cuentaRef);
+  await runTransaction(db, async (transaction) => {
+    const cuentaRef = doc(db, "restaurants", restaurantId, "cuentas", cuentaId);
+    const snapshot = await transaction.get(cuentaRef);
 
-  if (!snapshot.exists()) {
-    throw new Error("La cuenta no existe.");
-  }
+    if (!snapshot.exists()) throw new Error("La cuenta no existe.");
 
-  const cuenta = snapshot.data();
+    const cuenta = snapshot.data();
+    if (cuenta.estado === "pagada" || cuenta.estado === "cerrada") {
+      throw new Error("No se puede editar una cuenta pagada o cerrada.");
+    }
 
-  if (cuenta.estado === "pagada" || cuenta.estado === "cerrada") {
-    throw new Error("No se puede editar una cuenta pagada o cerrada.");
-  }
-
-  await updateDoc(cuentaRef, {
-    discountType,
-    discountValue: Number(discountValue || 0),
-    discountReason: hasDiscount ? discountReason.trim() : "",
-    manualExtraAmount: Number(manualExtraAmount || 0),
-    manualExtraReason: hasExtra ? manualExtraReason.trim() : "",
-    updatedAt: serverTimestamp(),
-  });
-
-  await createCashierAuditLog({
-    restaurantId,
-    action: hasDiscount
-      ? "cashier_discount_applied"
-      : "cashier_bill_updated",
-    actorUid,
-    actorEmail,
-    mesa: Number(cuenta.mesa),
-    cuentaId,
-    reason: hasDiscount ? discountReason : manualExtraReason,
-    metadata: {
+    const after = {
       discountType,
-      discountValue,
-      manualExtraAmount,
-    },
+      discountValue: Number(discountValue || 0),
+      discountReason: hasDiscount ? discountReason.trim() : "",
+      manualExtraAmount: Number(manualExtraAmount || 0),
+      manualExtraReason: hasExtra ? manualExtraReason.trim() : "",
+    };
+
+    transaction.update(cuentaRef, { ...after, updatedAt: serverTimestamp() });
+    writeAuditLog(transaction, {
+      restaurantId,
+      action: hasDiscount
+        ? "cashier_discount_applied"
+        : "cashier_bill_updated",
+      ...cashierActor(actorUid, actorEmail),
+      mesa: Number(cuenta.mesa),
+      cuentaId,
+      reason: hasDiscount ? discountReason : manualExtraReason,
+      description: `Caja actualizo ajustes de la cuenta ${cuentaId}`,
+      changes: {
+        before: {
+          discountType: cuenta.discountType ?? "none",
+          discountValue: cuenta.discountValue ?? 0,
+          manualExtraAmount: cuenta.manualExtraAmount ?? 0,
+        },
+        after,
+      },
+    });
   });
 };
 
@@ -186,53 +149,54 @@ export const registerCashierPayment = async ({
   actorEmail?: string | null;
   tip?: number;
 }) => {
-  if (!payments.length) {
-    throw new Error("Agregá al menos un pago.");
-  }
+  if (!payments.length) throw new Error("Agrega al menos un pago.");
 
-  const totalPaid = payments.reduce((sum, payment) => {
-    return sum + Number(payment.amount || 0);
-  }, 0);
-
+  const totalPaid = payments.reduce(
+    (sum, payment) => sum + Number(payment.amount || 0),
+    0
+  );
   if (!Number.isFinite(totalPaid) || totalPaid <= 0) {
-    throw new Error("El monto pagado no es válido.");
+    throw new Error("El monto pagado no es valido.");
   }
 
-  const cuentaRef = doc(db, "restaurants", restaurantId, "cuentas", cuentaId);
-  const snapshot = await getDoc(cuentaRef);
+  await runTransaction(db, async (transaction) => {
+    const cuentaRef = doc(db, "restaurants", restaurantId, "cuentas", cuentaId);
+    const snapshot = await transaction.get(cuentaRef);
+    if (!snapshot.exists()) throw new Error("La cuenta no existe.");
 
-  if (!snapshot.exists()) {
-    throw new Error("La cuenta no existe.");
-  }
+    const cuenta = snapshot.data();
+    if (cuenta.estado === "pagada" || cuenta.estado === "cerrada") {
+      throw new Error("La cuenta ya esta pagada o cerrada.");
+    }
 
-  const cuenta = snapshot.data();
-
-  if (cuenta.estado === "pagada" || cuenta.estado === "cerrada") {
-    throw new Error("La cuenta ya está pagada o cerrada.");
-  }
-
-  await updateDoc(cuentaRef, {
-    metodo,
-    payments,
-    paidAmount: totalPaid,
-    ...(tip && tip > 0 ? { tip } : {}),
-    estado: "pagada",
-    paidAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-
-  await createCashierAuditLog({
-    restaurantId,
-    action: "cashier_payment_registered",
-    actorUid,
-    actorEmail,
-    mesa,
-    cuentaId,
-    metadata: {
-      payments,
-      totalPaid,
+    const after = {
       metodo,
-    },
+      payments,
+      paidAmount: totalPaid,
+      tip: tip && tip > 0 ? tip : 0,
+      estado: "pagada",
+    };
+    transaction.update(cuentaRef, {
+      ...after,
+      paidAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    writeAuditLog(transaction, {
+      restaurantId,
+      action: "cashier_payment_registered",
+      ...cashierActor(actorUid, actorEmail),
+      mesa,
+      cuentaId,
+      description: `Caja registro el pago de la cuenta ${cuentaId}`,
+      changes: {
+        before: {
+          estado: cuenta.estado,
+          paidAmount: cuenta.paidAmount ?? 0,
+          metodo: cuenta.metodo ?? null,
+        },
+        after,
+      },
+    });
   });
 };
 
@@ -251,34 +215,35 @@ export const markCashierBillAsUnpaid = async ({
 }) => {
   assertReason(reason);
 
-  const cuentaRef = doc(db, "restaurants", restaurantId, "cuentas", cuentaId);
-  const snapshot = await getDoc(cuentaRef);
+  await runTransaction(db, async (transaction) => {
+    const cuentaRef = doc(db, "restaurants", restaurantId, "cuentas", cuentaId);
+    const snapshot = await transaction.get(cuentaRef);
+    if (!snapshot.exists()) throw new Error("La cuenta no existe.");
 
-  if (!snapshot.exists()) {
-    throw new Error("La cuenta no existe.");
-  }
+    const cuenta = snapshot.data();
+    if (cuenta.estado === "pagada" || cuenta.estado === "cerrada") {
+      throw new Error("No se puede marcar como no paga una cuenta ya pagada.");
+    }
 
-  const cuenta = snapshot.data();
-
-  if (cuenta.estado === "pagada" || cuenta.estado === "cerrada") {
-    throw new Error("No se puede marcar como no paga una cuenta ya pagada.");
-  }
-
-  await updateDoc(cuentaRef, {
-    unpaid: true,
-    unpaidReason: reason.trim(),
-    estado: "pendiente" as EstadoCuenta,
-    updatedAt: serverTimestamp(),
-  });
-
-  await createCashierAuditLog({
-    restaurantId,
-    action: "cashier_marked_unpaid",
-    actorUid,
-    actorEmail,
-    mesa: Number(cuenta.mesa),
-    cuentaId,
-    reason,
+    transaction.update(cuentaRef, {
+      unpaid: true,
+      unpaidReason: reason.trim(),
+      estado: "pendiente" as EstadoCuenta,
+      updatedAt: serverTimestamp(),
+    });
+    writeAuditLog(transaction, {
+      restaurantId,
+      action: "cashier_marked_unpaid",
+      ...cashierActor(actorUid, actorEmail),
+      mesa: Number(cuenta.mesa),
+      cuentaId,
+      reason,
+      description: `Caja marco como impaga la cuenta ${cuentaId}`,
+      changes: {
+        before: { unpaid: cuenta.unpaid ?? false, estado: cuenta.estado },
+        after: { unpaid: true, estado: "pendiente" },
+      },
+    });
   });
 };
 
@@ -295,32 +260,29 @@ export const requestCashierInvoice = async ({
   actorUid: string;
   actorEmail?: string | null;
 }) => {
-  const cuentaRef = doc(db, "restaurants", restaurantId, "cuentas", cuentaId);
-  const snapshot = await getDoc(cuentaRef);
+  await runTransaction(db, async (transaction) => {
+    const cuentaRef = doc(db, "restaurants", restaurantId, "cuentas", cuentaId);
+    const snapshot = await transaction.get(cuentaRef);
+    if (!snapshot.exists()) throw new Error("La cuenta no existe.");
 
-  if (!snapshot.exists()) {
-    throw new Error("La cuenta no existe.");
-  }
-
-  const cuenta = snapshot.data();
-
-  await updateDoc(cuentaRef, {
-    invoice: {
-      ...invoice,
-      status: "requested",
-      requestedAt: serverTimestamp(),
-    },
-    updatedAt: serverTimestamp(),
-  });
-
-  await createCashierAuditLog({
-    restaurantId,
-    action: "cashier_invoice_requested",
-    actorUid,
-    actorEmail,
-    mesa: Number(cuenta.mesa),
-    cuentaId,
-    metadata: invoice,
+    const cuenta = snapshot.data();
+    transaction.update(cuentaRef, {
+      invoice: { ...invoice, status: "requested", requestedAt: serverTimestamp() },
+      updatedAt: serverTimestamp(),
+    });
+    writeAuditLog(transaction, {
+      restaurantId,
+      action: "cashier_invoice_requested",
+      ...cashierActor(actorUid, actorEmail),
+      mesa: Number(cuenta.mesa),
+      cuentaId,
+      description: `Caja solicito factura para la cuenta ${cuentaId}`,
+      changes: {
+        before: { invoiceStatus: cuenta.invoice?.status ?? "not_requested" },
+        after: { invoiceStatus: "requested" },
+      },
+      metadata: invoice as Record<string, unknown>,
+    });
   });
 };
 
@@ -344,10 +306,11 @@ export const markCashierBillPrinted = async ({
     actorEmail,
     mesa,
     cuentaId,
+    description: `Caja imprimio la precuenta ${cuentaId}`,
+    changes: { before: {}, after: { printed: true } },
   });
 };
 
-// FC-005: Reabrir cuenta pagada con motivo obligatorio
 export const reopenCashierBill = async ({
   restaurantId,
   cuentaId,
@@ -361,35 +324,39 @@ export const reopenCashierBill = async ({
   actorUid: string;
   actorEmail?: string | null;
 }) => {
-  if (!reason.trim() || reason.trim().length < 4) {
-    throw new Error("Ingresá un motivo claro para reabrir la cuenta.");
-  }
+  assertReason(reason);
 
-  const cuentaRef = doc(db, "restaurants", restaurantId, "cuentas", cuentaId);
-  const snapshot = await getDoc(cuentaRef);
-  if (!snapshot.exists()) throw new Error("La cuenta no existe.");
+  await runTransaction(db, async (transaction) => {
+    const cuentaRef = doc(db, "restaurants", restaurantId, "cuentas", cuentaId);
+    const snapshot = await transaction.get(cuentaRef);
+    if (!snapshot.exists()) throw new Error("La cuenta no existe.");
 
-  const cuenta = snapshot.data();
-
-  await updateDoc(cuentaRef, {
-    estado: "pendiente",
-    payments: [],
-    paidAmount: 0,
-    tip: 0,
-    metodo: null,
-    reopenReason: reason.trim(),
-    reopenedAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
-
-  await createCashierAuditLog({
-    restaurantId,
-    action: "cashier_bill_created",
-    actorUid,
-    actorEmail,
-    mesa: Number(cuenta.mesa),
-    cuentaId,
-    reason: `Cuenta reabierta · ${reason.trim()}`,
-    metadata: { reopenReason: reason.trim() },
+    const cuenta = snapshot.data();
+    const after = {
+      estado: "pendiente",
+      payments: [],
+      paidAmount: 0,
+      tip: 0,
+      metodo: null,
+      reopenReason: reason.trim(),
+    };
+    transaction.update(cuentaRef, {
+      ...after,
+      reopenedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    writeAuditLog(transaction, {
+      restaurantId,
+      action: "cashier_bill_reopened",
+      ...cashierActor(actorUid, actorEmail),
+      mesa: Number(cuenta.mesa),
+      cuentaId,
+      reason,
+      description: `Caja reabrio la cuenta ${cuentaId}`,
+      changes: {
+        before: { estado: cuenta.estado, paidAmount: cuenta.paidAmount ?? 0 },
+        after,
+      },
+    });
   });
 };

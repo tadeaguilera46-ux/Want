@@ -1,12 +1,11 @@
 import {
   collection,
-  deleteDoc,
   doc,
   serverTimestamp,
-  setDoc,
-  updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { getDb } from "./firebase";
+import { writeAuditLog, type AuditActor } from "./audit-logs";
 import type { MenuIngredient, MenuVariant } from "./store";
 
 const db = getDb();
@@ -63,31 +62,79 @@ export const isMenuItemAvailableNow = (item: MenuItem): boolean => {
 
 export const createMenuItem = async (
   restaurantId: string,
-  data: Omit<MenuItem, "id">
+  data: Omit<MenuItem, "id">,
+  actor: AuditActor
 ) => {
   const ref = doc(collection(db, "restaurants", restaurantId, "menu"));
-
-  await setDoc(ref, {
+  const menuData = {
     ...data,
     ingredients: data.ingredients || [],
     variants: data.variants || [],
     comboItems: data.comboItems || [],
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
+  };
+  const batch = writeBatch(db);
+  batch.set(ref, menuData);
+  writeAuditLog(batch, {
+    restaurantId,
+    action: "menu_item_creado",
+    ...actor,
+    entityType: "menu_item",
+    entityId: ref.id,
+    description: `Se creo producto ${data.name}`,
+    changes: {
+      before: { exists: false },
+      after: data,
+    },
   });
+  await batch.commit();
 };
 
 export const updateMenuItem = async (
   restaurantId: string,
   itemId: string,
-  data: Partial<Omit<MenuItem, "id">>
+  data: Partial<Omit<MenuItem, "id">>,
+  actor: AuditActor
 ) => {
-  await updateDoc(doc(db, "restaurants", restaurantId, "menu", itemId), {
+  const batch = writeBatch(db);
+  batch.update(doc(db, "restaurants", restaurantId, "menu", itemId), {
     ...data,
     updatedAt: serverTimestamp(),
   });
+  writeAuditLog(batch, {
+    restaurantId,
+    action: "menu_item_actualizado",
+    ...actor,
+    entityType: "menu_item",
+    entityId: itemId,
+    description: `Se actualizo producto ${data.name || itemId}`,
+    changes: {
+      before: {},
+      after: data,
+    },
+  });
+  await batch.commit();
 };
 
-export const deleteMenuItem = async (restaurantId: string, itemId: string) => {
-  await deleteDoc(doc(db, "restaurants", restaurantId, "menu", itemId));
+export const deleteMenuItem = async (
+  restaurantId: string,
+  item: MenuItem,
+  actor: AuditActor
+) => {
+  const batch = writeBatch(db);
+  batch.delete(doc(db, "restaurants", restaurantId, "menu", item.id));
+  writeAuditLog(batch, {
+    restaurantId,
+    action: "menu_item_eliminado",
+    ...actor,
+    entityType: "menu_item",
+    entityId: item.id,
+    description: `Se elimino producto ${item.name}`,
+    changes: {
+      before: item,
+      after: { exists: false },
+    },
+  });
+  await batch.commit();
 };

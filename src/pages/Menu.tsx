@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import { Bell, Check, ChevronRight, Receipt, ShoppingCart, X } from "lucide-react";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { collection, doc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { getDb } from "../lib/firebase";
 import { useCart } from "@/lib/CartContext";
 import { parseTableNumber, resolveRuntimeContext } from "../lib/runtime-context";
@@ -14,6 +14,7 @@ import {
   getStoredTableSessionId,
 } from "../lib/table-session";
 import { getSessionById } from "../lib/sessions";
+import { writeAuditLog } from "../lib/audit-logs";
 import MenuItemCard from "@/components/menu/MenuItemCard";
 import {
   getDisplayCategory,
@@ -315,10 +316,33 @@ const Menu = () => {
     try {
       setSendingAssist(true);
       const db = getDb();
-      await addDoc(
-        collection(db, "restaurants", restaurantId, "assistanceRequests"),
-        { mesa: tableNumber, type, status: "pending", sessionId, createdAt: serverTimestamp() }
+      const requestRef = doc(
+        collection(db, "restaurants", restaurantId, "assistanceRequests")
       );
+      const batch = writeBatch(db);
+      batch.set(requestRef, {
+        mesa: tableNumber,
+        type,
+        status: "pending",
+        sessionId,
+        createdAt: serverTimestamp(),
+      });
+      writeAuditLog(batch, {
+        restaurantId,
+        action: "asistencia_solicitada",
+        actorUid: `customer:${sessionId}`,
+        actorRole: "customer",
+        mesa: tableNumber,
+        sessionId,
+        entityType: "assistance_request",
+        entityId: requestRef.id,
+        description: `Cliente solicito asistencia ${type}`,
+        changes: {
+          before: { exists: false },
+          after: { type, status: "pending" },
+        },
+      });
+      await batch.commit();
       setAssistSent(type);
       setTimeout(() => { setAssistOpen(false); setAssistSent(null); }, 2000);
     } catch (e) {

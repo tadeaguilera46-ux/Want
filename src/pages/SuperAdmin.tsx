@@ -4,7 +4,7 @@ import {
   doc,
   onSnapshot,
   serverTimestamp,
-  setDoc,
+  writeBatch,
 } from "firebase/firestore";
 import {
   getAuth,
@@ -24,6 +24,7 @@ import {
 import { getDb } from "../lib/firebase";
 import SuperAdminBillingPanel from "../components/SuperAdminBillingPanel";
 import { createStaffMember } from "../lib/staff";
+import { writeAuditLog } from "../lib/audit-logs";
 
 const db = getDb();
 const auth = getAuth();
@@ -141,6 +142,7 @@ const SuperAdmin = () => {
 
   const handleLogin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!user) return;
 
     try {
       setLoading(true);
@@ -200,7 +202,8 @@ const SuperAdmin = () => {
       setLoading(true);
       setMessage("");
 
-      await setDoc(doc(db, "restaurants", cleanRestaurantId), {
+      const batch = writeBatch(db);
+      batch.set(doc(db, "restaurants", cleanRestaurantId), {
         id: cleanRestaurantId,
         name: cleanName,
         active: true,
@@ -220,7 +223,7 @@ const SuperAdmin = () => {
       });
 
       // Crear subcollección pública con solo campos de branding.
-      await setDoc(
+      batch.set(
         doc(db, "restaurants", cleanRestaurantId, "public", "branding"),
         {
           name: cleanName,
@@ -232,12 +235,32 @@ const SuperAdmin = () => {
           welcomeMessage: "",
         }
       );
+      writeAuditLog(batch, {
+        restaurantId: cleanRestaurantId,
+        action: "restaurante_creado",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "superadmin",
+        entityType: "restaurant",
+        entityId: cleanRestaurantId,
+        description: `Superadmin creo restaurante ${cleanName}`,
+        changes: {
+          before: { exists: false },
+          after: { name: cleanName, active: true, plan: "pro" },
+        },
+      });
+      await batch.commit();
       
       await createStaffMember({
         restaurantId: cleanRestaurantId,
         email: cleanOwnerEmail,
         password: ownerPassword,
         role: "admin",
+        actor: {
+          actorUid: user.uid,
+          actorEmail: user.email,
+          actorRole: "superadmin",
+        },
       });
 
       setRestaurantName("");

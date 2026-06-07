@@ -3,25 +3,19 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Activity,
-  CheckSquare2,
   Clock,
   Receipt,
-  Square,
-  Trash2,
   Truck,
   User,
   Utensils,
   ShieldCheck,
-  X,
 } from "lucide-react";
 import {
   collection,
-  doc,
   limit,
   onSnapshot,
   orderBy,
   query,
-  writeBatch,
   type Timestamp,
 } from "firebase/firestore";
 import { getDb } from "../lib/firebase";
@@ -103,9 +97,6 @@ const AdminAuditLogs = () => {
   const [loading, setLoading] = useState(true);
   const [actionFilter, setActionFilter] = useState("all");
   const [error, setError] = useState<string | null>(null);
-  const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!restaurantId) {
@@ -157,64 +148,6 @@ const AdminAuditLogs = () => {
     return logs.filter((log) => log.action === actionFilter);
   }, [logs, actionFilter]);
 
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  const exitSelectMode = () => {
-    setSelectMode(false);
-    setSelectedIds(new Set());
-  };
-
-  const deleteSelected = async () => {
-    if (!restaurantId || selectedIds.size === 0) return;
-    if (!window.confirm(`¿Borrar ${selectedIds.size} registro(s) seleccionado(s)?`)) return;
-
-    try {
-      setDeleting(true);
-      const batch = writeBatch(db);
-      selectedIds.forEach((id) => {
-        batch.delete(doc(db, "restaurants", restaurantId, "auditLogs", id));
-      });
-      await batch.commit();
-      exitSelectMode();
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  const deleteAll = async () => {
-    if (!restaurantId || filteredLogs.length === 0) return;
-    if (!window.confirm(`¿Borrar todos los ${filteredLogs.length} registros? Esta acción no se puede deshacer.`)) return;
-
-    try {
-      setDeleting(true);
-      // Firestore batch limit is 500; split if needed
-      const chunks: AuditLog[][] = [];
-      for (let i = 0; i < filteredLogs.length; i += 500) {
-        chunks.push(filteredLogs.slice(i, i + 500));
-      }
-      for (const chunk of chunks) {
-        const batch = writeBatch(db);
-        chunk.forEach((log) => {
-          batch.delete(doc(db, "restaurants", restaurantId, "auditLogs", log.id));
-        });
-        await batch.commit();
-      }
-      exitSelectMode();
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setDeleting(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="mx-auto w-full max-w-5xl px-4 py-6">
@@ -248,51 +181,9 @@ const AdminAuditLogs = () => {
                 {filteredLogs.length} evento(s)
               </span>
 
-              {!selectMode ? (
-                <>
-                  <button
-                    onClick={() => setSelectMode(true)}
-                    disabled={filteredLogs.length === 0 || deleting}
-                    className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
-                  >
-                    <CheckSquare2 size={15} />
-                    Seleccionar
-                  </button>
-
-                  <button
-                    onClick={deleteAll}
-                    disabled={filteredLogs.length === 0 || deleting}
-                    className="flex h-10 items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:opacity-40"
-                  >
-                    <Trash2 size={15} />
-                    Borrar todo
-                  </button>
-                </>
-              ) : (
-                <>
-                  <span className="text-sm font-bold text-slate-600">
-                    {selectedIds.size} seleccionado(s)
-                  </span>
-
-                  <button
-                    onClick={deleteSelected}
-                    disabled={selectedIds.size === 0 || deleting}
-                    className="flex h-10 items-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-bold text-white transition hover:bg-red-700 disabled:opacity-40"
-                  >
-                    <Trash2 size={15} />
-                    {deleting ? "Borrando..." : "Borrar seleccionadas"}
-                  </button>
-
-                  <button
-                    onClick={exitSelectMode}
-                    disabled={deleting}
-                    className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
-                  >
-                    <X size={15} />
-                    Cancelar
-                  </button>
-                </>
-              )}
+              <span className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700">
+                Historial inmutable
+              </span>
             </div>
           </div>
 
@@ -338,31 +229,13 @@ const AdminAuditLogs = () => {
         ) : (
           <div className="space-y-3">
             {filteredLogs.map((log) => {
-              const isSelected = selectedIds.has(log.id);
               return (
                 <article
                   key={log.id}
-                  onClick={() => selectMode && toggleSelect(log.id)}
-                  className={`rounded-xl border p-4 shadow-sm transition ${
-                    selectMode ? "cursor-pointer" : ""
-                  } ${
-                    isSelected
-                      ? "border-red-300 bg-red-50 ring-2 ring-red-200"
-                      : "border-slate-200 bg-white"
-                  }`}
+                  className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
                 >
                   <div className="flex items-start gap-3">
-                    {selectMode && (
-                      <div className="mt-0.5 shrink-0">
-                        {isSelected ? (
-                          <CheckSquare2 size={20} className="text-red-600" />
-                        ) : (
-                          <Square size={20} className="text-slate-400" />
-                        )}
-                      </div>
-                    )}
-
-                    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white ${isSelected ? "bg-red-500" : "bg-slate-950"}`}>
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-950 text-white">
                       {actionIcon(log.action)}
                     </div>
 

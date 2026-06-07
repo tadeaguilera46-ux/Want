@@ -150,6 +150,49 @@ service cloud.firestore {
         && request.resource.data.status == "active";
     }
 
+    function isValidAuditLog(restaurantId) {
+      return request.resource.data.restaurantId == restaurantId
+        && request.resource.data.action is string
+        && request.resource.data.actorUid is string
+        && request.resource.data.actorRole is string
+        && request.resource.data.entityType is string
+        && request.resource.data.entityId is string
+        && request.resource.data.description is string
+        && request.resource.data.changes is map
+        && request.resource.data.changes.before is map
+        && request.resource.data.changes.after is map
+        && request.resource.data.metadata is map
+        && request.resource.data.createdAt == request.time;
+    }
+
+    function isValidStaffAuditLog(restaurantId) {
+      return isActiveStaff(restaurantId)
+        && request.resource.data.actorUid == request.auth.uid;
+    }
+
+    function isValidCustomerAuditLog(restaurantId) {
+      return request.resource.data.actorRole == "customer"
+        && request.resource.data.sessionId is string
+        && request.resource.data.actorUid
+           == "customer:" + request.resource.data.sessionId
+        && isValidTableNumber(request.resource.data.mesa)
+        && sessionExists(restaurantId, request.resource.data.sessionId)
+        && getAfter(sessionPath(restaurantId, request.resource.data.sessionId)).data.tableNumber
+           == request.resource.data.mesa
+        && (
+          (
+            request.resource.data.action == "cuenta_solicitada"
+            && getAfter(sessionPath(restaurantId, request.resource.data.sessionId)).data.billRequested
+               == true
+          )
+          || (
+            request.resource.data.action == "asistencia_solicitada"
+            && getAfter(sessionPath(restaurantId, request.resource.data.sessionId)).data.status
+               == "active"
+          )
+        );
+    }
+
     match /restaurants/{restaurantId} {
       allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
 
@@ -347,17 +390,16 @@ service cloud.firestore {
     match /restaurants/{restaurantId}/auditLogs/{auditLogId} {
       allow read: if isSuperAdmin() || isAdmin(restaurantId);
 
-      allow create: if (isSuperAdmin()
-        || isAdmin(restaurantId)
-        || isCashier(restaurantId)
-        || isRunner(restaurantId)
-        || isKitchen(restaurantId)
-        || isBar(restaurantId))
-        && request.resource.data.actorUid == request.auth.uid;
+      allow create: if isValidAuditLog(restaurantId)
+        && (
+          (isSuperAdmin()
+            && request.resource.data.actorUid == request.auth.uid)
+          || isValidStaffAuditLog(restaurantId)
+          || isValidCustomerAuditLog(restaurantId)
+        );
 
       allow update: if false;
-      // F-05: solo superAdmin puede borrar audit logs — admin del restaurante no.
-      allow delete: if isSuperAdmin();
+      allow delete: if false;
     }
 
     match /restaurants/{restaurantId}/assistanceRequests/{requestId} {

@@ -6,13 +6,13 @@ import {
   onSnapshot,
   query,
   orderBy,
-  updateDoc,
   doc,
   serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
 import { ChefHat, Clock3, Flame, CheckCircle2, LogOut } from "lucide-react";
 import { toast } from "sonner";
-import { createAuditLog } from "../lib/audit-logs";
+import { writeAuditLog } from "../lib/audit-logs";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
 import { useWakeLock } from "../hooks/useWakeLock";
 import type {
@@ -197,7 +197,7 @@ const Kitchen = () => {
   }, [restaurantId]);
 
   const cambiarEstado = async (id: string, estado: EstadoCocina) => {
-    if (loadingById[id] || !restaurantId) return;
+    if (loadingById[id] || !restaurantId || !user) return;
 
     if (!isOnline) {
       toast.error("Sin conexión. No se pueden actualizar pedidos ahora.");
@@ -223,21 +223,27 @@ const Kitchen = () => {
         updateData.cocinaReadyAt = serverTimestamp();
       }
 
-      await updateDoc(ref, updateData);
+      const batch = writeBatch(db);
+      batch.update(ref, updateData);
       if (estado === "listo") {
         const pedido = pedidos.find((currentPedido) => currentPedido.id === id);
 
-        await createAuditLog({
+        writeAuditLog(batch, {
           restaurantId,
           action: "pedido_listo",
-          userUid: user?.uid,
-          userEmail: user?.email || "",
-          userRole: "kitchen",
+          actorUid: user.uid,
+          actorEmail: user.email,
+          actorRole: "kitchen",
           mesa: Number(pedido?.mesa || 0),
           pedidoId: id,
           description: `Cocina marcó pedido listo en mesa ${pedido?.mesa || "-"}`,
+          changes: {
+            before: { estadoCocina: pedido?.estadoCocina ?? "pendiente" },
+            after: { estadoCocina: estado },
+          },
         });
       }
+      await batch.commit();
     } catch (err) {
       console.error("Error actualizando estado de cocina:", err);
       setError("No se pudo actualizar el estado. Reintentá.");

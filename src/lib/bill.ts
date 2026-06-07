@@ -7,6 +7,7 @@ import {
 } from "firebase/firestore";
 import { mesaDocRef } from "./mesas";
 import { sessionDocRef } from "./sessions";
+import { writeAuditLog, type AuditActor } from "./audit-logs";
 import type { CuentaInput, CuentaRecord, EstadoCuenta } from "./restaurant";
 
 const db = getDb();
@@ -136,13 +137,27 @@ export const getCuentaBySessionId = async (
   };
 };
 
-export const pedirCuenta = async (data: CuentaInput) => {
+type BillAuditActor = AuditActor & {
+  action?: string;
+  description?: string;
+};
+
+export const pedirCuenta = async (
+  data: CuentaInput,
+  auditActor?: BillAuditActor
+) => {
   validateCuentaInput(data);
 
   const restaurantId = normalizeRestaurantId(data.restaurantId);
   const mesa = data.mesa;
 
   const activeSessionId = await getActiveSessionIdForMesa(restaurantId, mesa);
+  const actor: BillAuditActor = auditActor || {
+    actorUid: `customer:${activeSessionId}`,
+    actorRole: "customer",
+    action: "cuenta_solicitada",
+    description: `Cliente solicito la cuenta de mesa ${mesa}`,
+  };
 
   const totalReal = await calcularTotalRealSesion({
     restaurantId,
@@ -256,6 +271,30 @@ export const pedirCuenta = async (data: CuentaInput) => {
         { merge: true }
       );
 
+      writeAuditLog(transaction, {
+        restaurantId,
+        action: actor.action || "cuenta_solicitada",
+        actorUid: actor.actorUid,
+        actorEmail: actor.actorEmail,
+        actorRole: actor.actorRole,
+        mesa,
+        cuentaId: activeSessionId,
+        sessionId: activeSessionId,
+        description:
+          actor.description || `Se actualizo la cuenta de mesa ${mesa}`,
+        changes: {
+          before: {
+            estado: cuentaData.estado,
+            total: cuentaData.total,
+            billRequested: sessionData?.billRequested ?? false,
+          },
+          after: {
+            estado: cuentaData.estado,
+            total: totalReal,
+            billRequested: true,
+          },
+        },
+      });
       return;
     }
 
@@ -270,6 +309,22 @@ export const pedirCuenta = async (data: CuentaInput) => {
       createdAt: now,
       updatedAt: now,
     });
+
+    writeAuditLog(transaction, {
+      restaurantId,
+      action: actor.action || "cuenta_solicitada",
+      actorUid: actor.actorUid,
+      actorEmail: actor.actorEmail,
+      actorRole: actor.actorRole,
+      mesa,
+      cuentaId: activeSessionId,
+      sessionId: activeSessionId,
+      description: actor.description || `Se solicito la cuenta de mesa ${mesa}`,
+      changes: {
+        before: { exists: false, billRequested: sessionData?.billRequested ?? false },
+        after: { estado: "pendiente", total: totalReal, billRequested: true },
+      },
+    });
   });
 
   return cuentaId;
@@ -279,7 +334,8 @@ export const actualizarEstadoCuenta = async (
   restaurantId: string,
   id: string,
   estado: EstadoCuenta,
-  mesa?: number
+  mesa: number | undefined,
+  actor: AuditActor
 ) => {
   const normalizedRestaurantId = normalizeRestaurantId(restaurantId);
   const sessionId = normalizeSessionId(id);
@@ -318,6 +374,19 @@ export const actualizarEstadoCuenta = async (
         estado,
         updatedAt: now,
       });
+      writeAuditLog(transaction, {
+        restaurantId: normalizedRestaurantId,
+        action: estado === "cerrada" ? "cuenta_cerrada" : "cuenta_actualizada",
+        ...actor,
+        mesa: mesaObjetivo,
+        cuentaId: sessionId,
+        sessionId,
+        description: `Se actualizo la cuenta ${sessionId} a ${estado}`,
+        changes: {
+          before: { estado: cuentaData.estado },
+          after: { estado },
+        },
+      });
       return;
     }
 
@@ -353,5 +422,18 @@ export const actualizarEstadoCuenta = async (
       },
       { merge: true }
     );
+    writeAuditLog(transaction, {
+      restaurantId: normalizedRestaurantId,
+      action: "cuenta_pagada",
+      ...actor,
+      mesa: mesaObjetivo,
+      cuentaId: sessionId,
+      sessionId,
+      description: `Se marco pagada la cuenta ${sessionId}`,
+      changes: {
+        before: { estado: cuentaData.estado },
+        after: { estado: "pagada", ordersLocked: true, billRequested: true },
+      },
+    });
   });
 };

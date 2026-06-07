@@ -1,5 +1,5 @@
 import { ChangeEvent, useEffect, useState } from "react";
-import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, onSnapshot, serverTimestamp, writeBatch } from "firebase/firestore";
 import {
   getDownloadURL,
   getStorage,
@@ -9,6 +9,8 @@ import {
 import { Image, Loader2, Paintbrush, Save, Upload } from "lucide-react";
 import { getDb, getStorageService } from "../lib/firebase";
 import { useRestaurantConfig } from "../lib/restaurant-config";
+import { useAuth } from "../lib/auth-context";
+import { writeAuditLog } from "../lib/audit-logs";
 
 const db = getDb();
 const storage = getStorageService();
@@ -43,6 +45,7 @@ export function RestaurantBrandingPanel({
   restaurantId: string;
 }) {
   const { config } = useRestaurantConfig(restaurantId);
+  const { user } = useAuth();
 
   const [name, setName] = useState("");
   const [logoUrl, setLogoUrl] = useState("");
@@ -82,7 +85,7 @@ export function RestaurantBrandingPanel({
     const file = event.target.files?.[0];
     event.target.value = "";
 
-    if (!file || !restaurantId) return;
+    if (!file || !restaurantId || !user) return;
 
     const maxSize = target === "logo" ? MAX_LOGO_SIZE_MB : MAX_COVER_SIZE_MB;
     const validationError = validateImageFile(file, maxSize);
@@ -146,18 +149,34 @@ export function RestaurantBrandingPanel({
 
       const brandingField = target === "logo" ? "logoUrl" : "coverUrl";
 
-      await setDoc(
+      const batch = writeBatch(db);
+      batch.set(
         doc(db, "restaurants", restaurantId),
         { [brandingField]: downloadUrl, updatedAt: serverTimestamp() },
         { merge: true }
       );
 
       // Mantener public/branding sincronizado con el doc raíz.
-      await setDoc(
+      batch.set(
         doc(db, "restaurants", restaurantId, "public", "branding"),
         { [brandingField]: downloadUrl },
         { merge: true }
       );
+      writeAuditLog(batch, {
+        restaurantId,
+        action: "branding_actualizado",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
+        entityType: "branding",
+        entityId: "branding",
+        description: `Admin actualizo ${brandingField}`,
+        changes: {
+          before: { [brandingField]: target === "logo" ? logoUrl : coverUrl },
+          after: { [brandingField]: downloadUrl },
+        },
+      });
+      await batch.commit();
 
       setMessage(
         target === "logo"
@@ -179,6 +198,7 @@ export function RestaurantBrandingPanel({
   };
 
   const handleSave = async () => {
+    if (!user) return;
     try {
       setSaving(true);
       setMessage("");
@@ -192,18 +212,34 @@ export function RestaurantBrandingPanel({
         welcomeMessage: welcomeMessage.trim(),
       };
 
-      await setDoc(
+      const batch = writeBatch(db);
+      batch.set(
         doc(db, "restaurants", restaurantId),
         { ...brandingData, updatedAt: serverTimestamp() },
         { merge: true }
       );
 
       // Mantener public/branding sincronizado con el doc raíz.
-      await setDoc(
+      batch.set(
         doc(db, "restaurants", restaurantId, "public", "branding"),
         brandingData,
         { merge: true }
       );
+      writeAuditLog(batch, {
+        restaurantId,
+        action: "branding_actualizado",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
+        entityType: "branding",
+        entityId: "branding",
+        description: "Admin actualizo branding del restaurante",
+        changes: {
+          before: {},
+          after: brandingData,
+        },
+      });
+      await batch.commit();
 
       setMessage("Branding guardado correctamente.");
     } catch (error) {

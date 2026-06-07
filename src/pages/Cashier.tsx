@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  addDoc,
   arrayUnion,
   collection,
   doc,
@@ -8,8 +7,8 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  updateDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import { toast } from "sonner";
 import {
@@ -49,6 +48,7 @@ import {
   isTwoForOneActive,
   type TwoForOnePromo,
 } from "../components/PromotionsPanel";
+import { writeAuditLog } from "../lib/audit-logs";
 
 const db = getDb();
 
@@ -755,30 +755,37 @@ const Cashier = () => {
 
       // Manual bills have no QR session. Create the cuenta document directly
       // instead of going through pedirCuenta (which requires an occupied mesa).
-      const cuentaRef = await addDoc(
-        collection(db, "restaurants", restaurantId, "cuentas"),
-        {
-          restaurantId,
-          mesa,
-          total: manualTotal,
-          sessionId: null,
-          estado: "pendiente",
-          metodo: null,
-          splitBill: false,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        }
+      const cuentaRef = doc(
+        collection(db, "restaurants", restaurantId, "cuentas")
       );
-
-      await createCashierAuditLog({
+      const batch = writeBatch(db);
+      batch.set(cuentaRef, {
+        restaurantId,
+        mesa,
+        total: manualTotal,
+        sessionId: null,
+        estado: "pendiente",
+        metodo: null,
+        splitBill: false,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      writeAuditLog(batch, {
         restaurantId,
         action: "cashier_bill_created",
         actorUid: user.uid,
         actorEmail: user.email,
+        actorRole: "cashier",
         mesa,
         cuentaId: cuentaRef.id,
+        description: `Caja creo una cuenta manual para mesa ${mesa}`,
+        changes: {
+          before: { exists: false },
+          after: { estado: "pendiente", total: manualTotal, source: "manual" },
+        },
         metadata: { total: manualTotal, source: "manual" },
       });
+      await batch.commit();
 
       setManualMesa("");
       setManualItems([]);
@@ -988,10 +995,26 @@ const Cashier = () => {
   };
 
   const handleSaveInternalNote = async () => {
-    if (!selectedCuenta || !restaurantId) return;
+    if (!selectedCuenta || !restaurantId || !user) return;
     try {
       const ref = doc(db, "restaurants", restaurantId, "cuentas", selectedCuenta.id);
-      await updateDoc(ref, { internalNote: internalNote.trim(), updatedAt: serverTimestamp() });
+      const batch = writeBatch(db);
+      batch.update(ref, { internalNote: internalNote.trim(), updatedAt: serverTimestamp() });
+      writeAuditLog(batch, {
+        restaurantId,
+        action: "cashier_internal_note_updated",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "cashier",
+        mesa: Number(selectedCuenta.mesa),
+        cuentaId: selectedCuenta.id,
+        description: `Caja actualizo nota interna de cuenta ${selectedCuenta.id}`,
+        changes: {
+          before: { internalNote: selectedCuenta.internalNote || "" },
+          after: { internalNote: internalNote.trim() },
+        },
+      });
+      await batch.commit();
       toast.success("Nota guardada.");
     } catch {
       toast.error("No se pudo guardar la nota.");
@@ -1013,10 +1036,27 @@ const Cashier = () => {
         reason: cancelItemReason.trim(),
         cancelledAt: Date.now(),
       };
-      await updateDoc(pedidoRef, {
+      const batch = writeBatch(db);
+      batch.update(pedidoRef, {
         cancelledItems: arrayUnion(entry),
         updatedAt: serverTimestamp(),
       });
+      writeAuditLog(batch, {
+        restaurantId,
+        action: "cashier_order_item_cancelled",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "cashier",
+        pedidoId: cancelItemTarget.pedidoId,
+        reason: cancelItemReason,
+        description: `Caja cancelo el item ${cancelItemTarget.name}`,
+        changes: {
+          before: { cancelled: false, itemIndex: cancelItemTarget.itemIndex },
+          after: { cancelled: true, itemIndex: cancelItemTarget.itemIndex },
+        },
+        metadata: { itemName: cancelItemTarget.name },
+      });
+      await batch.commit();
       setCancelItemTarget(null);
       setCancelItemReason("");
       toast.success(`"${cancelItemTarget.name}" cancelado.`);
@@ -1286,26 +1326,30 @@ const Cashier = () => {
   };
 
   const handleCierreCaja = async () => {
-    if (!restaurantId || !cashSession) return;
+    if (!restaurantId || !cashSession || !user) return;
     try {
       setClosingCaja(true);
-      await addDoc(
-        collection(db, "restaurants", restaurantId, "auditLogs"),
-        {
-          action: "cierre_caja",
-          userUid: user?.uid ?? null,
-          userEmail: user?.email ?? null,
-          userRole: "cashier",
-          description: `Cierre de caja · Monto inicial: ${formatPriceARS(cashSession.openingCash)} · Efectivo cobrado: ${formatPriceARS(totalEfectivo)} · Ajustes: +${formatPriceARS(totalAjustesAdd)} / −${formatPriceARS(totalAjustesDeduct)} · Efectivo final en caja: ${formatPriceARS(totalCajaActual)}`,
+      await createCashierAuditLog({
+        restaurantId,
+        action: "cierre_caja",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        entityType: "cash_session",
+        entityId: `${user.uid}:${cashSession.openedAt}`,
+        description: `Cierre de caja · Monto inicial: ${formatPriceARS(cashSession.openingCash)} · Efectivo cobrado: ${formatPriceARS(totalEfectivo)} · Ajustes: +${formatPriceARS(totalAjustesAdd)} / −${formatPriceARS(totalAjustesDeduct)} · Efectivo final en caja: ${formatPriceARS(totalCajaActual)}`,
+        changes: {
+          before: { status: "open", openingCash: cashSession.openingCash },
+          after: { status: "closed", efectivoFinal: totalCajaActual },
+        },
+        metadata: {
           montoInicial: cashSession.openingCash,
           efectivoCobrado: totalEfectivo,
           ajustesAdd: totalAjustesAdd,
           ajustesDeduct: totalAjustesDeduct,
           efectivoFinal: totalCajaActual,
           totalRecaudado,
-          createdAt: serverTimestamp(),
-        }
-      );
+        },
+      });
       toast.success("Caja cerrada y registrada en auditoría.");
       setShowCierreModal(false);
     } catch (err) {

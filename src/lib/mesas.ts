@@ -6,7 +6,6 @@ import {
   query,
   runTransaction,
   serverTimestamp,
-  setDoc,
   where,
   type DocumentData,
   type Timestamp,
@@ -17,6 +16,7 @@ import {
   sessionDocRef,
   type SessionStatus,
 } from "./sessions";
+import { writeAuditLog, type AuditActor } from "./audit-logs";
 
 const db = getDb();
 
@@ -333,7 +333,8 @@ export const getOrCreateMesaSession = async (
 
 export const markMesaNeedsCleaning = async (
   restaurantId: string,
-  numero: number
+  numero: number,
+  actor: AuditActor
 ) => {
   const normalizedRestaurantId = normalizeRestaurantId(restaurantId);
   assertValidMesaNumber(numero);
@@ -363,6 +364,17 @@ export const markMesaNeedsCleaning = async (
         },
         { merge: true }
       );
+      writeAuditLog(transaction, {
+        restaurantId: normalizedRestaurantId,
+        action: "mesa_limpieza_solicitada",
+        ...actor,
+        mesa: numero,
+        description: `Se marco mesa ${numero} para limpieza`,
+        changes: {
+          before: { exists: false },
+          after: { estado: "needs_cleaning", activeSessionId: null },
+        },
+      });
 
       return;
     }
@@ -427,12 +439,32 @@ export const markMesaNeedsCleaning = async (
       },
       { merge: true }
     );
+    writeAuditLog(transaction, {
+      restaurantId: normalizedRestaurantId,
+      action: "mesa_limpieza_solicitada",
+      ...actor,
+      mesa: numero,
+      sessionId: sessionIdToKeep || undefined,
+      description: `Se marco mesa ${numero} para limpieza`,
+      changes: {
+        before: {
+          estado: mesa.estado,
+          activeSessionId: mesa.activeSessionId,
+        },
+        after: {
+          estado: "needs_cleaning",
+          activeSessionId: null,
+          lastSessionId: sessionIdToKeep,
+        },
+      },
+    });
   });
 };
 
 export const markMesaAvailable = async (
   restaurantId: string,
-  numero: number
+  numero: number,
+  actor: AuditActor
 ) => {
   const normalizedRestaurantId = normalizeRestaurantId(restaurantId);
   assertValidMesaNumber(numero);
@@ -545,6 +577,23 @@ export const markMesaAvailable = async (
       },
       { merge: true }
     );
+    writeAuditLog(transaction, {
+      restaurantId: normalizedRestaurantId,
+      action: "mesa_limpiada",
+      ...actor,
+      mesa: numero,
+      sessionId: lastSessionId || undefined,
+      description: `Se marco mesa ${numero} como disponible`,
+      changes: {
+        before: {
+          estado: mesaSnapshot.exists()
+            ? mesaSnapshot.data()?.estado ?? null
+            : null,
+          activeSessionId: currentActiveSessionId,
+        },
+        after: { estado: "available", activeSessionId: null },
+      },
+    });
   });
 };
 
@@ -650,46 +699,70 @@ export const closeMesaSessionManually = async (
 export const createMesaIfNotExists = async (
   restaurantId: string,
   numero: number,
-  zona?: string
+  zona: string | undefined,
+  actor: AuditActor
 ) => {
   const normalizedRestaurantId = normalizeRestaurantId(restaurantId);
   assertValidMesaNumber(numero);
 
-  const ref = mesaDocRef(normalizedRestaurantId, numero);
-  const snapshot = await getDoc(ref);
+  await runTransaction(db, async (transaction) => {
+    const ref = mesaDocRef(normalizedRestaurantId, numero);
+    const snapshot = await transaction.get(ref);
+    if (snapshot.exists()) return;
 
-  if (snapshot.exists()) return;
-
-  await setDoc(ref, {
-    restaurantId: normalizedRestaurantId,
-    numero,
-    estado: "available",
-    activeSessionId: null,
-    lastSessionId: null,
-    active: true,
-    ...(zona?.trim() ? { zona: zona.trim() } : {}),
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-    cleanedAt: null,
+    transaction.set(ref, {
+      restaurantId: normalizedRestaurantId,
+      numero,
+      estado: "available",
+      activeSessionId: null,
+      lastSessionId: null,
+      active: true,
+      ...(zona?.trim() ? { zona: zona.trim() } : {}),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      cleanedAt: null,
+    });
+    writeAuditLog(transaction, {
+      restaurantId: normalizedRestaurantId,
+      action: "mesa_creada",
+      ...actor,
+      mesa: numero,
+      description: `Se creo mesa ${numero}`,
+      changes: {
+        before: { exists: false },
+        after: { estado: "available", active: true, zona: zona?.trim() || "" },
+      },
+    });
   });
 };
 
 export const setMesaZona = async (
   restaurantId: string,
   numero: number,
-  zona: string
+  zona: string,
+  actor: AuditActor
 ) => {
   const normalizedRestaurantId = normalizeRestaurantId(restaurantId);
   assertValidMesaNumber(numero);
-  const { updateDoc } = await import("firebase/firestore");
   const ref = mesaDocRef(normalizedRestaurantId, numero);
-  await updateDoc(ref, { zona: zona.trim(), updatedAt: serverTimestamp() });
+  const batch = (await import("firebase/firestore")).writeBatch(db);
+  batch.update(ref, { zona: zona.trim(), updatedAt: serverTimestamp() });
+  writeAuditLog(batch, {
+    restaurantId: normalizedRestaurantId,
+    action: "mesa_zona_actualizada",
+    ...actor,
+    mesa: numero,
+    description: `Se actualizo zona de mesa ${numero}`,
+    changes: { before: {}, after: { zona: zona.trim() } },
+  });
+  await batch.commit();
 };
 
 export const setMesaActive = async (
   restaurantId: string,
   numero: number,
-  active: boolean
+  active: boolean,
+  actor: AuditActor
 ) => {
   const normalizedRestaurantId = normalizeRestaurantId(restaurantId);
   assertValidMesaNumber(numero);
@@ -753,12 +826,24 @@ export const setMesaActive = async (
         },
         { merge: true }
       );
+      writeAuditLog(transaction, {
+        restaurantId: normalizedRestaurantId,
+        action: "mesa_actividad_actualizada",
+        ...actor,
+        mesa: numero,
+        description: `Se desactivo mesa ${numero}`,
+        changes: {
+          before: { active: mesa.active ?? true, estado: mesa.estado },
+          after: { active: false, estado: "available" },
+        },
+      });
     });
 
     return;
   }
 
-  await setDoc(
+  const batch = (await import("firebase/firestore")).writeBatch(db);
+  batch.set(
     mesaDocRef(normalizedRestaurantId, numero),
     {
       restaurantId: normalizedRestaurantId,
@@ -768,4 +853,16 @@ export const setMesaActive = async (
     },
     { merge: true }
   );
+  writeAuditLog(batch, {
+    restaurantId: normalizedRestaurantId,
+    action: "mesa_actividad_actualizada",
+    ...actor,
+    mesa: numero,
+    description: `Se activo mesa ${numero}`,
+    changes: {
+      before: { active: mesa.active ?? true },
+      after: { active: true },
+    },
+  });
+  await batch.commit();
 };

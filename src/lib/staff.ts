@@ -5,9 +5,10 @@ import {
   getDoc,
   getDocs,
   serverTimestamp,
-  setDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { getDb, getSecondaryAuth } from "./firebase";
+import { writeAuditLog, type AuditActor } from "./audit-logs";
 import {
   canCreateStaff,
   getStaffLimitLabel,
@@ -22,6 +23,7 @@ type CreateStaffMemberInput = {
   email: string;
   password: string;
   role: StaffRole;
+  actor: AuditActor;
 };
 
 export async function createStaffMember({
@@ -29,6 +31,7 @@ export async function createStaffMember({
   email,
   password,
   role,
+  actor,
 }: CreateStaffMemberInput) {
   const db = getDb();
   const secondaryAuth = getSecondaryAuth();
@@ -67,7 +70,7 @@ export async function createStaffMember({
 
     const uid = credential.user.uid;
 
-    await setDoc(doc(db, "restaurants", restaurantId, "staff", uid), {
+    const staffData = {
       uid,
       email: email.trim().toLowerCase(),
       role,
@@ -75,7 +78,22 @@ export async function createStaffMember({
       restaurantId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
+    };
+    const batch = writeBatch(db);
+    batch.set(doc(db, "restaurants", restaurantId, "staff", uid), staffData);
+    writeAuditLog(batch, {
+      restaurantId,
+      action: "empleado_creado",
+      ...actor,
+      entityType: "staff",
+      entityId: uid,
+      description: `Se creo el empleado ${staffData.email} con rol ${role}`,
+      changes: {
+        before: { exists: false },
+        after: { uid, email: staffData.email, role, active: true },
+      },
     });
+    await batch.commit();
 
     await signOut(secondaryAuth);
 
