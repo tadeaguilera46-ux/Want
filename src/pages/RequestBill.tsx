@@ -12,7 +12,6 @@ import {
 import { useMemo, useState, useEffect } from "react";
 import { getDb } from "../lib/firebase";
 import { collection, doc, onSnapshot, query, where } from "firebase/firestore";
-import { pedirCuenta } from "../lib/bill";
 import type { MetodoPago, PedidoRecord } from "../lib/restaurant";
 import { resolveRuntimeContext } from "../lib/runtime-context";
 
@@ -301,13 +300,21 @@ const RequestBill = () => {
       setError(null);
       setIsSubmitting(true);
 
-      await pedirCuenta({
-        restaurantId,
-        mesa: tableNumber,
-        metodo: selected,
-        total,
-        splitBill,
+      const response = await fetch("/api/request-bill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          restaurantId,
+          sessionId,
+          mesa: tableNumber,
+          metodo: selected,
+          splitBill,
+        }),
       });
+      const data = await response.json() as { ok: boolean; error?: string };
+      if (!data.ok) {
+        throw new Error(data.error ?? "Error desconocido");
+      }
 
       navigate(`/bill-confirmed?restaurantId=${restaurantId}&table=${table}`, {
         state: { table, restaurantId },
