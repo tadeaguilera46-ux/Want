@@ -203,7 +203,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           after: { cancelled: true, itemIndex },
         },
         metadata: { itemIndex, itemName: cancelledItem ? (cancelledItem as CancelledItem).name : "" },
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
     } catch (auditErr) {
       console.error("Audit log failed (non-blocking):", auditErr);

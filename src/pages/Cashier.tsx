@@ -38,7 +38,6 @@ import {
   createCashierAuditLog,
   createOrRefreshCashierBill,
   markCashierBillPrinted,
-  registerCashierPayment,
   reopenCashierBill,
   requestCashierInvoice,
   updateCashierBillAdjustments,
@@ -518,7 +517,6 @@ const Cashier = () => {
         const ts = getTimestampMs(c.createdAt);
         return ts > 0 && billsNow - ts >= BILL_WARN_MINUTES * 60_000;
       }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [pendingBills, billsNow]
   );
 
@@ -564,6 +562,8 @@ const Cashier = () => {
     setInvoicePostalCode(selectedCuenta.invoice?.postalCode || "");
     setInvoiceProvince(selectedCuenta.invoice?.province || "");
     setInvoiceCity(selectedCuenta.invoice?.city || "");
+    setSplitMode("partes");
+    setSplitProductSelection({});
   }, [selectedCuenta?.id]);
 
   const selectedOrders = useMemo(() => {

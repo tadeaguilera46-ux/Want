@@ -237,7 +237,7 @@ export const addPartialPayment = async ({
     const existingPayments: CashierPayment[] = Array.isArray(cuenta.payments)
       ? cuenta.payments
       : [];
-    const newPayments = [...existingPayments, { ...payment, createdAt: undefined }];
+    const newPayments = [...existingPayments, { ...payment }];
     const newPaidAmount = newPayments.reduce(
       (s, p) => s + Number(p.amount || 0),
       0
