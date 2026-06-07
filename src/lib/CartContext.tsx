@@ -89,6 +89,17 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     saveCart(storageKey, cart);
   }, [cart, storageKey]);
 
+  // Sync cart in real-time when another tab writes to the same localStorage key
+  useEffect(() => {
+    if (!storageKey) return;
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key !== storageKey) return;
+      setCart(e.newValue ? (JSON.parse(e.newValue) as CartItem[]) : []);
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [storageKey]);
+
   const addToCart = (item: MenuItem, quantity = 1) => {
     const safeQuantity =
       Number.isInteger(quantity) && quantity > 0 ? quantity : 1;
