@@ -39,6 +39,7 @@ type PedidoInput = {
   restaurantId: string;
   mesa: number;
   sessionId: string;
+  clientRequestId?: string;
   items: PedidoItemInput[];
   total: number;
 };
@@ -137,6 +138,14 @@ const validatePedido = (pedido: PedidoInput) => {
   }
 
   if (
+    pedido.clientRequestId !== undefined &&
+    (typeof pedido.clientRequestId !== "string" ||
+      !/^[A-Za-z0-9_-]{16,128}$/.test(pedido.clientRequestId.trim()))
+  ) {
+    throw new UserFacingError("Identificador de pedido inválido");
+  }
+
+  if (
     typeof pedido.total !== "number" ||
     !Number.isFinite(pedido.total) ||
     pedido.total < 0
@@ -160,6 +169,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const restaurantId = pedido.restaurantId.trim();
     const mesa = Number(pedido.mesa);
+    const requestedSessionId = pedido.sessionId.trim();
+    const clientRequestId = pedido.clientRequestId?.trim() || null;
+    const pedidoRef = clientRequestId
+      ? db.doc(`restaurants/${restaurantId}/pedidos/${clientRequestId}`)
+      : db.collection(`restaurants/${restaurantId}/pedidos`).doc();
 
     const now = new Date();
     const [promoSnap, twoForOneSnap] = await Promise.all([
@@ -173,6 +187,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const restaurantRef = db.doc(`restaurants/${restaurantId}`);
       const mesaRef = db.doc(`restaurants/${restaurantId}/mesas/${mesa}`);
 
+      const existingPedidoSnap = await transaction.get(pedidoRef);
+
+      if (existingPedidoSnap.exists) {
+        const existingPedido = existingPedidoSnap.data() || {};
+
+        if (
+          clientRequestId &&
+          existingPedido.clientRequestId === clientRequestId &&
+          existingPedido.restaurantId === restaurantId &&
+          existingPedido.sessionId === requestedSessionId &&
+          existingPedido.mesa === mesa
+        ) {
+          return pedidoRef.id;
+        }
+
+        throw new UserFacingError("No se pudo validar el pedido. Reintentá.");
+      }
+
       const restaurantSnap = await transaction.get(restaurantRef);
       const mesaSnap = await transaction.get(mesaRef);
 
@@ -185,8 +217,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const mesaData = mesaSnap.exists ? mesaSnap.data() || {} : {};
      const activeSessionId = mesaData.activeSessionId;
-     const requestedSessionId = pedido.sessionId.trim();
-
      if (!mesaSnap.exists) {
         throw new UserFacingError(
           "Esta mesa ya fue cerrada. Para volver a pedir, escaneá nuevamente el QR."
@@ -512,11 +542,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         { merge: true }
       );
 
-      const pedidoRef = db.collection(`restaurants/${restaurantId}/pedidos`).doc();
-
       transaction.set(pedidoRef, {
         restaurantId,
         mesa,
+        clientRequestId,
         items: normalizedItems,
         total: normalizedItems.reduce(
           (sum, item) => sum + Number(item.subtotal || 0),
@@ -561,7 +590,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             itemCount: normalizedItems.length,
           },
         },
-        metadata: {},
+        metadata: { clientRequestId },
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 

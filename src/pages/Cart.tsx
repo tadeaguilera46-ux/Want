@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -12,7 +12,11 @@ import {
 } from "lucide-react";
 import { useCart } from "@/lib/CartContext";
 import { crearPedido } from "../lib/orders";
-import { rememberCustomerOrderId } from "../lib/customer-orders";
+import {
+  clearCustomerOrderRequestId,
+  getOrCreateCustomerOrderRequestId,
+  rememberCustomerOrderId,
+} from "../lib/customer-orders";
 import { getMesa } from "../lib/mesas";
 import { getSessionById } from "../lib/sessions";
 import type { PedidoInput, PedidoItem } from "../lib/restaurant";
@@ -74,6 +78,7 @@ const Cart = () => {
   const [isSubmittingOrderAndBill, setIsSubmittingOrderAndBill] =
     useState(false);
   const [error, setError] = useState<string | null>(null);
+  const submissionLockRef = useRef(false);
 
   const isBusy =
     isValidatingSession || isSubmittingOrder || isSubmittingOrderAndBill;
@@ -196,10 +201,18 @@ const Cart = () => {
       throw new Error("Agregá al menos un producto antes de enviar el pedido.");
     }
 
+    const orderFingerprint = JSON.stringify({ items, total });
+
     return {
       restaurantId,
       mesa: tableNumber,
       sessionId,
+      clientRequestId: getOrCreateCustomerOrderRequestId({
+        restaurantId,
+        table: tableNumber,
+        sessionId,
+        orderFingerprint,
+      }),
       items,
       total,
     };
@@ -214,7 +227,8 @@ const Cart = () => {
   };
 
   const handlePedido = async () => {
-    if (isBusy || cart.length === 0) return;
+    if (submissionLockRef.current || isBusy || cart.length === 0) return;
+    submissionLockRef.current = true;
 
     try {
       setError(null);
@@ -227,6 +241,12 @@ const Cart = () => {
         table: tableNumber,
         sessionId: pedido.sessionId,
         orderId: pedidoId,
+      });
+      clearCustomerOrderRequestId({
+        restaurantId,
+        table: tableNumber,
+        sessionId: pedido.sessionId,
+        requestId: pedido.clientRequestId || "",
       });
 
       clearCart();
@@ -244,12 +264,14 @@ const Cart = () => {
         redirectToClosedBill();
       }
     } finally {
+      submissionLockRef.current = false;
       setIsSubmittingOrder(false);
     }
   };
 
   const handlePedidoYCuenta = async () => {
-    if (isBusy || cart.length === 0) return;
+    if (submissionLockRef.current || isBusy || cart.length === 0) return;
+    submissionLockRef.current = true;
 
     try {
       setError(null);
@@ -262,6 +284,12 @@ const Cart = () => {
         table: tableNumber,
         sessionId: pedido.sessionId,
         orderId: pedidoId,
+      });
+      clearCustomerOrderRequestId({
+        restaurantId,
+        table: tableNumber,
+        sessionId: pedido.sessionId,
+        requestId: pedido.clientRequestId || "",
       });
 
       clearCart();
@@ -279,6 +307,7 @@ const Cart = () => {
         redirectToClosedBill();
       }
     } finally {
+      submissionLockRef.current = false;
       setIsSubmittingOrderAndBill(false);
     }
   };
