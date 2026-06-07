@@ -1,17 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  collection,
-  getDocs,
-  onSnapshot,
-  orderBy,
-  query,
-  where,
-} from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
-import { getDb, auth } from "@/lib/firebase";
+import { collection, onSnapshot } from "firebase/firestore";
+import { getDb } from "@/lib/firebase";
 import type { MenuIngredient } from "@/lib/store";
-import type { StockItem } from "@/types/stock";
-import { getMenuItemAvailability } from "@/lib/stock-availability";
 
 const db = getDb();
 
@@ -43,6 +33,11 @@ export type MenuItem = {
   availableDays?: number[];
   allergens?: string[];
   modifierGroups?: { name: string; required: boolean; options: { name: string; priceAdd: number }[] }[];
+  availabilityStatus?: "available" | "sold_out" | "paused";
+  availabilityMessage?: string | null;
+  lowStock?: boolean;
+  maxQuantity?: number | null;
+  missingOptionalIngredients?: string[];
 };
 
 export const getItemType = (item: MenuItem): MenuType => {
@@ -70,51 +65,36 @@ export const getItemTags = (item: MenuItem) => {
 export const useMenuData = (restaurantId: string) => {
   const [activeCategory, setActiveCategory] = useState("");
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [twoForOnePromos, setTwoForOnePromos] = useState<TwoForOnePromo[]>([]);
   const [loadingMenu, setLoadingMenu] = useState(true);
-  const [loadingStock, setLoadingStock] = useState(true);
-  // Stock solo se carga para usuarios autenticados (staff).
-  // Clientes anónimos no tienen acceso a stock en Firestore rules (F-01).
-  const [isAuthenticated, setIsAuthenticated] = useState(!!auth.currentUser);
-
-  useEffect(() => {
-    return onAuthStateChanged(auth, (user) => {
-      setIsAuthenticated(!!user);
-    });
-  }, []);
 
   useEffect(() => {
     if (!restaurantId) return;
 
     let cancelled = false;
+    setLoadingMenu(true);
 
     const loadMenu = async () => {
       try {
-        setLoadingMenu(true);
-
-        const q = query(
-          collection(db, "restaurants", restaurantId, "menu"),
-          where("active", "==", true)
+        const response = await fetch(
+          `/api/get-public-menu?restaurantId=${encodeURIComponent(restaurantId)}`,
+          { cache: "no-store" }
         );
-
-        const snapshot = await getDocs(q);
+        const data = (await response.json()) as {
+          ok?: boolean;
+          items?: MenuItem[];
+        };
 
         if (cancelled) return;
 
-        const data = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        })) as MenuItem[];
+        if (!response.ok || !data.ok || !Array.isArray(data.items)) {
+          throw new Error("No se pudo cargar el menú");
+        }
 
-        setMenuItems(data);
+        setMenuItems(data.items);
       } catch (error) {
         console.error("Error cargando menú:", error);
-
-        if (!cancelled) {
-          setMenuItems([]);
-        }
       } finally {
         if (!cancelled) {
           setLoadingMenu(false);
@@ -123,46 +103,18 @@ export const useMenuData = (restaurantId: string) => {
     };
 
     void loadMenu();
+    const refreshInterval = window.setInterval(loadMenu, 15000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void loadMenu();
+    };
+    document.addEventListener("visibilitychange", refreshWhenVisible);
 
     return () => {
       cancelled = true;
+      window.clearInterval(refreshInterval);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [restaurantId]);
-
-  useEffect(() => {
-    if (!restaurantId || !isAuthenticated) {
-      setStockItems([]);
-      setLoadingStock(false);
-      return;
-    }
-
-    setLoadingStock(true);
-
-    const q = query(
-      collection(db, "restaurants", restaurantId, "stock"),
-      orderBy("name")
-    );
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const data = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...docSnap.data(),
-        })) as StockItem[];
-
-        setStockItems(data);
-        setLoadingStock(false);
-      },
-      (error) => {
-        console.error("Error cargando stock:", error);
-        setStockItems([]);
-        setLoadingStock(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, [restaurantId, isAuthenticated]);
 
   useEffect(() => {
     if (!restaurantId) return;
@@ -220,21 +172,19 @@ export const useMenuData = (restaurantId: string) => {
   };
 
   const availableMenuItems = useMemo(() => {
-    // Anónimos: mostrar todos los items activos sin filtrar por stock.
-    // La validación real de stock ocurre server-side en create-order.ts.
-    if (!isAuthenticated) {
-      return menuItems.filter(isItemAvailableNow).map(applyPromotion);
-    }
+    return menuItems.map((item) => {
+      const itemWithScheduleStatus = isItemAvailableNow(item)
+        ? item
+        : {
+            ...item,
+            availabilityStatus: "paused" as const,
+            availabilityMessage: "No disponible en este horario",
+            maxQuantity: 0,
+          };
 
-    return menuItems.filter((item) => {
-      if (!isItemAvailableNow(item)) return false;
-      const availability = getMenuItemAvailability({
-        ingredients: item.ingredients,
-        stockItems,
-      });
-      return availability.visible;
-    }).map(applyPromotion);
-  }, [menuItems, stockItems, isAuthenticated, promotions]);
+      return applyPromotion(itemWithScheduleStatus);
+    });
+  }, [menuItems, promotions]);
 
   const categories = useMemo(() => {
     const unique = Array.from(
@@ -269,8 +219,8 @@ export const useMenuData = (restaurantId: string) => {
   }, [availableMenuItems, activeCategory]);
 
   return {
-    stockItems,
-    loading: loadingMenu || loadingStock,
+    stockItems: [],
+    loading: loadingMenu,
     categories,
     activeCategory,
     setActiveCategory,

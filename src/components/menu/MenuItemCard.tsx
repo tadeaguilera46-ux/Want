@@ -1,6 +1,12 @@
 import { memo } from "react";
 import { motion } from "framer-motion";
-import { AlertTriangle, MessageSquareText, Plus } from "lucide-react";
+import {
+  AlertTriangle,
+  MessageSquareText,
+  PauseCircle,
+  Plus,
+  XCircle,
+} from "lucide-react";
 import MenuImage from "./MenuImage";
 import type { MenuIngredient } from "@/lib/store";
 
@@ -22,6 +28,8 @@ type MenuCardItem = {
 
 type MenuItemAvailability = {
   lowStock: boolean;
+  status?: "available" | "sold_out" | "paused";
+  message?: string | null;
 };
 
 type Props = {
@@ -49,6 +57,9 @@ function MenuItemCard({
   originalPrice,
   twoForOne,
 }: Props) {
+  const isUnavailable =
+    availability.status === "sold_out" || availability.status === "paused";
+
   return (
     <motion.div
       layout
@@ -57,10 +68,14 @@ function MenuItemCard({
       whileHover={{ y: -4, boxShadow: "0 20px 40px -16px rgba(0,0,0,0.28)" }}
       whileTap={{ scale: 0.985 }}
       transition={{ duration: 0.22 }}
-      className="overflow-hidden rounded-[30px] border border-black/5 bg-white shadow-[0_12px_30px_-16px_rgba(0,0,0,0.22)]"
+      className={`overflow-hidden rounded-[30px] border border-black/5 bg-white shadow-[0_12px_30px_-16px_rgba(0,0,0,0.22)] ${
+        isUnavailable ? "opacity-75" : ""
+      }`}
     >
       <div className="relative aspect-[16/10] w-full overflow-hidden bg-zinc-100">
-        <MenuImage src={item.image} alt={item.name} />
+        <div className={`h-full w-full ${isUnavailable ? "grayscale" : ""}`}>
+          <MenuImage src={item.image} alt={item.name} />
+        </div>
 
         <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
 
@@ -79,6 +94,20 @@ function MenuItemCard({
               <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800 backdrop-blur">
                 <AlertTriangle size={12} />
                 Quedan pocas unidades
+              </span>
+            )}
+
+            {availability.status === "sold_out" && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
+                <XCircle size={12} />
+                Agotado
+              </span>
+            )}
+
+            {availability.status === "paused" && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-zinc-700 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
+                <PauseCircle size={12} />
+                Pausado
               </span>
             )}
 
@@ -117,6 +146,15 @@ function MenuItemCard({
           {item.description || "Sin descripción"}
         </p>
 
+        {isUnavailable && (
+          <p className="mt-2 text-sm font-semibold text-zinc-700">
+            {availability.message ||
+              (availability.status === "sold_out"
+                ? "Temporalmente agotado"
+                : "Temporalmente pausado")}
+          </p>
+        )}
+
         {item.allergens && item.allergens.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
             {item.allergens.map((a) => (
@@ -140,7 +178,8 @@ function MenuItemCard({
         <div className="mt-4 flex items-center justify-between gap-3">
           <button
             onClick={() => onNote(item)}
-            className="inline-flex h-10 items-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50"
+            disabled={isUnavailable}
+            className="inline-flex h-10 items-center gap-2 rounded-lg border border-black/10 bg-white px-3 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <MessageSquareText size={14} />
             Agregar nota
@@ -156,7 +195,8 @@ function MenuItemCard({
             <motion.button
               whileTap={{ scale: 0.92 }}
               onClick={() => onAdd(item)}
-              className="flex h-11 w-11 items-center justify-center rounded-full text-white shadow-want"
+              disabled={isUnavailable}
+              className="flex h-11 w-11 items-center justify-center rounded-full text-white shadow-want disabled:cursor-not-allowed disabled:opacity-40"
               style={{ backgroundColor: primaryColor }}
             >
               <Plus size={18} />

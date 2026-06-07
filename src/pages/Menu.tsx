@@ -107,6 +107,13 @@ const Menu = () => {
 
   const { addToCart, getQuantity, totalItems, total } = useCart();
 
+  useEffect(() => {
+    setSelectedItem((currentItem) => {
+      if (!currentItem) return currentItem;
+      return allItems.find((item) => item.id === currentItem.id) || null;
+    });
+  }, [allItems]);
+
   const primaryColor = config.primaryColor || "#000000";
   const secondaryColor = config.secondaryColor || "#FFFFFF";
   const pageBackground = secondaryColor === "#FFFFFF" ? "#f6f4ef" : secondaryColor;
@@ -326,12 +333,24 @@ const Menu = () => {
     searchResults.filter((item) => getDisplayCategory(item) === categoryKey);
 
   const getAutomaticObservation = (item: MenuItem) => {
+    if (item.missingOptionalIngredients) {
+      return buildMissingOptionalObservation(item.missingOptionalIngredients);
+    }
     if (stockItems.length === 0) return "";
     const availability = getMenuItemAvailability({ ingredients: item.ingredients, stockItems });
     return buildMissingOptionalObservation(availability.missingOptionalIngredients);
   };
 
   const getAvailableQuantityToAdd = (item: MenuItem) => {
+    if (
+      item.availabilityStatus === "sold_out" ||
+      item.availabilityStatus === "paused"
+    ) {
+      return 0;
+    }
+    if (typeof item.maxQuantity === "number") {
+      return Math.max(0, item.maxQuantity - getQuantity(item.id));
+    }
     const availability = getMenuItemAvailability({
       ingredients: item.ingredients,
       stockItems,
@@ -344,6 +363,14 @@ const Menu = () => {
 
   const canAddQuantity = (item: MenuItem, quantity = 1) => {
     if (sessionError) { alert(sessionError); return false; }
+    if (item.availabilityStatus === "sold_out") {
+      toast.error(`${item.name} está agotado.`);
+      return false;
+    }
+    if (item.availabilityStatus === "paused") {
+      toast.error(`${item.name} está temporalmente pausado.`);
+      return false;
+    }
     const availableQuantity = getAvailableQuantityToAdd(item);
     if (quantity > availableQuantity) {
       toast.error(
@@ -357,6 +384,11 @@ const Menu = () => {
   };
 
   const confirmOptionalMissing = (item: MenuItem) => {
+    if (item.missingOptionalIngredients?.length) {
+      return window.confirm(
+        `No tenemos ${item.missingOptionalIngredients.join(", ")}. ¿Querés pedir igual ${item.name}?`
+      );
+    }
     if (stockItems.length === 0) return true;
     const availability = getMenuItemAvailability({ ingredients: item.ingredients, stockItems });
     if (availability.missingOptionalIngredients.length === 0) return true;
@@ -700,7 +732,13 @@ const Menu = () => {
                         const matchedItem = allItems.find(
                           (i) => i.name.toLowerCase() === promo.productName.toLowerCase()
                         );
-                        if (!matchedItem) return null;
+                        if (
+                          !matchedItem ||
+                          matchedItem.availabilityStatus === "sold_out" ||
+                          matchedItem.availabilityStatus === "paused"
+                        ) {
+                          return null;
+                        }
                         const originalPrice =
                           active && matchedItem.originalPrice !== undefined
                             ? matchedItem.originalPrice
@@ -765,8 +803,12 @@ const Menu = () => {
                       // Category promo → photo of first item + scroll button
                       if (promo.category && promo.category !== "__none__") {
                         const firstItem = allItems.find(
-                          (i) => getDisplayCategory(i) === promo.category
+                          (i) =>
+                            getDisplayCategory(i) === promo.category &&
+                            i.availabilityStatus !== "sold_out" &&
+                            i.availabilityStatus !== "paused"
                         );
+                        if (!firstItem) return null;
                         return (
                           <div
                             key={promo.id}
@@ -866,7 +908,19 @@ const Menu = () => {
                           )
                         : null;
 
-                      if (matchedItem) {
+                      if (
+                        matchedItem &&
+                        (matchedItem.availabilityStatus === "sold_out" ||
+                          matchedItem.availabilityStatus === "paused")
+                      ) {
+                        return null;
+                      }
+
+                      if (
+                        matchedItem &&
+                        matchedItem.availabilityStatus !== "sold_out" &&
+                        matchedItem.availabilityStatus !== "paused"
+                      ) {
                         return (
                           <div
                             key={promo.id}
@@ -996,7 +1050,12 @@ const Menu = () => {
                               item={item}
                               quantity={quantity}
                               tags={tags}
-                              availability={availability}
+                              availability={{
+                                ...availability,
+                                lowStock: item.lowStock ?? availability.lowStock,
+                                status: item.availabilityStatus,
+                                message: item.availabilityMessage,
+                              }}
                               primaryColor={primaryColor}
                               formatPrice={formatPriceARS}
                               onAdd={handleAddWithoutNote}
@@ -1206,10 +1265,17 @@ const Menu = () => {
                 </button>
                 <button
                   onClick={handleAddWithNote}
-                  className="h-12 rounded-lg font-semibold text-white"
+                  disabled={
+                    selectedItem.availabilityStatus === "sold_out" ||
+                    selectedItem.availabilityStatus === "paused"
+                  }
+                  className="h-12 rounded-lg font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
                   style={{ backgroundColor: primaryColor }}
                 >
-                  Agregar {selectedQuantity} al pedido
+                  {selectedItem.availabilityStatus === "sold_out" ||
+                  selectedItem.availabilityStatus === "paused"
+                    ? "Producto no disponible"
+                    : `Agregar ${selectedQuantity} al pedido`}
                 </button>
               </div>
             </motion.div>
