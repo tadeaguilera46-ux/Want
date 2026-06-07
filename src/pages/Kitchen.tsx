@@ -196,66 +196,87 @@ const Kitchen = () => {
     return () => unsubscribe();
   }, [restaurantId]);
 
-  const cambiarEstado = async (id: string, estado: EstadoCocina) => {
-    if (loadingById[id] || !restaurantId || !user) return;
+  const getItemEstado = (pedido: Pedido, itemIndex: number): EstadoCocina => {
+    const base = (pedido.estadoCocina || "pendiente") as EstadoCocina;
+    return (pedido.itemEstados?.[String(itemIndex)] as EstadoCocina | undefined) ?? base;
+  };
 
-    if (!isOnline) {
-      toast.error("Sin conexión. No se pueden actualizar pedidos ahora.");
-      return;
-    }
+  const siguienteEstadoItem = (estado: EstadoCocina): EstadoCocina | null => {
+    if (estado === "pendiente") return "preparando";
+    if (estado === "preparando") return "listo";
+    return null;
+  };
+
+  const cambiarEstadoItem = async (pedidoId: string, itemIndex: number, nuevoEstado: EstadoCocina) => {
+    const loadKey = `${pedidoId}:${itemIndex}`;
+    if (loadingById[loadKey] || !restaurantId || !user) return;
+    if (!isOnline) { toast.error("Sin conexión. No se pueden actualizar pedidos ahora."); return; }
+
+    const pedido = pedidos.find((p) => p.id === pedidoId);
+    if (!pedido) return;
 
     try {
-      setLoadingById((prev) => ({ ...prev, [id]: true }));
+      setLoadingById((prev) => ({ ...prev, [loadKey]: true }));
       setError(null);
 
-      const ref = doc(db, "restaurants", restaurantId, "pedidos", id);
+      const currentItemEstados = (pedido.itemEstados ?? {}) as Record<string, EstadoCocina>;
+      const newItemEstados = { ...currentItemEstados, [String(itemIndex)]: nuevoEstado };
+
+      const foodIndices = (pedido.items || [])
+        .map((item, idx) => ({ item, idx }))
+        .filter(({ item, idx }) => isFoodItem(item) && !pedido.cancelledItems?.some((c) => c.itemIndex === idx))
+        .map(({ idx }) => idx);
+
+      const baseEstado = (pedido.estadoCocina || "pendiente") as EstadoCocina;
+      const allStates = foodIndices.map((idx) => (newItemEstados[String(idx)] as EstadoCocina | undefined) ?? baseEstado);
+
+      let derivedEstado: EstadoCocina = "pendiente";
+      if (allStates.every((s) => s === "listo")) {
+        derivedEstado = "listo";
+      } else if (allStates.some((s) => s === "preparando" || s === "listo")) {
+        derivedEstado = "preparando";
+      }
 
       const updateData: Record<string, unknown> = {
-        estadoCocina: estado,
+        [`itemEstados.${itemIndex}`]: nuevoEstado,
+        estadoCocina: derivedEstado,
         updatedAt: serverTimestamp(),
       };
 
-      if (estado === "preparando") {
+      const oldDerived = (pedido.estadoCocina || "pendiente") as EstadoCocina;
+      if (oldDerived === "pendiente" && derivedEstado !== "pendiente") {
         updateData.cocinaStartedAt = serverTimestamp();
       }
-
-      if (estado === "listo") {
+      if (derivedEstado === "listo") {
         updateData.cocinaReadyAt = serverTimestamp();
       }
 
+      const ref = doc(db, "restaurants", restaurantId, "pedidos", pedidoId);
       const batch = writeBatch(db);
       batch.update(ref, updateData);
-      if (estado === "listo") {
-        const pedido = pedidos.find((currentPedido) => currentPedido.id === id);
-
+      if (derivedEstado === "listo") {
         writeAuditLog(batch, {
           restaurantId,
           action: "pedido_listo",
           actorUid: user.uid,
           actorEmail: user.email,
           actorRole: "kitchen",
-          mesa: Number(pedido?.mesa || 0),
-          pedidoId: id,
-          description: `Cocina marcó pedido listo en mesa ${pedido?.mesa || "-"}`,
+          mesa: Number(pedido.mesa || 0),
+          pedidoId,
+          description: `Cocina marcó pedido listo en mesa ${pedido.mesa || "-"}`,
           changes: {
-            before: { estadoCocina: pedido?.estadoCocina ?? "pendiente" },
-            after: { estadoCocina: estado },
+            before: { estadoCocina: pedido.estadoCocina ?? "pendiente" },
+            after: { estadoCocina: derivedEstado },
           },
         });
       }
       await batch.commit();
     } catch (err) {
-      console.error("Error actualizando estado de cocina:", err);
+      console.error("Error actualizando estado de ítem:", err);
       setError("No se pudo actualizar el estado. Reintentá.");
     } finally {
-      setLoadingById((prev) => ({ ...prev, [id]: false }));
+      setLoadingById((prev) => ({ ...prev, [`${pedidoId}:${itemIndex}`]: false }));
     }
-  };
-
-  const siguienteEstado = (estado: EstadoCocina | null | undefined) => {
-    if (estado === "pendiente") return "preparando";
-    if (estado === "preparando") return "listo";
-    return null;
   };
 
   const getCreatedAtMs = (value?: FirestoreTimestampLike | null) => {
@@ -564,11 +585,9 @@ const Kitchen = () => {
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                     {mesaPedidos.map((p) => {
                       const estadoActual = (p.estadoCocina || "pendiente") as EstadoCocina;
-                      const next = siguienteEstado(estadoActual);
-                      const comida = (p.items || []).filter(
-                        (item, idx) => isFoodItem(item) && !(p.cancelledItems?.some((c) => c.itemIndex === idx))
-                      );
-                      const isLoading = !!loadingById[p.id];
+                      const comidaConIdx = (p.items || [])
+                        .map((item, idx) => ({ item, idx }))
+                        .filter(({ item, idx }) => isFoodItem(item) && !p.cancelledItems?.some((c) => c.itemIndex === idx));
                       const isNew = now - getCreatedAtMs(p.createdAt) < NEW_BADGE_MS;
                       const urgente = getElapsedMinutes(p) >= WARNING_MINUTES;
 
@@ -582,53 +601,67 @@ const Kitchen = () => {
                             urgente ? "shadow-md" : "",
                           ].join(" ")}
                         >
-                          <div className="mb-4 flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="flex flex-wrap items-center gap-2">
-                                {isNew && (
-                                  <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
-                                    Nuevo
-                                  </span>
-                                )}
-                              </div>
-                              <div className="mt-1 flex flex-wrap items-center gap-2">
-                                <span
-                                  className={`inline-flex rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide ${getBadgeStylesByEstado(estadoActual)}`}
-                                >
-                                  {estadoActual === "pendiente" && <Clock3 size={13} className="mr-1.5" />}
-                                  {estadoActual === "preparando" && <Flame size={13} className="mr-1.5" />}
-                                  {estadoActual === "listo" && <CheckCircle2 size={13} className="mr-1.5" />}
-                                  {getEstadoLabel(estadoActual)}
-                                </span>
-                                <span className={`inline-flex rounded-full px-3 py-1.5 text-sm font-bold ${getTimeStyles(p)}`}>
-                                  ⏱ {formatElapsedTime(p)}
-                                </span>
-                              </div>
-                            </div>
+                          <div className="mb-4 flex flex-wrap items-center gap-2">
+                            {isNew && (
+                              <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
+                                Nuevo
+                              </span>
+                            )}
+                            <span className={`inline-flex rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide ${getBadgeStylesByEstado(estadoActual)}`}>
+                              {estadoActual === "pendiente" && <Clock3 size={13} className="mr-1.5" />}
+                              {estadoActual === "preparando" && <Flame size={13} className="mr-1.5" />}
+                              {estadoActual === "listo" && <CheckCircle2 size={13} className="mr-1.5" />}
+                              {getEstadoLabel(estadoActual)}
+                            </span>
+                            <span className={`inline-flex rounded-full px-3 py-1.5 text-sm font-bold ${getTimeStyles(p)}`}>
+                              ⏱ {formatElapsedTime(p)}
+                            </span>
                           </div>
 
                           <div className="space-y-3">
-                            {comida.map((item, i) => {
+                            {comidaConIdx.map(({ item, idx }) => {
+                              const itemEstado = getItemEstado(p, idx);
+                              const nextItem = siguienteEstadoItem(itemEstado);
+                              const loadKey = `${p.id}:${idx}`;
+                              const isItemLoading = !!loadingById[loadKey];
                               const observation = normalizeObservation(item.observacion);
                               const hasObservation = observation.length > 0;
+
                               return (
                                 <div
-                                  key={`${item.nombre}-${observation || "sin-observacion"}-${i}`}
-                                  className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3"
+                                  key={`${item.nombre}-${observation || "sin-observacion"}-${idx}`}
+                                  className={`rounded-lg border px-4 py-3 transition-colors ${itemEstado === "listo" ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-slate-50"}`}
                                 >
-                                  <div className="flex items-start justify-between gap-3">
+                                  <div className="flex items-start justify-between gap-2">
                                     <div className="min-w-0 flex-1">
-                                      <p className="text-lg font-semibold leading-tight text-slate-950 break-words">
+                                      <p className={`text-base font-semibold leading-tight break-words ${itemEstado === "listo" ? "text-emerald-800 line-through opacity-70" : "text-slate-950"}`}>
                                         {item.nombre}
                                       </p>
                                     </div>
-                                    <div className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base font-bold text-slate-900">
-                                      x{item.cantidad}
+                                    <div className="flex shrink-0 items-center gap-2">
+                                      <span className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-sm font-bold text-slate-900">
+                                        x{item.cantidad}
+                                      </span>
+                                      {itemEstado === "listo" ? (
+                                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100">
+                                          <CheckCircle2 size={16} className="text-emerald-600" />
+                                        </span>
+                                      ) : (
+                                        <button
+                                          onClick={() => cambiarEstadoItem(p.id, idx, nextItem!)}
+                                          disabled={isItemLoading || !isOnline || !nextItem}
+                                          className={`flex h-8 items-center gap-1 rounded-lg px-2.5 text-xs font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                                            nextItem === "preparando" ? "bg-slate-800 hover:bg-slate-700" : "bg-emerald-600 hover:bg-emerald-500"
+                                          }`}
+                                        >
+                                          {isItemLoading ? "..." : nextItem === "preparando" ? <><Flame size={12} /> Iniciar</> : <><CheckCircle2 size={12} /> Listo</>}
+                                        </button>
+                                      )}
                                     </div>
                                   </div>
                                   {hasObservation && (
-                                    <div className="mt-3 rounded-xl border border-amber-300 bg-amber-100 px-3 py-2.5">
-                                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-900">OBS</p>
+                                    <div className="mt-2 rounded-lg border border-amber-300 bg-amber-100 px-3 py-2">
+                                      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">OBS</p>
                                       <p className="text-sm font-semibold leading-snug text-amber-950 break-words">{observation}</p>
                                     </div>
                                   )}
@@ -636,18 +669,6 @@ const Kitchen = () => {
                               );
                             })}
                           </div>
-
-                          {next && (
-                            <button
-                              onClick={() => cambiarEstado(p.id, next)}
-                              disabled={isLoading || !isOnline}
-                              className={`mt-5 flex h-12 w-full items-center justify-center rounded-lg px-4 text-base font-semibold text-white transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
-                                next === "preparando" ? "bg-slate-950 hover:opacity-90" : "bg-emerald-600 hover:opacity-90"
-                              }`}
-                            >
-                              {!isOnline ? "Sin conexión" : isLoading ? "Actualizando..." : next === "preparando" ? "Empezar preparación" : "Marcar como listo"}
-                            </button>
-                          )}
                         </div>
                       );
                     })}
