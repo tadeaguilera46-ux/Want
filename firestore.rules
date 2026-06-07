@@ -288,7 +288,13 @@ service cloud.firestore {
     match /restaurants/{restaurantId}/menu/{itemId} {
       allow read: if resource.data.active == true || isActiveStaff(restaurantId);
 
-      allow create, update, delete: if isSuperAdmin() || isAdmin(restaurantId);
+      allow create, delete: if isSuperAdmin() || isAdmin(restaurantId);
+
+      allow update: if isSuperAdmin() || isAdmin(restaurantId)
+        || (
+          (isKitchen(restaurantId) || isBar(restaurantId))
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active', 'updatedAt'])
+        );
     }
 
     match /restaurants/{restaurantId}/pedidos/{pedidoId} {
