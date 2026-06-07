@@ -11,7 +11,7 @@ import {
   serverTimestamp,
   writeBatch,
 } from "firebase/firestore";
-import { ChefHat, Clock3, Flame, CheckCircle2, LogOut, ToggleLeft, ToggleRight } from "lucide-react";
+import { ChefHat, Clock3, Flame, CheckCircle2, LogOut, ToggleLeft, ToggleRight, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { writeAuditLog } from "../lib/audit-logs";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
@@ -39,6 +39,16 @@ const DANGER_MINUTES = 15;
 const NOW_REFRESH_MS = 5000;
 
 const normalizeObservation = (value?: string) => value?.trim() || "";
+
+const CRITICAL_KEYWORDS = [
+  "alergi", "celiac", "celiaquí", "gluten", "lactosa",
+  "maní", "mani", "nuez", "nueces", "cacahuete",
+  "diabétic", "diabetic", "intoleranc", "fruto seco",
+  "sin azúcar", "sin azucar", "anafilax",
+];
+
+const isCriticalObservation = (text: string) =>
+  CRITICAL_KEYWORDS.some((kw) => text.toLowerCase().includes(kw));
 
 const isFoodItem = (item: { category?: string }) => {
   return item.category === "food";
@@ -752,12 +762,22 @@ const Kitchen = () => {
                                       )}
                                     </div>
                                   </div>
-                                  {hasObservation && (
-                                    <div className="mt-2 rounded-lg border border-amber-300 bg-amber-100 px-3 py-2">
-                                      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">OBS</p>
-                                      <p className="text-sm font-semibold leading-snug text-amber-950 break-words">{observation}</p>
-                                    </div>
-                                  )}
+                                  {hasObservation && (() => {
+                                    const critical = isCriticalObservation(observation);
+                                    return (
+                                      <div className={`mt-2 rounded-lg border px-3 py-2 ${critical ? "border-red-400 bg-red-100" : "border-amber-300 bg-amber-100"}`}>
+                                        <div className="mb-0.5 flex items-center gap-1">
+                                          {critical && <AlertTriangle size={11} className="shrink-0 text-red-700" />}
+                                          <p className={`text-[10px] font-bold uppercase tracking-wide ${critical ? "text-red-700" : "text-amber-900"}`}>
+                                            {critical ? "¡ALERGIA / ALERTA!" : "OBS"}
+                                          </p>
+                                        </div>
+                                        <p className={`text-sm font-semibold leading-snug break-words ${critical ? "text-red-900" : "text-amber-950"}`}>
+                                          {observation}
+                                        </p>
+                                      </div>
+                                    );
+                                  })()}
                                 </div>
                               );
                             })}
