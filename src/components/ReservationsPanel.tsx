@@ -31,6 +31,12 @@ type Reservation = {
     sentAt?: unknown;
     error?: string | null;
   };
+  reminder?: {
+    channel: "email";
+    status: "pending" | "sending" | "sent" | "failed";
+    sentAt?: unknown;
+    error?: string | null;
+  };
   notes?: string;
   createdAt?: unknown;
 };
@@ -95,6 +101,12 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
           sentAt: null,
           error: null,
         },
+        reminder: {
+          channel: "email",
+          status: "pending",
+          sentAt: null,
+          error: null,
+        },
         restaurantId,
         createdAt: serverTimestamp(),
       };
@@ -118,6 +130,7 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
             partySize: Number(partySize) || 2,
             status: "confirmed",
             confirmationStatus: "pending",
+            reminderStatus: "pending",
           },
         },
       });
@@ -249,6 +262,19 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
                   )}
                   {r.confirmation?.status === "failed" && (
                     <span className="font-semibold text-red-600">Error al enviar confirmación</span>
+                  )}
+                  {r.status === "confirmed" &&
+                    (!r.reminder || r.reminder.status === "pending") && (
+                    <span className="font-semibold text-blue-600">Recordatorio programado 2 h antes</span>
+                  )}
+                  {r.reminder?.status === "sending" && (
+                    <span className="font-semibold text-blue-600">Enviando recordatorio...</span>
+                  )}
+                  {r.reminder?.status === "sent" && (
+                    <span className="font-semibold text-emerald-600">Recordatorio enviado</span>
+                  )}
+                  {r.reminder?.status === "failed" && (
+                    <span className="font-semibold text-red-600">Error al enviar recordatorio</span>
                   )}
                   {r.notes && <span className="italic">{r.notes}</span>}
                 </div>

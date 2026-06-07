@@ -42,11 +42,15 @@ async function sendEmail(
   to: string,
   subject: string,
   html: string,
-  attachments?: { filename: string; content: Buffer }[]
+  attachments?: { filename: string; content: Buffer }[],
+  idempotencyKey?: string
 ): Promise<boolean> {
   const resend = new Resend(apiKey);
   const from = process.env.EMAIL_FROM || "WANT <onboarding@resend.dev>";
-  const { error } = await resend.emails.send({ from, to, subject, html, attachments });
+  const { error } = await resend.emails.send(
+    { from, to, subject, html, attachments },
+    idempotencyKey ? { idempotencyKey } : undefined
+  );
   if (error) {
     console.error("sendEmail error:", error);
     return false;
@@ -156,6 +160,178 @@ export const sendReservationConfirmation = onDocumentCreated(
         "confirmation.error": "No se pudo enviar el email",
         "confirmation.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
       });
+    }
+  }
+);
+
+const RESERVATION_REMINDER_MINUTES = 120;
+const RESERVATION_REMINDER_LOCK_MINUTES = 30;
+
+function getDateInBuenosAires(offsetDays = 0): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(Date.now() + offsetDays * 24 * 60 * 60 * 1000));
+}
+
+function getReservationTimeMs(date: unknown, time: unknown): number | null {
+  if (
+    typeof date !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+    typeof time !== "string" ||
+    !/^\d{2}:\d{2}$/.test(time)
+  ) {
+    return null;
+  }
+
+  const reservationTime = Date.parse(`${date}T${time}:00-03:00`);
+  return Number.isFinite(reservationTime) ? reservationTime : null;
+}
+
+export const sendReservationReminders = onSchedule(
+  {
+    schedule: "every 15 minutes",
+    timeZone: "America/Argentina/Buenos_Aires",
+    secrets: [RESEND_API_KEY],
+  },
+  async () => {
+    const db = admin.firestore();
+    const nowMs = Date.now();
+    const candidateDates = [
+      getDateInBuenosAires(),
+      getDateInBuenosAires(1),
+    ];
+    const restaurantsSnap = await db.collection("restaurants").get();
+    const snapshots = await Promise.all(
+      restaurantsSnap.docs.map((restaurantDoc) =>
+        restaurantDoc.ref
+          .collection("reservations")
+          .where("date", "in", candidateDates)
+          .get()
+      )
+    );
+    const restaurantNames = new Map<string, string>();
+
+    for (const reservationSnap of snapshots.flatMap((snapshot) => snapshot.docs)) {
+      const reservation = reservationSnap.data();
+      const reservationTimeMs = getReservationTimeMs(
+        reservation.date,
+        reservation.time
+      );
+      const minutesUntilReservation =
+        reservationTimeMs === null
+          ? null
+          : (reservationTimeMs - nowMs) / (60 * 1000);
+
+      if (
+        reservation.status !== "confirmed" ||
+        minutesUntilReservation === null ||
+        minutesUntilReservation <= 0 ||
+        minutesUntilReservation > RESERVATION_REMINDER_MINUTES ||
+        reservation.reminder?.status === "sent"
+      ) {
+        continue;
+      }
+
+      const email =
+        typeof reservation.email === "string"
+          ? reservation.email.trim().toLowerCase()
+          : "";
+      const claimed = await db.runTransaction(async (transaction) => {
+        const currentSnap = await transaction.get(reservationSnap.ref);
+        if (!currentSnap.exists) return false;
+
+        const current = currentSnap.data() || {};
+        const sendingAtMs =
+          typeof current.reminder?.sendingAt?.toMillis === "function"
+            ? current.reminder.sendingAt.toMillis()
+            : 0;
+        const hasActiveSendingLock =
+          current.reminder?.status === "sending" &&
+          nowMs - sendingAtMs <
+            RESERVATION_REMINDER_LOCK_MINUTES * 60 * 1000;
+        if (
+          current.status !== "confirmed" ||
+          current.reminder?.status === "sent" ||
+          hasActiveSendingLock
+        ) {
+          return false;
+        }
+
+        transaction.update(reservationSnap.ref, {
+          "reminder.channel": "email",
+          "reminder.status": "sending",
+          "reminder.sendingAt": admin.firestore.FieldValue.serverTimestamp(),
+          "reminder.error": null,
+          "reminder.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return true;
+      });
+
+      if (!claimed) continue;
+
+      try {
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          throw new Error("Email inválido o ausente");
+        }
+
+        const restaurantRef = reservationSnap.ref.parent.parent;
+        if (!restaurantRef) throw new Error("Restaurante inválido");
+
+        let restaurantName = restaurantNames.get(restaurantRef.id);
+        if (!restaurantName) {
+          const restaurantSnap = await restaurantRef.get();
+          const restaurantData = restaurantSnap.data();
+          restaurantName =
+            typeof restaurantData?.name === "string"
+              ? restaurantData.name
+              : "el restaurante";
+          restaurantNames.set(restaurantRef.id, restaurantName);
+        }
+
+        const sent = await sendEmail(
+          RESEND_API_KEY.value(),
+          email,
+          `Recordatorio de reserva — ${restaurantName}`,
+          emailWrapper(
+            "Tu reserva es dentro de 2 horas",
+            `<p style="margin:0 0 16px;font-size:15px;color:#3f3f46;line-height:1.6">Hola <strong>${escapeHtml(reservation.name)}</strong>, te recordamos que tu reserva en <strong>${escapeHtml(restaurantName)}</strong> es el <strong>${escapeHtml(reservation.date)}</strong> a las <strong>${escapeHtml(reservation.time)}</strong>.</p>
+             <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;border-collapse:collapse">
+               <tr><td style="padding:8px 0;border-bottom:1px solid #f4f4f5;color:#71717a">Personas</td><td style="padding:8px 0;border-bottom:1px solid #f4f4f5;text-align:right;font-weight:700">${escapeHtml(reservation.partySize)}</td></tr>
+               ${Number.isInteger(reservation.mesa) && reservation.mesa > 0 ? `<tr><td style="padding:8px 0;color:#71717a">Mesa</td><td style="padding:8px 0;text-align:right;font-weight:700">${escapeHtml(reservation.mesa)}</td></tr>` : ""}
+             </table>
+             <p style="margin:0;font-size:13px;color:#71717a">Si necesitás modificar o cancelar la reserva, comunicate directamente con el restaurante.</p>`
+          ),
+          undefined,
+          `reservation-reminder-${crypto
+            .createHash("sha256")
+            .update(reservationSnap.ref.path)
+            .digest("hex")}`
+        );
+
+        if (!sent) throw new Error("Resend rechazó el recordatorio");
+
+        await reservationSnap.ref.update({
+          "reminder.status": "sent",
+          "reminder.sentAt": admin.firestore.FieldValue.serverTimestamp(),
+          "reminder.sendingAt": null,
+          "reminder.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
+          "reminder.error": null,
+        });
+      } catch (error) {
+        console.error("sendReservationReminders error:", error);
+        Sentry.captureException(error, {
+          extra: { reservationId: reservationSnap.id },
+        });
+        await reservationSnap.ref.update({
+          "reminder.status": "failed",
+          "reminder.sendingAt": null,
+          "reminder.error": "No se pudo enviar el recordatorio",
+          "reminder.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
     }
   }
 );
