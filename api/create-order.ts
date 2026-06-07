@@ -261,7 +261,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       sessionData.billRequested === true
      ) {
       throw new UserFacingError(
-        "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa."
+        "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa, hasta estar paga."
       );
      }
 
@@ -282,14 +282,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           estadoCuenta === "cerrada"
         ) {
           throw new UserFacingError(
-            "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa."
+            "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa, hasta estar paga."
           );
         }
       }
      
      if (sessionData.ordersLocked === true) {
         throw new UserFacingError(
-          "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa."
+          "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa, hasta estar paga."
         );
      }
 
