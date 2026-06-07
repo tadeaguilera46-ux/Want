@@ -9,7 +9,7 @@ import {
 } from "firebase/firestore";
 import { getApp } from "firebase/app";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { Calendar, Clock, Plus, Users } from "lucide-react";
+import { Calendar, CalendarClock, Clock, Plus, Users } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import { toast } from "sonner";
 import { useAuth } from "../lib/auth-context";
@@ -46,6 +46,13 @@ type Reservation = {
     error?: string | null;
   };
   notes?: string;
+  rescheduleHistory?: {
+    from: { date: string; time: string };
+    to: { date: string; time: string };
+    changedAt?: unknown;
+    actorUid?: string;
+    actorEmail?: string | null;
+  }[];
   createdAt?: unknown;
 };
 
@@ -155,6 +162,12 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [rescheduling, setRescheduling] = useState(false);
+  const [rescheduleDraft, setRescheduleDraft] = useState<{
+    reservationId: string;
+    date: string;
+    time: string;
+  } | null>(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settings, setSettings] =
     useState<ReservationSettings>(DEFAULT_SETTINGS);
@@ -264,6 +277,35 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
       toast.error(getFunctionErrorMessage(error));
     } finally {
       setUpdatingId(null);
+    }
+  };
+
+  const startReschedule = (reservation: Reservation) => {
+    setRescheduleDraft({
+      reservationId: reservation.id,
+      date: reservation.date,
+      time: reservation.slot || reservation.time,
+    });
+  };
+
+  const saveReschedule = async () => {
+    if (!rescheduleDraft || !user) return;
+    try {
+      setRescheduling(true);
+      const reschedule = httpsCallable(functions, "rescheduleReservation");
+      await reschedule({
+        restaurantId,
+        reservationId: rescheduleDraft.reservationId,
+        date: rescheduleDraft.date,
+        time: rescheduleDraft.time,
+      });
+      setViewDate(rescheduleDraft.date);
+      setRescheduleDraft(null);
+      toast.success("Reserva reprogramada y registrada en el historial.");
+    } catch (error) {
+      toast.error(getFunctionErrorMessage(error));
+    } finally {
+      setRescheduling(false);
     }
   };
 
@@ -535,25 +577,110 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
                   )}
                   {r.notes && <span className="italic">{r.notes}</span>}
                 </div>
+                {r.rescheduleHistory && r.rescheduleHistory.length > 0 && (
+                  <details className="mt-2 text-xs text-zinc-500">
+                    <summary className="cursor-pointer font-semibold text-zinc-600">
+                      Historial de reprogramaciones ({r.rescheduleHistory.length})
+                    </summary>
+                    <div className="mt-2 space-y-1 border-l-2 border-zinc-200 pl-3">
+                      {[...r.rescheduleHistory].reverse().map((entry, index) => (
+                        <p key={`${entry.from.date}-${entry.from.time}-${index}`}>
+                          {entry.from.date} {entry.from.time} → {entry.to.date}{" "}
+                          {entry.to.time}
+                        </p>
+                      ))}
+                    </div>
+                  </details>
+                )}
+                {rescheduleDraft?.reservationId === r.id && (
+                  <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 p-3">
+                    <p className="mb-2 text-xs font-bold text-blue-800">
+                      Nueva fecha y horario
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        type="date"
+                        min={today()}
+                        value={rescheduleDraft.date}
+                        onChange={(event) =>
+                          setRescheduleDraft((current) =>
+                            current
+                              ? { ...current, date: event.target.value }
+                              : current
+                          )
+                        }
+                        className="h-9 rounded-lg border border-blue-200 bg-white px-3 text-sm"
+                      />
+                      <select
+                        value={rescheduleDraft.time}
+                        onChange={(event) =>
+                          setRescheduleDraft((current) =>
+                            current
+                              ? { ...current, time: event.target.value }
+                              : current
+                          )
+                        }
+                        className="h-9 rounded-lg border border-blue-200 bg-white px-3 text-sm"
+                      >
+                        {slots.map((slot) => (
+                          <option key={slot} value={slot}>
+                            {slot}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={saveReschedule}
+                        disabled={rescheduling}
+                        className="h-9 rounded-lg bg-blue-700 px-3 text-xs font-bold text-white disabled:opacity-50"
+                      >
+                        {rescheduling ? "Guardando..." : "Confirmar"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRescheduleDraft(null)}
+                        disabled={rescheduling}
+                        className="h-9 rounded-lg border border-blue-200 bg-white px-3 text-xs font-bold text-blue-700 disabled:opacity-50"
+                      >
+                        Cerrar
+                      </button>
+                    </div>
+                    <p className="mt-2 text-xs text-blue-700">
+                      El cupo de la nueva franja se valida al confirmar.
+                    </p>
+                  </div>
+                )}
               </div>
-              <select
-                value=""
-                onChange={(event) =>
-                  setStatus(r.id, event.target.value as ReservationStatus)
-                }
-                disabled={updatingId === r.id}
-                className="h-9 shrink-0 rounded-lg border border-zinc-200 bg-white px-3 text-xs font-bold text-zinc-700 disabled:opacity-50"
-                aria-label={`Cambiar estado de la reserva de ${r.name}`}
-              >
-                <option value="" disabled>
-                  {updatingId === r.id ? "Actualizando..." : "Cambiar estado"}
-                </option>
-                {STATUS_TRANSITIONS[r.status].map((status) => (
-                  <option key={status} value={status}>
-                    {STATUS_ACTION_LABEL[status]}
+              <div className="flex shrink-0 flex-col gap-2">
+                {(r.status === "pending" || r.status === "confirmed") && (
+                  <button
+                    type="button"
+                    onClick={() => startReschedule(r)}
+                    disabled={rescheduling}
+                    className="flex h-9 items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-bold text-blue-700 disabled:opacity-50"
+                  >
+                    <CalendarClock size={14} /> Reprogramar
+                  </button>
+                )}
+                <select
+                  value=""
+                  onChange={(event) =>
+                    setStatus(r.id, event.target.value as ReservationStatus)
+                  }
+                  disabled={updatingId === r.id}
+                  className="h-9 rounded-lg border border-zinc-200 bg-white px-3 text-xs font-bold text-zinc-700 disabled:opacity-50"
+                  aria-label={`Cambiar estado de la reserva de ${r.name}`}
+                >
+                  <option value="" disabled>
+                    {updatingId === r.id ? "Actualizando..." : "Cambiar estado"}
                   </option>
-                ))}
-              </select>
+                  {STATUS_TRANSITIONS[r.status].map((status) => (
+                    <option key={status} value={status}>
+                      {STATUS_ACTION_LABEL[status]}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           ))}
         </div>

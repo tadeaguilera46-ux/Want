@@ -666,6 +666,211 @@ export const updateReservationStatus = onCall({ cors: true }, async (request) =>
   return { ok: true };
 });
 
+export const rescheduleReservation = onCall({ cors: true }, async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
+
+  const data = request.data as {
+    restaurantId?: unknown;
+    reservationId?: unknown;
+    date?: unknown;
+    time?: unknown;
+  };
+  const restaurantId =
+    typeof data.restaurantId === "string" ? data.restaurantId.trim() : "";
+  const reservationId =
+    typeof data.reservationId === "string" ? data.reservationId.trim() : "";
+  const date = typeof data.date === "string" ? data.date.trim() : "";
+  const time = typeof data.time === "string" ? data.time.trim() : "";
+
+  if (
+    !restaurantId ||
+    !reservationId ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+    !/^\d{2}:\d{2}$/.test(time)
+  ) {
+    throw new HttpsError("invalid-argument", "Nueva fecha u horario inválido");
+  }
+
+  const staff = await requireRestaurantAdmin(restaurantId, request.auth.uid);
+  const db = admin.firestore();
+  const reservationRef = db.doc(
+    `restaurants/${restaurantId}/reservations/${reservationId}`
+  );
+  const settingsRef = db.doc(
+    `restaurants/${restaurantId}/reservationSettings/main`
+  );
+  const auditRef = db.collection(`restaurants/${restaurantId}/auditLogs`).doc();
+
+  await db.runTransaction(async (transaction) => {
+    const [reservationSnap, settingsSnap] = await Promise.all([
+      transaction.get(reservationRef),
+      transaction.get(settingsRef),
+    ]);
+    if (!reservationSnap.exists) {
+      throw new HttpsError("not-found", "Reserva inexistente");
+    }
+
+    const reservation = reservationSnap.data() || {};
+    const status = reservation.status as ReservationStatus;
+    if (status !== "pending" && status !== "confirmed") {
+      throw new HttpsError(
+        "failed-precondition",
+        "Solo se pueden reprogramar reservas pendientes o confirmadas"
+      );
+    }
+
+    const settings = settingsSnap.exists
+      ? normalizeReservationSettings(settingsSnap.data())
+      : DEFAULT_RESERVATION_SETTINGS;
+    const nextSlot = getReservationSlot(time, settings);
+    const previousDate = String(reservation.date || "");
+    const previousSlot = String(reservation.slot || reservation.time || "");
+
+    if (date === previousDate && nextSlot === previousSlot) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Elegí una fecha u horario diferente"
+      );
+    }
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(previousDate) ||
+      !/^\d{2}:\d{2}$/.test(previousSlot)
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "La reserva actual no tiene una fecha u horario válido"
+      );
+    }
+
+    if (status === "confirmed") {
+      const previousSlotRef = db.doc(
+        `restaurants/${restaurantId}/reservationSlots/${previousDate}_${previousSlot.replace(":", "-")}`
+      );
+      const nextSlotRef = db.doc(
+        `restaurants/${restaurantId}/reservationSlots/${date}_${nextSlot.replace(":", "-")}`
+      );
+      const [previousSlotSnap, nextSlotSnap] = await Promise.all([
+        transaction.get(previousSlotRef),
+        transaction.get(nextSlotRef),
+      ]);
+      const missingDates = Array.from(
+        new Set([
+          ...(!previousSlotSnap.exists ? [previousDate] : []),
+          ...(!nextSlotSnap.exists ? [date] : []),
+        ])
+      );
+      const reservationsByDate = new Map<
+        string,
+        FirebaseFirestore.QuerySnapshot
+      >();
+
+      await Promise.all(
+        missingDates.map(async (reservationDate) => {
+          const snapshot = await transaction.get(
+            db
+              .collection(`restaurants/${restaurantId}/reservations`)
+              .where("date", "==", reservationDate)
+          );
+          reservationsByDate.set(reservationDate, snapshot);
+        })
+      );
+
+      const calculateReservedPersons = (
+        reservationDate: string,
+        slot: string
+      ) =>
+        reservationsByDate
+          .get(reservationDate)
+          ?.docs.reduce((total, document) => {
+            const existing = document.data();
+            return OCCUPYING_RESERVATION_STATUSES.has(existing.status) &&
+              (existing.slot || existing.time) === slot
+              ? total + Number(existing.partySize || 0)
+              : total;
+          }, 0) || 0;
+
+      const previousReservedPersons = previousSlotSnap.exists
+        ? Number(previousSlotSnap.data()?.reservedPersons || 0)
+        : calculateReservedPersons(previousDate, previousSlot);
+      const nextReservedPersons = nextSlotSnap.exists
+        ? Number(nextSlotSnap.data()?.reservedPersons || 0)
+        : calculateReservedPersons(date, nextSlot);
+      const partySize = Number(reservation.partySize || 0);
+
+      if (nextReservedPersons + partySize > settings.capacityPerSlot) {
+        throw new HttpsError(
+          "resource-exhausted",
+          `La franja de ${nextSlot} no tiene capacidad suficiente`
+        );
+      }
+
+      transaction.set(
+        previousSlotRef,
+        {
+          restaurantId,
+          date: previousDate,
+          slot: previousSlot,
+          capacity: settings.capacityPerSlot,
+          reservedPersons: Math.max(0, previousReservedPersons - partySize),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+      transaction.set(
+        nextSlotRef,
+        {
+          restaurantId,
+          date,
+          slot: nextSlot,
+          capacity: settings.capacityPerSlot,
+          reservedPersons: nextReservedPersons + partySize,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+
+    const changedAt = admin.firestore.Timestamp.now();
+    const historyEntry = {
+      from: { date: previousDate, time: previousSlot },
+      to: { date, time: nextSlot },
+      changedAt,
+      actorUid: request.auth!.uid,
+      actorEmail: staff.email || request.auth!.token.email || null,
+    };
+
+    transaction.update(reservationRef, {
+      date,
+      time: nextSlot,
+      slot: nextSlot,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      rescheduledAt: changedAt,
+      rescheduleHistory: admin.firestore.FieldValue.arrayUnion(historyEntry),
+      "reminder.status": "pending",
+      "reminder.sentAt": null,
+      "reminder.sendingAt": null,
+      "reminder.error": null,
+      "reminder.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
+    });
+    transaction.set(
+      auditRef,
+      reservationAuditData({
+        restaurantId,
+        action: "reserva_reprogramada",
+        actorUid: request.auth!.uid,
+        actorEmail: staff.email || request.auth!.token.email || null,
+        entityId: reservationId,
+        mesa: reservation.mesa || null,
+        description: `Se reprogramó reserva ${reservationId}`,
+        before: { date: previousDate, time: previousSlot, status },
+        after: { date, time: nextSlot, status },
+      })
+    );
+  });
+
+  return { ok: true };
+});
+
 export const getReservationForCancellation = onCall(
   { cors: true },
   async (request) => {
