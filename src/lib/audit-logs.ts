@@ -4,8 +4,8 @@ import {
   serverTimestamp,
   writeBatch,
   type DocumentData,
-  type Transaction,
-  type WriteBatch,
+  type DocumentReference,
+  type WithFieldValue,
 } from "firebase/firestore";
 import { getDb } from "./firebase";
 
@@ -39,7 +39,12 @@ export type CreateAuditLogInput = AuditActor & {
   metadata?: Record<string, unknown>;
 };
 
-type AuditWriter = Pick<WriteBatch, "set"> | Pick<Transaction, "set">;
+type AuditWriter = {
+  set: (
+    reference: DocumentReference<DocumentData>,
+    data: WithFieldValue<DocumentData>
+  ) => unknown;
+};
 
 const requireText = (value: unknown, field: string) => {
   if (typeof value !== "string") {
