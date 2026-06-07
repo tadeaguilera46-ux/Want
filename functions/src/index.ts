@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/node";
 import { onCall, onRequest, HttpsError } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onDocumentCreated } from "firebase-functions/v2/firestore";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
@@ -42,11 +43,15 @@ async function sendEmail(
   subject: string,
   html: string,
   attachments?: { filename: string; content: Buffer }[]
-): Promise<void> {
+): Promise<boolean> {
   const resend = new Resend(apiKey);
   const from = process.env.EMAIL_FROM || "WANT <onboarding@resend.dev>";
   const { error } = await resend.emails.send({ from, to, subject, html, attachments });
-  if (error) console.error("sendEmail error:", error);
+  if (error) {
+    console.error("sendEmail error:", error);
+    return false;
+  }
+  return true;
 }
 
 function emailWrapper(title: string, body: string): string {
@@ -63,6 +68,97 @@ function emailWrapper(title: string, body: string): string {
     </td></tr>
   </table></td></tr></table></body></html>`;
 }
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+export const sendReservationConfirmation = onDocumentCreated(
+  {
+    document: "restaurants/{restaurantId}/reservations/{reservationId}",
+    secrets: [RESEND_API_KEY],
+  },
+  async (event) => {
+    const reservationSnap = event.data;
+    if (!reservationSnap) return;
+
+    const reservation = reservationSnap.data();
+    const email =
+      typeof reservation.email === "string"
+        ? reservation.email.trim().toLowerCase()
+        : "";
+
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      await reservationSnap.ref.update({
+        "confirmation.status": "failed",
+        "confirmation.error": "Email inválido o ausente",
+        "confirmation.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+
+    try {
+      const restaurantSnap = await admin
+        .firestore()
+        .doc(`restaurants/${event.params.restaurantId}`)
+        .get();
+      const restaurantName =
+        typeof restaurantSnap.data()?.name === "string"
+          ? restaurantSnap.data()?.name
+          : "el restaurante";
+      const mesa =
+        Number.isInteger(reservation.mesa) && reservation.mesa > 0
+          ? `<tr><td style="padding:8px 0;color:#71717a">Mesa</td><td style="padding:8px 0;text-align:right;font-weight:700">${escapeHtml(reservation.mesa)}</td></tr>`
+          : "";
+
+      const sent = await sendEmail(
+        RESEND_API_KEY.value(),
+        email,
+        `Reserva confirmada — ${restaurantName}`,
+        emailWrapper(
+          "Tu reserva está confirmada",
+          `<p style="margin:0 0 16px;font-size:15px;color:#3f3f46;line-height:1.6">Hola <strong>${escapeHtml(reservation.name)}</strong>, tu reserva en <strong>${escapeHtml(restaurantName)}</strong> fue confirmada.</p>
+           <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;border-collapse:collapse">
+             <tr><td style="padding:8px 0;border-bottom:1px solid #f4f4f5;color:#71717a">Fecha</td><td style="padding:8px 0;border-bottom:1px solid #f4f4f5;text-align:right;font-weight:700">${escapeHtml(reservation.date)}</td></tr>
+             <tr><td style="padding:8px 0;border-bottom:1px solid #f4f4f5;color:#71717a">Hora</td><td style="padding:8px 0;border-bottom:1px solid #f4f4f5;text-align:right;font-weight:700">${escapeHtml(reservation.time)}</td></tr>
+             <tr><td style="padding:8px 0;border-bottom:1px solid #f4f4f5;color:#71717a">Personas</td><td style="padding:8px 0;border-bottom:1px solid #f4f4f5;text-align:right;font-weight:700">${escapeHtml(reservation.partySize)}</td></tr>
+             ${mesa}
+           </table>
+           <p style="margin:0;font-size:13px;color:#71717a">Si necesitás modificar o cancelar la reserva, comunicate directamente con el restaurante.</p>`
+        )
+      );
+
+      if (!sent) {
+        throw new Error("Resend rechazó la confirmación de reserva");
+      }
+
+      await reservationSnap.ref.update({
+        "confirmation.status": "sent",
+        "confirmation.sentAt": admin.firestore.FieldValue.serverTimestamp(),
+        "confirmation.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
+        "confirmation.error": null,
+      });
+    } catch (error) {
+      console.error("sendReservationConfirmation error:", error);
+      Sentry.captureException(error, {
+        extra: {
+          restaurantId: event.params.restaurantId,
+          reservationId: event.params.reservationId,
+        },
+      });
+      await reservationSnap.ref.update({
+        "confirmation.status": "failed",
+        "confirmation.error": "No se pudo enviar el email",
+        "confirmation.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+  }
+);
 
 const MP_PLANS: Record<string, string> = {
   starter: "ec0431741ea24561a858ae740135a58c",

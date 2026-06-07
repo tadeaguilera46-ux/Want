@@ -19,11 +19,18 @@ type Reservation = {
   id: string;
   name: string;
   phone: string;
+  email: string;
   date: string;
   time: string;
   partySize: number;
   mesa?: number;
   status: "pending" | "confirmed" | "cancelled";
+  confirmation?: {
+    channel: "email";
+    status: "pending" | "sent" | "failed";
+    sentAt?: unknown;
+    error?: string | null;
+  };
   notes?: string;
   createdAt?: unknown;
 };
@@ -41,6 +48,7 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [date, setDate] = useState(today());
   const [time, setTime] = useState("20:00");
   const [partySize, setPartySize] = useState("2");
@@ -60,7 +68,12 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !phone.trim() || !user) return;
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!name.trim() || !phone.trim() || !normalizedEmail || !user) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      toast.error("Ingresá un email válido.");
+      return;
+    }
     try {
       setSaving(true);
       const reservationRef = doc(
@@ -69,12 +82,19 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
       const reservationData = {
         name: name.trim(),
         phone: phone.trim(),
+        email: normalizedEmail,
         date,
         time,
         partySize: Number(partySize) || 2,
         mesa: mesa ? Number(mesa) : null,
         notes: notes.trim() || null,
-        status: "pending",
+        status: "confirmed",
+        confirmation: {
+          channel: "email",
+          status: "pending",
+          sentAt: null,
+          error: null,
+        },
         restaurantId,
         createdAt: serverTimestamp(),
       };
@@ -96,15 +116,16 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
             date,
             time,
             partySize: Number(partySize) || 2,
-            status: "pending",
+            status: "confirmed",
+            confirmationStatus: "pending",
           },
         },
       });
       await batch.commit();
-      setName(""); setPhone(""); setDate(today()); setTime("20:00");
+      setName(""); setPhone(""); setEmail(""); setDate(today()); setTime("20:00");
       setPartySize("2"); setMesa(""); setNotes("");
       setShowForm(false);
-      toast.success("Reserva registrada.");
+      toast.success("Reserva confirmada. Enviaremos el email automáticamente.");
     } catch {
       toast.error("No se pudo guardar.");
     } finally {
@@ -185,6 +206,7 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
           <div className="grid gap-2 sm:grid-cols-2">
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre *" required className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono *" required className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email *" required className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
             <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
             <input type="number" min={1} max={30} value={partySize} onChange={(e) => setPartySize(e.target.value)} placeholder="Personas" className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
@@ -218,6 +240,16 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
                   <span className="flex items-center gap-1"><Users size={11} />{r.partySize} personas</span>
                   {r.mesa && <span>Mesa {r.mesa}</span>}
                   {r.phone && <span>{r.phone}</span>}
+                  {r.email && <span>{r.email}</span>}
+                  {r.confirmation?.status === "pending" && (
+                    <span className="font-semibold text-amber-600">Enviando confirmación...</span>
+                  )}
+                  {r.confirmation?.status === "sent" && (
+                    <span className="font-semibold text-emerald-600">Confirmación enviada</span>
+                  )}
+                  {r.confirmation?.status === "failed" && (
+                    <span className="font-semibold text-red-600">Error al enviar confirmación</span>
+                  )}
                   {r.notes && <span className="italic">{r.notes}</span>}
                 </div>
               </div>
