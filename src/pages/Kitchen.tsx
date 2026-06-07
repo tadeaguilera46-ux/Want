@@ -354,6 +354,25 @@ const Kitchen = () => {
       });
   }, [pedidos]);
 
+  const pedidosPorMesa = useMemo(() => {
+    const groups = new Map<number, Pedido[]>();
+    for (const p of pedidosVisibles) {
+      const mesa = Number(p.mesa);
+      if (!groups.has(mesa)) groups.set(mesa, []);
+      groups.get(mesa)!.push(p);
+    }
+    return Array.from(groups.entries())
+      .sort(([, aList], [, bList]) => {
+        const minA = Math.min(...aList.map((p) => getEstadoPriority((p.estadoCocina || "pendiente") as EstadoCocina)));
+        const minB = Math.min(...bList.map((p) => getEstadoPriority((p.estadoCocina || "pendiente") as EstadoCocina)));
+        if (minA !== minB) return minA - minB;
+        const earliestA = Math.min(...aList.map((p) => getCreatedAtMs(p.createdAt)));
+        const earliestB = Math.min(...bList.map((p) => getCreatedAtMs(p.createdAt)));
+        return earliestA - earliestB;
+      })
+      .map(([mesa, mesaPedidos]) => ({ mesa, mesaPedidos }));
+  }, [pedidosVisibles]);
+
   const stats = useMemo(() => {
     const pendientes = pedidosVisibles.filter(
       (p) => (p.estadoCocina || "pendiente") === "pendiente"
@@ -519,7 +538,7 @@ const Kitchen = () => {
           </div>
         )}
 
-        {pedidosVisibles.length === 0 ? (
+        {pedidosPorMesa.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 bg-white px-8 py-14 text-center shadow-sm">
             <p className="text-lg font-semibold text-slate-700">
               No hay pedidos de cocina activos
@@ -529,127 +548,110 @@ const Kitchen = () => {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-            {pedidosVisibles.map((p) => {
-              const estadoActual = (p.estadoCocina ||
-                "pendiente") as EstadoCocina;
-              const next = siguienteEstado(estadoActual);
-              const comida = (p.items || []).filter(
-                (item, idx) => isFoodItem(item) && !(p.cancelledItems?.some((c) => c.itemIndex === idx))
-              );
-              const isLoading = !!loadingById[p.id];
-              const isNew = now - getCreatedAtMs(p.createdAt) < NEW_BADGE_MS;
-              const urgente = getElapsedMinutes(p) >= WARNING_MINUTES;
-
+          <div className="space-y-6">
+            {pedidosPorMesa.map(({ mesa, mesaPedidos }) => {
+              const mesaUrgente = mesaPedidos.some((p) => getElapsedMinutes(p) >= WARNING_MINUTES);
               return (
-                <div
-                  key={p.id}
-                  className={[
-                    "rounded-xl border border-slate-200 border-l-4 bg-white p-5 shadow-sm transition-all duration-200",
-                    getCardStylesByEstado(estadoActual),
-                    isNew ? "ring-2 ring-orange-300" : "",
-                    urgente ? "shadow-md" : "",
-                  ].join(" ")}
-                >
-                  <div className="mb-4 flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-2xl font-bold tracking-tight text-slate-950">
-                          Mesa {p.mesa}
-                        </p>
-
-                        {isNew && (
-                          <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
-                            Nuevo
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide ${getBadgeStylesByEstado(
-                            estadoActual
-                          )}`}
-                        >
-                          {estadoActual === "pendiente" && (
-                            <Clock3 size={13} className="mr-1.5" />
-                          )}
-                          {estadoActual === "preparando" && (
-                            <Flame size={13} className="mr-1.5" />
-                          )}
-                          {estadoActual === "listo" && (
-                            <CheckCircle2 size={13} className="mr-1.5" />
-                          )}
-                          {getEstadoLabel(estadoActual)}
-                        </span>
-
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1.5 text-sm font-bold ${getTimeStyles(
-                            p
-                          )}`}
-                        >
-                          ⏱ {formatElapsedTime(p)}
-                        </span>
-                      </div>
-                    </div>
+                <div key={mesa}>
+                  <div className={`mb-3 flex items-center gap-3 rounded-lg px-4 py-2.5 ${mesaUrgente ? "bg-orange-50 border border-orange-200" : "bg-slate-100 border border-slate-200"}`}>
+                    <span className={`text-xl font-bold tracking-tight ${mesaUrgente ? "text-orange-800" : "text-slate-800"}`}>
+                      Mesa {mesa}
+                    </span>
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${mesaUrgente ? "bg-orange-200 text-orange-900" : "bg-slate-200 text-slate-700"}`}>
+                      {mesaPedidos.length} {mesaPedidos.length === 1 ? "pedido" : "pedidos"}
+                    </span>
                   </div>
-
-                  <div className="space-y-3">
-                    {comida.map((item, i) => {
-                      const observation = normalizeObservation(item.observacion);
-                      const hasObservation = observation.length > 0;
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                    {mesaPedidos.map((p) => {
+                      const estadoActual = (p.estadoCocina || "pendiente") as EstadoCocina;
+                      const next = siguienteEstado(estadoActual);
+                      const comida = (p.items || []).filter(
+                        (item, idx) => isFoodItem(item) && !(p.cancelledItems?.some((c) => c.itemIndex === idx))
+                      );
+                      const isLoading = !!loadingById[p.id];
+                      const isNew = now - getCreatedAtMs(p.createdAt) < NEW_BADGE_MS;
+                      const urgente = getElapsedMinutes(p) >= WARNING_MINUTES;
 
                       return (
                         <div
-                          key={`${item.nombre}-${observation || "sin-observacion"}-${i}`}
-                          className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3"
+                          key={p.id}
+                          className={[
+                            "rounded-xl border border-slate-200 border-l-4 bg-white p-5 shadow-sm transition-all duration-200",
+                            getCardStylesByEstado(estadoActual),
+                            isNew ? "ring-2 ring-orange-300" : "",
+                            urgente ? "shadow-md" : "",
+                          ].join(" ")}
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-lg font-semibold leading-tight text-slate-950 break-words">
-                                {item.nombre}
-                              </p>
-                            </div>
-
-                            <div className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base font-bold text-slate-900">
-                              x{item.cantidad}
+                          <div className="mb-4 flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                {isNew && (
+                                  <span className="rounded-full bg-orange-500 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
+                                    Nuevo
+                                  </span>
+                                )}
+                              </div>
+                              <div className="mt-1 flex flex-wrap items-center gap-2">
+                                <span
+                                  className={`inline-flex rounded-full px-3 py-1.5 text-xs font-semibold uppercase tracking-wide ${getBadgeStylesByEstado(estadoActual)}`}
+                                >
+                                  {estadoActual === "pendiente" && <Clock3 size={13} className="mr-1.5" />}
+                                  {estadoActual === "preparando" && <Flame size={13} className="mr-1.5" />}
+                                  {estadoActual === "listo" && <CheckCircle2 size={13} className="mr-1.5" />}
+                                  {getEstadoLabel(estadoActual)}
+                                </span>
+                                <span className={`inline-flex rounded-full px-3 py-1.5 text-sm font-bold ${getTimeStyles(p)}`}>
+                                  ⏱ {formatElapsedTime(p)}
+                                </span>
+                              </div>
                             </div>
                           </div>
 
-                          {hasObservation && (
-                            <div className="mt-3 rounded-xl border border-amber-300 bg-amber-100 px-3 py-2.5">
-                              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
-                                OBS
-                              </p>
-                              <p className="text-sm font-semibold leading-snug text-amber-950 break-words">
-                                {observation}
-                              </p>
-                            </div>
+                          <div className="space-y-3">
+                            {comida.map((item, i) => {
+                              const observation = normalizeObservation(item.observacion);
+                              const hasObservation = observation.length > 0;
+                              return (
+                                <div
+                                  key={`${item.nombre}-${observation || "sin-observacion"}-${i}`}
+                                  className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3"
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-lg font-semibold leading-tight text-slate-950 break-words">
+                                        {item.nombre}
+                                      </p>
+                                    </div>
+                                    <div className="shrink-0 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-base font-bold text-slate-900">
+                                      x{item.cantidad}
+                                    </div>
+                                  </div>
+                                  {hasObservation && (
+                                    <div className="mt-3 rounded-xl border border-amber-300 bg-amber-100 px-3 py-2.5">
+                                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-900">OBS</p>
+                                      <p className="text-sm font-semibold leading-snug text-amber-950 break-words">{observation}</p>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {next && (
+                            <button
+                              onClick={() => cambiarEstado(p.id, next)}
+                              disabled={isLoading || !isOnline}
+                              className={`mt-5 flex h-12 w-full items-center justify-center rounded-lg px-4 text-base font-semibold text-white transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
+                                next === "preparando" ? "bg-slate-950 hover:opacity-90" : "bg-emerald-600 hover:opacity-90"
+                              }`}
+                            >
+                              {!isOnline ? "Sin conexión" : isLoading ? "Actualizando..." : next === "preparando" ? "Empezar preparación" : "Marcar como listo"}
+                            </button>
                           )}
                         </div>
                       );
                     })}
                   </div>
-
-                  {next && (
-                    <button
-                      onClick={() => cambiarEstado(p.id, next)}
-                      disabled={isLoading || !isOnline}
-                      className={`mt-5 flex h-12 w-full items-center justify-center rounded-lg px-4 text-base font-semibold text-white transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
-                        next === "preparando"
-                          ? "bg-slate-950 hover:opacity-90"
-                          : "bg-emerald-600 hover:opacity-90"
-                      }`}
-                    >
-                      {!isOnline
-                        ? "Sin conexión"
-                        : isLoading
-                          ? "Actualizando..."
-                          : next === "preparando"
-                            ? "Empezar preparación"
-                            : "Marcar como listo"}
-                    </button>
-                  )}
                 </div>
               );
             })}
