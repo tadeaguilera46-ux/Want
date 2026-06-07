@@ -155,7 +155,7 @@ function MenuItemPicker({
                     onClick={() => handleSelect("")}
                     className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm transition hover:bg-zinc-50 ${!value ? "font-semibold text-zinc-950" : "text-zinc-500"}`}
                   >
-                    Todos los productos (sin filtro)
+                    Todos los productos
                   </button>
                   <div className="mx-4 my-1 h-px bg-zinc-100" />
 
@@ -230,7 +230,6 @@ function CategoryPicker({
       className="h-10 w-full rounded-lg border border-zinc-200 px-3 text-sm"
     >
       <option value="">Todas las categorías</option>
-      <option value={PROMO_CATEGORY_NONE}>Solo el producto seleccionado</option>
       {categories.map((cat) => (
         <option key={cat} value={cat}>
           {cat}
@@ -297,6 +296,7 @@ export function PromotionsPanel({ restaurantId }: { restaurantId: string }) {
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [productName, setProductName] = useState("");
+  const [productMode, setProductMode] = useState<"all" | "none" | "specific">("all");
   const [discountType, setDiscountType] = useState<"percentage" | "fixed">("percentage");
   const [discountValue, setDiscountValue] = useState("10");
   const [fromTime, setFromTime] = useState("18:00");
@@ -318,10 +318,13 @@ export function PromotionsPanel({ restaurantId }: { restaurantId: string }) {
     if (!name.trim() || !discountValue) return;
     try {
       setSaving(true);
+      const savedProductName = productMode === "specific" ? productName.trim() : "";
+      const savedCategory =
+        productMode === "all" ? "" : productMode === "specific" ? PROMO_CATEGORY_NONE : category.trim();
       await addDoc(collection(db, "restaurants", restaurantId, "promotions"), {
         name: name.trim(),
-        category: category.trim(),
-        productName: productName.trim(),
+        category: savedCategory,
+        productName: savedProductName,
         discountType,
         discountValue: Number(discountValue),
         fromTime,
@@ -331,7 +334,7 @@ export function PromotionsPanel({ restaurantId }: { restaurantId: string }) {
         restaurantId,
         createdAt: serverTimestamp(),
       });
-      setName(""); setCategory(""); setProductName(""); setDiscountValue("10");
+      setName(""); setCategory(""); setProductName(""); setProductMode("all"); setDiscountValue("10");
       setFromTime("18:00"); setToTime("20:00"); setDays([]);
       toast.success("Promoción creada.");
     } catch {
@@ -355,15 +358,41 @@ export function PromotionsPanel({ restaurantId }: { restaurantId: string }) {
         </div>
         <form onSubmit={handleAdd} className="space-y-3">
           <div className="grid gap-2 sm:grid-cols-2">
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Happy Hour)" required className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
-            <CategoryPicker restaurantId={restaurantId} value={category} onChange={setCategory} />
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Happy Hour)" required className="h-10 rounded-lg border border-zinc-200 px-3 text-sm sm:col-span-2" />
+            <div className="sm:col-span-2 flex overflow-hidden rounded-lg border border-zinc-200">
+              {(["all", "none", "specific"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => { setProductMode(mode); if (mode !== "specific") setProductName(""); }}
+                  className={`flex-1 h-10 text-xs font-semibold transition border-r last:border-r-0 border-zinc-200 ${productMode === mode ? "bg-zinc-950 text-white" : "bg-white text-zinc-500 hover:bg-zinc-50"}`}
+                >
+                  {mode === "all" ? "Todos los productos" : mode === "none" ? "Ningún producto" : "Producto específico"}
+                </button>
+              ))}
+            </div>
+            {productMode === "specific" && (
+              <div className="sm:col-span-2">
+                <MenuItemPicker
+                  restaurantId={restaurantId}
+                  value={productName}
+                  onChange={setProductName}
+                  placeholder="Seleccionar producto..."
+                />
+              </div>
+            )}
             <div className="sm:col-span-2">
-              <MenuItemPicker
-                restaurantId={restaurantId}
-                value={productName}
-                onChange={setProductName}
-                placeholder="Producto específico (tiene prioridad sobre categoría)"
-              />
+              {productMode !== "none" ? (
+                <div className="flex h-10 items-center rounded-lg border border-zinc-100 bg-zinc-50 px-3">
+                  <span className="text-xs text-zinc-400">
+                    {productMode === "all"
+                      ? "Categoría deshabilitada: el descuento aplica a todo el menú"
+                      : "Categoría deshabilitada: el descuento aplica solo al producto seleccionado"}
+                  </span>
+                </div>
+              ) : (
+                <CategoryPicker restaurantId={restaurantId} value={category} onChange={setCategory} />
+              )}
             </div>
             <select value={discountType} onChange={(e) => setDiscountType(e.target.value as "percentage" | "fixed")} className="h-10 rounded-lg border border-zinc-200 px-3 text-sm">
               <option value="percentage">Porcentaje (%)</option>
