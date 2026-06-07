@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  addDoc,
   collection,
   doc,
+  getDocs,
+  limit,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  updateDoc,
   where,
   writeBatch,
 } from "firebase/firestore";
@@ -323,6 +327,8 @@ const Cashier = () => {
     reason: string;
   } | null>(null);
   const [closingCaja, setClosingCaja] = useState(false);
+  const [cajaTurnoId, setCajaTurnoId] = useState<string | null>(null);
+  const [cajaArqueoRealInput, setCajaArqueoRealInput] = useState("");
 
   const sessionKey = restaurantId && user?.uid
     ? `cashier_session_${restaurantId}_${user.uid}_${new Date().toISOString().slice(0, 10)}`
@@ -425,16 +431,46 @@ const Cashier = () => {
     return () => unsubscribe();
   }, [restaurantId]);
 
+  // Restore cash session — Firestore first, localStorage as fallback
   useEffect(() => {
-    if (!sessionKey) return;
-    const stored = localStorage.getItem(sessionKey);
-    if (stored) {
-      try {
-        setCashSession(JSON.parse(stored));
-      } catch {
-        // ignore malformed data
-      }
-    }
+    if (!restaurantId || !user?.uid || !sessionKey) return;
+    const uid = user.uid;
+    getDocs(
+      query(
+        collection(db, "restaurants", restaurantId, "cajaTurnos"),
+        where("actorUid", "==", uid),
+        where("status", "==", "open"),
+        orderBy("openedAt", "desc"),
+        limit(1)
+      )
+    )
+      .then((snap) => {
+        if (!snap.empty) {
+          const d = snap.docs[0];
+          const data = d.data();
+          setCajaTurnoId(d.id);
+          setCashSession({
+            openingCash: Number(data.openingCash ?? 0),
+            openedAt: Number(data.openedAt ?? Date.now()),
+            adjustments: Array.isArray(data.adjustments)
+              ? (data.adjustments as CashAdjustment[])
+              : [],
+          });
+          setShowOpeningDialog(false);
+        } else {
+          const stored = localStorage.getItem(sessionKey);
+          if (stored) {
+            try { setCashSession(JSON.parse(stored) as typeof cashSession); } catch { /* ignore */ }
+          }
+        }
+      })
+      .catch(() => {
+        const stored = localStorage.getItem(sessionKey);
+        if (stored) {
+          try { setCashSession(JSON.parse(stored) as typeof cashSession); } catch { /* ignore */ }
+        }
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionKey]);
 
   const activeSessionIds = useMemo(() => {
@@ -1309,23 +1345,81 @@ const Cashier = () => {
     localStorage.setItem(sessionKey, JSON.stringify(session));
     setCashSession(session);
     setShowOpeningDialog(false);
+
+    // Persist apertura to Firestore (best-effort)
+    if (restaurantId && user?.uid) {
+      addDoc(collection(db, "restaurants", restaurantId, "cajaTurnos"), {
+        restaurantId,
+        actorUid: user.uid,
+        actorEmail: user.email ?? "",
+        status: "open",
+        openingCash: amount,
+        openedAt: session.openedAt,
+        adjustments: [],
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+        .then((ref) => setCajaTurnoId(ref.id))
+        .catch(console.error);
+    }
   };
 
   const handleCierreCaja = async () => {
     if (!restaurantId || !cashSession || !user) return;
+    const arqueoRealValue =
+      cajaArqueoRealInput.trim() !== ""
+        ? Math.max(0, Number(cajaArqueoRealInput) || 0)
+        : undefined;
     try {
       setClosingCaja(true);
+      const now = Date.now();
+
+      // Persist cierre to Firestore cajaTurno
+      if (cajaTurnoId) {
+        await updateDoc(
+          doc(db, "restaurants", restaurantId, "cajaTurnos", cajaTurnoId),
+          {
+            status: "closed",
+            closedAt: now,
+            cierre: {
+              closedAt: now,
+              totalEfectivo,
+              totalRecaudado,
+              totalTips,
+              arqueoEsperado: totalCajaActual,
+              ...(arqueoRealValue !== undefined && {
+                arqueoReal: arqueoRealValue,
+                diferencia: arqueoRealValue - totalCajaActual,
+              }),
+              ajustesAdd: totalAjustesAdd,
+              ajustesDeduct: totalAjustesDeduct,
+              efectivoFinal: totalCajaActual,
+              paymentBreakdown,
+              paidCuentasCount: paidCuentasToday.length,
+            },
+            updatedAt: serverTimestamp(),
+          }
+        );
+      }
+
       await createCashierAuditLog({
         restaurantId,
         action: "cierre_caja",
         actorUid: user.uid,
         actorEmail: user.email,
         entityType: "cash_session",
-        entityId: `${user.uid}:${cashSession.openedAt}`,
-        description: `Cierre de caja · Monto inicial: ${formatPriceARS(cashSession.openingCash)} · Efectivo cobrado: ${formatPriceARS(totalEfectivo)} · Ajustes: +${formatPriceARS(totalAjustesAdd)} / −${formatPriceARS(totalAjustesDeduct)} · Efectivo final en caja: ${formatPriceARS(totalCajaActual)}`,
+        entityId: cajaTurnoId ?? `${user.uid}:${cashSession.openedAt}`,
+        description: `Cierre de caja · Monto inicial: ${formatPriceARS(cashSession.openingCash)} · Efectivo cobrado: ${formatPriceARS(totalEfectivo)} · Ajustes: +${formatPriceARS(totalAjustesAdd)} / −${formatPriceARS(totalAjustesDeduct)} · Efectivo final: ${formatPriceARS(totalCajaActual)}${arqueoRealValue !== undefined ? ` · Arqueo real: ${formatPriceARS(arqueoRealValue)} · Diferencia: ${formatPriceARS(arqueoRealValue - totalCajaActual)}` : ""}`,
         changes: {
           before: { status: "open", openingCash: cashSession.openingCash },
-          after: { status: "closed", efectivoFinal: totalCajaActual },
+          after: {
+            status: "closed",
+            efectivoFinal: totalCajaActual,
+            ...(arqueoRealValue !== undefined && {
+              arqueoReal: arqueoRealValue,
+              diferencia: arqueoRealValue - totalCajaActual,
+            }),
+          },
         },
         metadata: {
           montoInicial: cashSession.openingCash,
@@ -1334,10 +1428,20 @@ const Cashier = () => {
           ajustesDeduct: totalAjustesDeduct,
           efectivoFinal: totalCajaActual,
           totalRecaudado,
+          ...(arqueoRealValue !== undefined && {
+            arqueoReal: arqueoRealValue,
+            diferencia: arqueoRealValue - totalCajaActual,
+          }),
         },
       });
+
+      if (sessionKey) localStorage.removeItem(sessionKey);
       toast.success("Caja cerrada y registrada en auditoría.");
       setShowCierreModal(false);
+      setCajaTurnoId(null);
+      setCashSession(null);
+      setCajaArqueoRealInput("");
+      setShowOpeningDialog(true);
     } catch (err) {
       console.error(err);
       toast.error("No se pudo registrar el cierre de caja.");
@@ -1428,6 +1532,14 @@ ${adjRows ? `<h2>Ajustes de caja</h2><table><thead><tr><th>Monto</th><th>Motivo<
     localStorage.setItem(sessionKey, JSON.stringify(updated));
     setCashSession(updated);
     setAdjustForm(null);
+
+    // Persist movimiento to Firestore (best-effort)
+    if (restaurantId && cajaTurnoId) {
+      updateDoc(doc(db, "restaurants", restaurantId, "cajaTurnos", cajaTurnoId), {
+        adjustments: updated.adjustments,
+        updatedAt: serverTimestamp(),
+      }).catch(console.error);
+    }
   };
 
   if (!restaurantId) {
@@ -2719,6 +2831,33 @@ ${adjRows ? `<h2>Ajustes de caja</h2><table><thead><tr><th>Monto</th><th>Motivo<
                 </div>
               )}
             </div>
+            {/* Arqueo real */}
+            <div>
+              <h3 className="mb-2 text-base font-bold text-zinc-950">Arqueo real <span className="text-sm font-normal text-zinc-400">(opcional)</span></h3>
+              <p className="mb-3 text-xs text-zinc-500">
+                Ingresá el efectivo físicamente contado en la caja para registrar la diferencia con el arqueo esperado (<strong>{formatPriceARS(totalCajaActual)}</strong>).
+              </p>
+              <input
+                type="number"
+                min={0}
+                placeholder="Efectivo contado en caja..."
+                value={cajaArqueoRealInput}
+                onChange={(e) => setCajaArqueoRealInput(e.target.value)}
+                className="h-11 w-full rounded-xl border border-zinc-200 bg-white px-4 text-sm font-semibold outline-none focus:ring-2 focus:ring-black/10"
+              />
+              {cajaArqueoRealInput.trim() !== "" && !isNaN(Number(cajaArqueoRealInput)) && (
+                <div
+                  className={`mt-2 rounded-lg px-4 py-2.5 text-sm font-bold ${
+                    Number(cajaArqueoRealInput) - totalCajaActual >= 0
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      : "bg-red-50 text-red-700 border border-red-200"
+                  }`}
+                >
+                  Diferencia: {formatPriceARS(Number(cajaArqueoRealInput) - totalCajaActual)}
+                </div>
+              )}
+            </div>
+
             {/* Close register */}
             <div className="border-t border-zinc-200 pt-4">
               <button
