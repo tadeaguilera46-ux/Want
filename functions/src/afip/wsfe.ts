@@ -1,4 +1,4 @@
-import { INVOICE_TYPE_CODES, IVA_CODE_21, IVA_CODE_105, IVA_CODES, type InvoiceRequest, type AfipInvoiceResult } from "./types.js";
+import { INVOICE_TYPE_CODES, IVA_CODE_21, IVA_CODES, type InvoiceRequest, type AfipInvoiceResult } from "./types.js";
 
 const WSFE_URLS = {
   homologacion: "https://wswhomo.afip.gov.ar/wsfev1/service.asmx",
