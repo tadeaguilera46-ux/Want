@@ -590,7 +590,11 @@ const Menu = () => {
                                 {promo.discountType === "percentage"
                                   ? `${promo.discountValue}% off`
                                   : `$${promo.discountValue} off`}
-                                {promo.category ? ` en ${promo.category}` : " en todo el menú"}
+                                {promo.productName
+                                  ? ` en "${promo.productName}"`
+                                  : promo.category
+                                    ? ` en ${promo.category}`
+                                    : " en todo el menú"}
                               </p>
                               <p className="mt-0.5 text-xs text-zinc-400">
                                 {promo.fromTime}–{promo.toTime}

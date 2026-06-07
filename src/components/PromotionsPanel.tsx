@@ -15,6 +15,7 @@ export type Promotion = {
   id: string;
   name: string;
   category: string;
+  productName: string;
   discountType: "percentage" | "fixed";
   discountValue: number;
   fromTime: string;
@@ -66,6 +67,7 @@ export function PromotionsPanel({ restaurantId }: { restaurantId: string }) {
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
+  const [productName, setProductName] = useState("");
   const [discountType, setDiscountType] = useState<"percentage" | "fixed">("percentage");
   const [discountValue, setDiscountValue] = useState("10");
   const [fromTime, setFromTime] = useState("18:00");
@@ -90,6 +92,7 @@ export function PromotionsPanel({ restaurantId }: { restaurantId: string }) {
       await addDoc(collection(db, "restaurants", restaurantId, "promotions"), {
         name: name.trim(),
         category: category.trim(),
+        productName: productName.trim(),
         discountType,
         discountValue: Number(discountValue),
         fromTime,
@@ -99,7 +102,7 @@ export function PromotionsPanel({ restaurantId }: { restaurantId: string }) {
         restaurantId,
         createdAt: serverTimestamp(),
       });
-      setName(""); setCategory(""); setDiscountValue("10");
+      setName(""); setCategory(""); setProductName(""); setDiscountValue("10");
       setFromTime("18:00"); setToTime("20:00"); setDays([]);
       toast.success("Promoción creada.");
     } catch {
@@ -124,7 +127,8 @@ export function PromotionsPanel({ restaurantId }: { restaurantId: string }) {
         <form onSubmit={handleAdd} className="space-y-3">
           <div className="grid gap-2 sm:grid-cols-2">
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre (ej: Happy Hour)" required className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
-            <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Categoría afectada (vacío = todas)" className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
+            <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Categoría (vacío = todas)" className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
+            <input value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="Producto exacto (tiene prioridad sobre categoría)" className="h-10 rounded-lg border border-zinc-200 px-3 text-sm sm:col-span-2" />
             <select value={discountType} onChange={(e) => setDiscountType(e.target.value as "percentage" | "fixed")} className="h-10 rounded-lg border border-zinc-200 px-3 text-sm">
               <option value="percentage">Porcentaje (%)</option>
               <option value="fixed">Monto fijo ($)</option>
@@ -169,7 +173,11 @@ export function PromotionsPanel({ restaurantId }: { restaurantId: string }) {
                   </div>
                   <p className="mt-0.5 text-xs text-zinc-500">
                     {p.discountType === "percentage" ? `${p.discountValue}% off` : `$${p.discountValue} off`}
-                    {p.category ? ` en "${p.category}"` : " en todo el menú"}
+                    {p.productName
+                      ? ` en "${p.productName}"`
+                      : p.category
+                        ? ` en categoría "${p.category}"`
+                        : " en todo el menú"}
                     {" · "}{p.fromTime}–{p.toTime}
                     {p.days.length > 0 && ` · ${p.days.map(d => DAYS[d]).join(", ")}`}
                   </p>

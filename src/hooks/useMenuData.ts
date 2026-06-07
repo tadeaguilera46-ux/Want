@@ -201,13 +201,18 @@ export const useMenuData = (restaurantId: string) => {
 
   const applyPromotion = (item: MenuItem): MenuItem => {
     const activePromos = promotions.filter(isPromotionActive);
-    const promo = activePromos.find(
-      (p) => !p.category || p.category === getDisplayCategory(item)
-    );
+    // productName tiene prioridad; si no, matchea por categoría; si ninguno, aplica a todo
+    const promo = activePromos.find((p) => {
+      if (p.productName) {
+        return p.productName.toLowerCase() === item.name.toLowerCase();
+      }
+      return !p.category || p.category === getDisplayCategory(item);
+    });
     if (!promo) return item;
-    const discount = promo.discountType === "percentage"
-      ? item.price * (promo.discountValue / 100)
-      : promo.discountValue;
+    const discount =
+      promo.discountType === "percentage"
+        ? item.price * (promo.discountValue / 100)
+        : promo.discountValue;
     return { ...item, price: Math.max(0, Math.round(item.price - discount)) };
   };
 

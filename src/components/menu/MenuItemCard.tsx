@@ -4,7 +4,7 @@ import { AlertTriangle, MessageSquareText, Plus } from "lucide-react";
 import MenuImage from "./MenuImage";
 import type { MenuIngredient } from "@/lib/store";
 
-type MenuType = "food" | "drinks";
+type MenuType = "food" | "drinks" | "combo";
 
 type MenuCardItem = {
   id: string;
