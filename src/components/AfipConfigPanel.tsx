@@ -40,6 +40,7 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
   const [cuit, setCuit] = useState("");
   const [puntoVenta, setPuntoVenta] = useState("1");
   const [fiscalCondition, setFiscalCondition] = useState<"monotributista" | "responsable_inscripto">("responsable_inscripto");
+  const [ivaRate, setIvaRate] = useState<21 | 10.5 | 0>(21);
   const [env, setEnv] = useState<"homologacion" | "produccion" | "simulacion">("produccion");
 
   // Step 2 state
@@ -91,7 +92,7 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
     try {
       setSaving(true);
       const fn = httpsCallable<unknown, { csrPem: string }>(functions, "afipGenerateCsr");
-      const res = await fn({ restaurantId, cuit: rawCuit, puntoVenta: pv, fiscalCondition, env });
+      const res = await fn({ restaurantId, cuit: rawCuit, puntoVenta: pv, fiscalCondition, ivaRate, env });
       if (env === "simulacion") {
         // Simulación salta directo al paso 3
         setCurrentStep(2);
@@ -218,6 +219,33 @@ export function AfipConfigPanel({ restaurantId }: { restaurantId: string }) {
                 {fiscalCondition === "responsable_inscripto"
                   ? "Emitirá Factura A (para empresas con CUIT) y Factura B (para consumidores finales)."
                   : "Emitirá Factura C para todos los clientes."}
+              </p>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="mb-1 block text-xs font-bold text-zinc-600">Alícuota IVA</label>
+              <div className="flex gap-3">
+                {([
+                  { value: 21, label: "21%" },
+                  { value: 10.5, label: "10.5%" },
+                  { value: 0, label: "Exento 0%" },
+                ] as const).map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setIvaRate(value)}
+                    className={`flex-1 rounded-lg border py-2.5 text-sm font-semibold transition ${
+                      ivaRate === value
+                        ? "border-zinc-900 bg-zinc-900 text-white"
+                        : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-400"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1 text-xs text-zinc-400">
+                La alícuota que aplica a todos los consumos del restaurante. La mayoría usa 21%.
               </p>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { INVOICE_TYPE_CODES, IVA_CODE_21, type InvoiceRequest, type AfipInvoiceResult } from "./types.js";
+import { INVOICE_TYPE_CODES, IVA_CODE_21, IVA_CODE_105, IVA_CODES, type InvoiceRequest, type AfipInvoiceResult } from "./types.js";
 
 const WSFE_URLS = {
   homologacion: "https://wswhomo.afip.gov.ar/wsfev1/service.asmx",
@@ -88,7 +88,8 @@ export async function issueFECAE(
   puntoVenta: number,
   nextNumber: number,
   req: InvoiceRequest,
-  env: "homologacion" | "produccion"
+  env: "homologacion" | "produccion",
+  ivaRate: number = 21
 ): Promise<AfipInvoiceResult> {
   const url = WSFE_URLS[env];
   const cbteType = INVOICE_TYPE_CODES[req.invoiceType];
@@ -102,40 +103,43 @@ export async function issueFECAE(
     .map((p) => p.padStart(2, "0"))
     .join("");
 
-  // Calcular importes según condición fiscal
+  // Calcular importes según tipo de comprobante y alícuota configurada
   let impTotal: number;
   let impNeto: number;
   let impIVA: number;
+  let impOpEx = 0;
   let ivaBlock = "";
 
   if (req.invoiceType === "C") {
-    // Monotributista: sin IVA — impTotal = impNeto
+    // Monotributista: sin IVA discriminado — impTotal = impNeto
     impNeto = Math.round(req.total * 100) / 100;
     impIVA = 0;
     impTotal = impNeto;
-  } else if (req.invoiceType === "B") {
-    // RI → Consumidor Final: total incluye IVA 21%
-    // impNeto se obtiene descontando IVA, impTotal = impNeto + impIVA (sin redondear por separado)
-    impNeto = Math.round((req.total / 1.21) * 100) / 100;
-    impIVA = Math.round((req.total - impNeto) * 100) / 100;
-    impTotal = impNeto + impIVA; // garantiza ImpTotal = ImpNeto + ImpIVA exacto
+  } else if (ivaRate === 0) {
+    // Exento: no hay IVA — el total va en ImpOpEx
+    impNeto = 0;
+    impIVA = 0;
+    impOpEx = Math.round(req.total * 100) / 100;
+    impTotal = impOpEx;
     ivaBlock = `
       <ar:Iva>
         <ar:AlicIva>
-          <ar:Id>${IVA_CODE_21}</ar:Id>
-          <ar:BaseImp>${impNeto.toFixed(2)}</ar:BaseImp>
-          <ar:Importe>${impIVA.toFixed(2)}</ar:Importe>
+          <ar:Id>${IVA_CODES[0]}</ar:Id>
+          <ar:BaseImp>${impOpEx.toFixed(2)}</ar:BaseImp>
+          <ar:Importe>0.00</ar:Importe>
         </ar:AlicIva>
       </ar:Iva>`;
   } else {
-    // Factura A: IVA discriminado 21%
-    impNeto = Math.round((req.total / 1.21) * 100) / 100;
+    // Factura A o B con IVA: el total incluye IVA, extraemos neto e IVA
+    const rate = ivaRate / 100;
+    const ivaCode = IVA_CODES[ivaRate] ?? IVA_CODE_21;
+    impNeto = Math.round((req.total / (1 + rate)) * 100) / 100;
     impIVA = Math.round((req.total - impNeto) * 100) / 100;
-    impTotal = impNeto + impIVA; // garantiza ImpTotal = ImpNeto + ImpIVA exacto
+    impTotal = impNeto + impIVA;
     ivaBlock = `
       <ar:Iva>
         <ar:AlicIva>
-          <ar:Id>${IVA_CODE_21}</ar:Id>
+          <ar:Id>${ivaCode}</ar:Id>
           <ar:BaseImp>${impNeto.toFixed(2)}</ar:BaseImp>
           <ar:Importe>${impIVA.toFixed(2)}</ar:Importe>
         </ar:AlicIva>
@@ -189,7 +193,7 @@ export async function issueFECAE(
             <ar:ImpTotal>${impTotal.toFixed(2)}</ar:ImpTotal>
             <ar:ImpTotConc>0.00</ar:ImpTotConc>
             <ar:ImpNeto>${impNeto.toFixed(2)}</ar:ImpNeto>
-            <ar:ImpOpEx>0.00</ar:ImpOpEx>
+            <ar:ImpOpEx>${impOpEx.toFixed(2)}</ar:ImpOpEx>
             <ar:ImpIVA>${impIVA.toFixed(2)}</ar:ImpIVA>
             <ar:ImpTrib>0.00</ar:ImpTrib>
             <ar:MonId>PES</ar:MonId>

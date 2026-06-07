@@ -666,11 +666,12 @@ export const afipGenerateCsr = onCall(
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
 
-    const { restaurantId, cuit, puntoVenta, fiscalCondition, env: reqEnv } = request.data as {
+    const { restaurantId, cuit, puntoVenta, fiscalCondition, ivaRate, env: reqEnv } = request.data as {
       restaurantId: string;
       cuit: string;
       puntoVenta: number;
       fiscalCondition: "monotributista" | "responsable_inscripto";
+      ivaRate: number;
       env?: string;
     };
 
@@ -699,6 +700,7 @@ export const afipGenerateCsr = onCall(
           cuit: cuit.replace(/\D/g, "").replace(/^(\d{2})(\d{8})(\d)$/, "$1-$2-$3"),
           puntoVenta,
           fiscalCondition,
+          ivaRate: ivaRate ?? 21,
           privateKeyEncrypted: "",
           privateKeyIv: "",
           csrPem: "",
@@ -727,6 +729,7 @@ export const afipGenerateCsr = onCall(
         cuit: cuit.replace(/\D/g, "").replace(/^(\d{2})(\d{8})(\d)$/, "$1-$2-$3"),
         puntoVenta,
         fiscalCondition,
+        ivaRate: ivaRate ?? 21,
         privateKeyEncrypted: encrypted,
         privateKeyIv: iv,
         csrPem,
@@ -850,19 +853,9 @@ export const afipIssueInvoice = onCall(
     }
 
     // ── Entorno real: autenticación y emisión en ARCA ────────────────────────
-    const masterKey = AFIP_MASTER_KEY.value();
-    const privateKeyPem = decryptPrivateKey(
-      config.privateKeyEncrypted,
-      config.privateKeyIv,
-      masterKey
-    );
-
-    const { token, sign } = await getAfipToken(
-      invoiceReq.restaurantId,
-      privateKeyPem,
-      config.certificate,
-      env as "homologacion" | "produccion"
-    );
+    const cuentaRef = admin.firestore()
+      .collection("restaurants").doc(invoiceReq.restaurantId)
+      .collection("cuentas").doc(invoiceReq.cuentaId);
 
     const invoiceType: "A" | "B" | "C" = invoiceReq.invoiceType ??
       (config.fiscalCondition === "monotributista" ? "C" : "B");
@@ -870,20 +863,57 @@ export const afipIssueInvoice = onCall(
     const cbteTypeCode = INVOICE_TYPE_CODES[invoiceType];
     if (!cbteTypeCode) throw new HttpsError("invalid-argument", "Tipo de comprobante inválido");
 
-    const lastNumber = await getLastInvoiceNumber(
-      token, sign, config.cuit, config.puntoVenta, cbteTypeCode, env
-    );
+    const ivaRate: number = (config as AfipConfig & { ivaRate?: number }).ivaRate ?? 21;
 
-    const result = await issueFECAE(
-      token, sign, config.cuit, config.puntoVenta, lastNumber + 1,
-      { ...invoiceReq, invoiceType },
-      env
-    );
+    // ── Lock anti-race condition ────────────────────────────────────────────────
+    const lockRef = admin.firestore()
+      .collection("afipLocks")
+      .doc(`${invoiceReq.restaurantId}-${config.puntoVenta}-${cbteTypeCode}`);
 
-    await admin.firestore()
-      .collection("restaurants").doc(invoiceReq.restaurantId)
-      .collection("cuentas").doc(invoiceReq.cuentaId)
-      .update({
+    await admin.firestore().runTransaction(async (tx) => {
+      const lockSnap = await tx.get(lockRef);
+      if (lockSnap.exists) {
+        const lockedAt: number = lockSnap.data()?.lockedAt?.toMillis?.() ?? 0;
+        if (Date.now() - lockedAt < 60_000) {
+          throw new HttpsError(
+            "resource-exhausted",
+            "Hay una emisión en curso para este comprobante. Reintentá en unos segundos."
+          );
+        }
+      }
+      tx.set(lockRef, {
+        lockedAt: admin.firestore.FieldValue.serverTimestamp(),
+        lockedBy: invoiceReq.cuentaId,
+      });
+    });
+
+    try {
+      const masterKey = AFIP_MASTER_KEY.value();
+      const privateKeyPem = decryptPrivateKey(
+        config.privateKeyEncrypted,
+        config.privateKeyIv,
+        masterKey
+      );
+
+      const { token, sign } = await getAfipToken(
+        invoiceReq.restaurantId,
+        privateKeyPem,
+        config.certificate,
+        env as "homologacion" | "produccion"
+      );
+
+      const lastNumber = await getLastInvoiceNumber(
+        token, sign, config.cuit, config.puntoVenta, cbteTypeCode, env
+      );
+
+      const result = await issueFECAE(
+        token, sign, config.cuit, config.puntoVenta, lastNumber + 1,
+        { ...invoiceReq, invoiceType },
+        env,
+        ivaRate
+      );
+
+      await cuentaRef.update({
         "invoice.status": "issued",
         "invoice.cae": result.cae,
         "invoice.caeExpiry": result.caeExpiry,
@@ -891,8 +921,22 @@ export const afipIssueInvoice = onCall(
         "invoice.invoiceType": result.invoiceType,
         "invoice.puntoVenta": result.puntoVenta,
         "invoice.issuedAt": admin.firestore.FieldValue.serverTimestamp(),
+        "invoice.failureReason": admin.firestore.FieldValue.delete(),
       });
 
-    return result;
+      return result;
+    } catch (err) {
+      // Marcar la factura como fallida con el motivo exacto
+      const reason = err instanceof Error ? err.message : "Error desconocido al emitir en ARCA";
+      await cuentaRef.update({
+        "invoice.status": "failed",
+        "invoice.failureReason": reason,
+        "invoice.failedAt": admin.firestore.FieldValue.serverTimestamp(),
+      }).catch(() => {}); // best-effort: no ocultar el error original
+      throw err;
+    } finally {
+      // Liberar lock siempre, independientemente del resultado
+      await lockRef.delete().catch(() => {});
+    }
   }
 );

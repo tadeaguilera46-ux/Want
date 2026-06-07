@@ -46,7 +46,10 @@ import { WaitlistPanel } from "../components/WaitlistPanel";
 import { ReservationsPanel } from "../components/ReservationsPanel";
 import { ShiftsPanel } from "../components/ShiftsPanel";
 import { StaffMetricsPanel } from "../components/StaffMetricsPanel";
-import { PromotionsPanel } from "../components/PromotionsPanel";
+import {
+  PromotionsPanel,
+  TwoForOnePanel,
+} from "../components/PromotionsPanel";
 import { AfipConfigPanel } from "../components/AfipConfigPanel";
 import { canUseAnalytics, canUseAuditLogs, canUseInvoices, canUseStock } from "../lib/plan";
 import { ReceiptText, Activity } from "lucide-react";
@@ -1350,6 +1353,9 @@ return (
               description="Configurá descuentos automáticos por horario, categoría y día de la semana."
             >
               <PromotionsPanel restaurantId={restaurantId} />
+              <div className="mt-8">
+                <TwoForOnePanel restaurantId={restaurantId} />
+              </div>
             </AdminSectionShell>
           )}
 

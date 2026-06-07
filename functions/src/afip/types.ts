@@ -4,6 +4,7 @@ export type AfipConfig = {
   cuit: string;
   puntoVenta: number;
   fiscalCondition: AfipFiscalCondition;
+  ivaRate: number; // alícuota IVA en % — 21, 10.5 o 0 (exento)
   privateKeyEncrypted: string;
   privateKeyIv: string;
   certificate: string;
@@ -23,9 +24,17 @@ export const INVOICE_TYPE_CODES: Record<string, number> = {
   C: 11,  // Factura C  (Monotributista)
 };
 
-// IVA alicuota codes
-export const IVA_CODE_21 = 5;
-export const IVA_CODE_105 = 4;
+// IVA alicuota codes (AFIP)
+export const IVA_CODE_21 = 5;   // 21%
+export const IVA_CODE_105 = 4;  // 10.5%
+export const IVA_CODE_EXENTO = 2; // Exento 0%
+
+// Mapa rate (%) → código AFIP
+export const IVA_CODES: Record<number, number> = {
+  21:   IVA_CODE_21,
+  10.5: IVA_CODE_105,
+  0:    IVA_CODE_EXENTO,
+};
 
 export type InvoiceRequest = {
   restaurantId: string;

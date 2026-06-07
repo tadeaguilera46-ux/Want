@@ -45,6 +45,10 @@ import type {
   CashierDiscountType,
   CashierPaymentMethod,
 } from "../types/cashier";
+import {
+  isTwoForOneActive,
+  type TwoForOnePromo,
+} from "../components/PromotionsPanel";
 
 const db = getDb();
 
@@ -238,6 +242,7 @@ const Cashier = () => {
   const [cuentas, setCuentas] = useState<Cuenta[]>([]);
   const [orders, setOrders] = useState<Pedido[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [twoForOnePromos, setTwoForOnePromos] = useState<TwoForOnePromo[]>([]);
 
   const [selectedCuentaId, setSelectedCuentaId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -325,6 +330,17 @@ const Cashier = () => {
     });
 
     return () => unsubscribe();
+  }, [restaurantId]);
+
+  useEffect(() => {
+    if (!restaurantId) return;
+    return onSnapshot(
+      collection(db, "restaurants", restaurantId, "promotions2x1"),
+      (snap) =>
+        setTwoForOnePromos(
+          snap.docs.map((d) => ({ id: d.id, ...d.data() }) as TwoForOnePromo)
+        )
+    );
   }, [restaurantId]);
 
   useEffect(() => {
@@ -536,14 +552,52 @@ const Cashier = () => {
     return 0;
   }, [discountType, discountValue, realSubtotal]);
 
+  const twoForOneDiscount = useMemo(() => {
+    const activePromos = twoForOnePromos.filter(isTwoForOneActive);
+    if (activePromos.length === 0) return 0;
+
+    // Agrupar items no cancelados por nombre y sumar cantidades
+    const grouped = new Map<string, { price: number; quantity: number }>();
+    for (const item of selectedItems) {
+      if (item._cancelled) continue;
+      const name = getItemName(item);
+      const price = getItemPrice(item);
+      const qty = getItemQuantity(item);
+      const existing = grouped.get(name);
+      if (existing) {
+        existing.quantity += qty;
+      } else {
+        grouped.set(name, { price, quantity: qty });
+      }
+    }
+
+    let discount = 0;
+    for (const [itemName, { price, quantity }] of grouped) {
+      const matches = activePromos.some(
+        (p) =>
+          !p.productName ||
+          p.productName.toLowerCase() === itemName.toLowerCase()
+      );
+      if (!matches) continue;
+      // Por cada par, 1 es gratis
+      const freeCount = Math.floor(quantity / 2);
+      discount += freeCount * price;
+    }
+
+    return discount;
+  }, [selectedItems, twoForOnePromos]);
+
   const extraAmount = useMemo(() => {
     const value = Number(manualExtraAmount || 0);
     return Number.isFinite(value) && value > 0 ? value : 0;
   }, [manualExtraAmount]);
 
   const finalTotal = useMemo(() => {
-    return Math.max(0, realSubtotal - discountAmount + extraAmount);
-  }, [realSubtotal, discountAmount, extraAmount]);
+    return Math.max(
+      0,
+      realSubtotal - discountAmount - twoForOneDiscount + extraAmount
+    );
+  }, [realSubtotal, discountAmount, twoForOneDiscount, extraAmount]);
 
   const paidTotal = useMemo(() => {
     if (!selectedCuenta) return 0;
@@ -1916,6 +1970,13 @@ ${adjRows ? `<h2>Ajustes de caja</h2><table><thead><tr><th>Monto</th><th>Motivo<
                         <span>Descuento</span>
                         <strong>-{formatPriceARS(discountAmount)}</strong>
                       </div>
+
+                      {twoForOneDiscount > 0 && (
+                        <div className="flex justify-between text-sm text-red-600">
+                          <span>2x1</span>
+                          <strong>-{formatPriceARS(twoForOneDiscount)}</strong>
+                        </div>
+                      )}
 
                       <div className="flex justify-between text-sm">
                         <span>Extra</span>
