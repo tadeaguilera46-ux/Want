@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { CartItem, MenuItem } from "@/lib/store";
 import { getStoredTableSessionId } from "./table-session";
@@ -67,12 +67,26 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     return buildStorageKey(restaurantId, tableNumber, sessionId);
   })();
 
+  // Tracks the last storageKey this effect saw, so we can detect null→value transitions
+  const storageKeyRef = useRef<string | null>(storageKey);
+
   const [cart, setCart] = useState<CartItem[]>(() =>
     storageKey ? loadCart(storageKey) : []
   );
 
   useEffect(() => {
-    if (storageKey) saveCart(storageKey, cart);
+    if (!storageKey) {
+      storageKeyRef.current = null;
+      return;
+    }
+    if (storageKeyRef.current !== storageKey) {
+      // storageKey just became available (new tab, sessionStorage was empty on mount).
+      // Load the existing cart instead of overwriting localStorage with [].
+      storageKeyRef.current = storageKey;
+      setCart(loadCart(storageKey));
+      return;
+    }
+    saveCart(storageKey, cart);
   }, [cart, storageKey]);
 
   const addToCart = (item: MenuItem, quantity = 1) => {
