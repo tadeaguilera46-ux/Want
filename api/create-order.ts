@@ -524,10 +524,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         const nextBase = availableBase - requiredBase;
         const nextQuantity = fromBaseUnit(nextBase, stockUnit);
+        const quantityBefore = Number(stockData.currentQuantity || 0);
+        const quantityMoved = fromBaseUnit(requiredBase, stockUnit);
 
         transaction.update(stockRef, {
           currentQuantity: nextQuantity,
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        const kardexRef = db.collection(`restaurants/${restaurantId}/kardex`).doc();
+        transaction.set(kardexRef, {
+          restaurantId,
+          stockItemId,
+          stockItemName: stockData.name ?? stockItemId,
+          unit: stockUnit,
+          movementType: "salida",
+          quantityBefore,
+          quantityMoved,
+          quantityAfter: nextQuantity,
+          actorEmail: null,
+          actorUid: null,
+          reason: `Pedido mesa ${mesa}`,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
 

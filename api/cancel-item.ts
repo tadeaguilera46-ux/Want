@@ -277,7 +277,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         action: "cancel_item",
         actorUid: actorUid.trim(),
         actorEmail: (actorEmail ?? "").trim(),
-        actorRole: "cashier",
+        actorRole: staffRole,
         entityType: "pedido",
         entityId: pedidoId,
         pedidoId,

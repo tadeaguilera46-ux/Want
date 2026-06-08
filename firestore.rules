@@ -127,6 +127,21 @@ service cloud.firestore {
         && isValidOptionalColor(request.resource.data.secondaryColor);
     }
 
+    function isValidWaitlistCreate(restaurantId) {
+      return request.resource.data.keys().hasOnly([
+          'restaurantId', 'name', 'partySize', 'phone', 'status', 'arrivedAt'
+        ])
+        && request.resource.data.restaurantId == restaurantId
+        && request.resource.data.status == "waiting"
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.partySize is int
+        && request.resource.data.partySize > 0
+        && request.resource.data.partySize <= 30
+        && isValidOptionalString(request.resource.data.phone)
+        && request.resource.data.arrivedAt == request.time;
+    }
+
     function sessionExists(restaurantId, sessionId) {
       return sessionId is string
         && exists(sessionPath(restaurantId, sessionId));
@@ -452,19 +467,12 @@ service cloud.firestore {
 
     // Lista de espera (Waitlist)
     match /restaurants/{restaurantId}/waitlist/{entryId} {
-      allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
-      allow create: if isSuperAdmin() || isAdmin(restaurantId)
-        && request.resource.data.restaurantId == restaurantId;
-      // Entrar en estado notified pasa por Cloud Functions para enviar el aviso.
-      allow update: if isSuperAdmin()
-        || (
-          isActiveStaff(restaurantId)
-          && (
-            request.resource.data.status != "notified"
-            || resource.data.status == "notified"
-          )
-        );
-      allow delete: if isSuperAdmin() || isAdmin(restaurantId);
+      allow read: if isSuperAdmin() || isAdmin(restaurantId);
+      allow create: if (isSuperAdmin() || isAdmin(restaurantId))
+        && isValidWaitlistCreate(restaurantId);
+      // Cambios de estado pasan por Cloud Functions para validar transiciones,
+      // evitar carreras con avisos/asignaciones y conservar historial.
+      allow update, delete: if false;
     }
 
     // Reservas
@@ -526,6 +534,15 @@ service cloud.firestore {
     // Carrito compartido por mesa/sesión (acceso anónimo — seguridad via UUID sessionId)
     match /restaurants/{restaurantId}/carts/{sessionId} {
       allow read, write: if true;
+    }
+
+    // Kardex de movimientos de inventario
+    match /restaurants/{restaurantId}/kardex/{entryId} {
+      allow read: if isSuperAdmin() || isAdmin(restaurantId);
+      allow create: if (isSuperAdmin() || isAdmin(restaurantId))
+        && isPremiumRestaurant(restaurantId)
+        && request.resource.data.restaurantId == restaurantId;
+      allow update, delete: if false;
     }
 
     // Promociones y Happy Hour
