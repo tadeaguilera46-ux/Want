@@ -25,7 +25,29 @@ type CancellationDetails = {
 const functions = getFunctions(getApp(), "us-central1");
 
 const errorMessage = (error: unknown) => {
-  if (error instanceof Error && error.message) return error.message;
+  const value =
+    error && typeof error === "object"
+      ? (error as { code?: unknown; details?: unknown; message?: unknown })
+      : {};
+  const code =
+    typeof value.code === "string"
+      ? value.code.replace(/^functions\//, "")
+      : "";
+  const details = typeof value.details === "string" ? value.details.trim() : "";
+  const message =
+    typeof value.message === "string" ? value.message.trim() : "";
+
+  if (details) return details;
+  if (
+    message &&
+    !["internal", "unknown", "FirebaseError: internal"].includes(message)
+  ) {
+    return message.replace(/^Firebase:\s*/i, "");
+  }
+  if (code === "permission-denied") return "El enlace de cancelación no es válido.";
+  if (code === "failed-precondition") return "Esta reserva ya no puede cancelarse.";
+  if (code === "unavailable") return "No pudimos conectar con Reservas. Reintentá.";
+  if (code === "internal") return "Reservas no pudo procesar el enlace. Reintentá.";
   return "No pudimos validar el enlace de cancelación.";
 };
 

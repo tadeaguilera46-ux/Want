@@ -28,6 +28,19 @@ const MP_WEBHOOK_SECRET = defineSecret("MP_WEBHOOK_SECRET");
 const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
 const AFIP_MASTER_KEY = defineSecret("AFIP_MASTER_KEY");
 
+const RESERVATION_CALLABLE_OPTIONS: {
+  cors: Array<string | RegExp>;
+  invoker: "public";
+} = {
+  cors: [
+    "https://want-livid.vercel.app",
+    /^http:\/\/localhost(?::\d+)?$/,
+    /^http:\/\/127\.0\.0\.1(?::\d+)?$/,
+  ],
+  // Browser preflight must be public; each handler still enforces auth or token.
+  invoker: "public",
+};
+
 // Entorno AFIP: "homologacion" en dev, "produccion" en prod
 const AFIP_ENV = (process.env.AFIP_ENV ?? "produccion") as "homologacion" | "produccion";
 
@@ -155,6 +168,33 @@ function parseTimeToMinutes(value: unknown): number | null {
   return hours * 60 + minutes;
 }
 
+function isValidReservationDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return (
+    parsed.getUTCFullYear() === year &&
+    parsed.getUTCMonth() === month - 1 &&
+    parsed.getUTCDate() === day
+  );
+}
+
+function getReservationTimeMs(date: unknown, time: unknown): number | null {
+  if (!isValidReservationDate(date) || parseTimeToMinutes(time) === null) {
+    return null;
+  }
+
+  const reservationTime = Date.parse(`${date}T${time}:00-03:00`);
+  return Number.isFinite(reservationTime) ? reservationTime : null;
+}
+
+function isValidReservationDocumentId(value: unknown): value is string {
+  return typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
+}
+
 function normalizeReservationPhone(value: unknown): string {
   if (typeof value !== "string") return "";
   const digits = value.replace(/\D/g, "");
@@ -230,6 +270,10 @@ async function requireRestaurantAdmin(
   restaurantId: string,
   uid: string
 ): Promise<FirebaseFirestore.DocumentData> {
+  if (!isValidReservationDocumentId(restaurantId)) {
+    throw new HttpsError("invalid-argument", "restaurantId inválido");
+  }
+
   const staffSnap = await admin
     .firestore()
     .doc(`restaurants/${restaurantId}/staff/${uid}`)
@@ -238,7 +282,7 @@ async function requireRestaurantAdmin(
   if (
     !staffSnap.exists ||
     staffSnap.data()?.role !== "admin" ||
-    staffSnap.data()?.active === false
+    staffSnap.data()?.active !== true
   ) {
     throw new HttpsError("permission-denied", "No tenés permisos");
   }
@@ -392,10 +436,20 @@ async function requireAvailableReservationTable({
       `La mesa ${mesa} no existe o no está disponible`
     );
   }
-  if (
+  const lockingReservationId = tableSlotSnap.data()?.reservationId;
+  const hasLiveConflictingLock =
     tableSlotSnap.exists &&
-    tableSlotSnap.data()?.reservationId !== reservationId
-  ) {
+    lockingReservationId !== reservationId &&
+    reservationsSnap.docs.some((document) => {
+      if (document.id !== lockingReservationId) return false;
+      const reservation = document.data();
+      return (
+        OCCUPYING_RESERVATION_STATUSES.has(reservation.status) &&
+        Number(reservation.mesa) === mesa &&
+        (reservation.slot || reservation.time) === slot
+      );
+    });
+  if (hasLiveConflictingLock) {
     throw new HttpsError(
       "resource-exhausted",
       `La mesa ${mesa} ya está reservada en la franja de ${slot}`
@@ -444,7 +498,7 @@ function reservationTableSlotData({
   };
 }
 
-export const saveReservationSettings = onCall({ cors: true }, async (request) => {
+export const saveReservationSettings = onCall(RESERVATION_CALLABLE_OPTIONS, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
 
   const data = request.data as { restaurantId?: unknown; settings?: unknown };
@@ -484,7 +538,7 @@ export const saveReservationSettings = onCall({ cors: true }, async (request) =>
   return { ok: true, settings };
 });
 
-export const createReservation = onCall({ cors: true }, async (request) => {
+export const createReservation = onCall(RESERVATION_CALLABLE_OPTIONS, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
 
   const input = request.data as Record<string, unknown>;
@@ -506,13 +560,20 @@ export const createReservation = onCall({ cors: true }, async (request) => {
     !name ||
     !phoneNormalized ||
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+    !isValidReservationDate(date) ||
+    parseTimeToMinutes(time) === null ||
     !Number.isInteger(partySize) ||
     partySize < 1 ||
     partySize > 100 ||
     (mesa !== null && (!Number.isInteger(mesa) || mesa < 1))
   ) {
     throw new HttpsError("invalid-argument", "Datos de reserva inválidos");
+  }
+  if ((getReservationTimeMs(date, time) || 0) <= Date.now()) {
+    throw new HttpsError(
+      "failed-precondition",
+      "La reserva debe programarse para un horario futuro"
+    );
   }
 
   const staff = await requireRestaurantAdmin(restaurantId, request.auth.uid);
@@ -650,7 +711,7 @@ export const createReservation = onCall({ cors: true }, async (request) => {
 });
 
 export const getReservationHistoryByPhone = onCall(
-  { cors: true },
+  RESERVATION_CALLABLE_OPTIONS,
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
 
@@ -724,7 +785,7 @@ export const getReservationHistoryByPhone = onCall(
   }
 );
 
-export const getReservationMetrics = onCall({ cors: true }, async (request) => {
+export const getReservationMetrics = onCall(RESERVATION_CALLABLE_OPTIONS, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
 
   const data = request.data as {
@@ -818,7 +879,7 @@ export const getReservationMetrics = onCall({ cors: true }, async (request) => {
   };
 });
 
-export const updateReservationStatus = onCall({ cors: true }, async (request) => {
+export const updateReservationStatus = onCall(RESERVATION_CALLABLE_OPTIONS, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
 
   const data = request.data as {
@@ -834,7 +895,7 @@ export const updateReservationStatus = onCall({ cors: true }, async (request) =>
 
   if (
     !restaurantId ||
-    !reservationId ||
+    !isValidReservationDocumentId(reservationId) ||
     typeof status !== "string" ||
     !RESERVATION_STATUSES.includes(status as ReservationStatus)
   ) {
@@ -881,6 +942,19 @@ export const updateReservationStatus = onCall({ cors: true }, async (request) =>
       ? normalizeReservationSettings(settingsSnap.data())
       : DEFAULT_RESERVATION_SETTINGS;
     const rawSlot = String(reservation.slot || reservation.time || "");
+    const reservationTimeMs = getReservationTimeMs(
+      reservation.date,
+      rawSlot
+    );
+    if (
+      nextStatus === "no_show" &&
+      (reservationTimeMs === null || reservationTimeMs > Date.now())
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "No se puede marcar ausencia antes del horario reservado"
+      );
+    }
     const currentOccupies =
       OCCUPYING_RESERVATION_STATUSES.has(currentStatus);
     const nextOccupies = OCCUPYING_RESERVATION_STATUSES.has(nextStatus);
@@ -991,14 +1065,23 @@ export const updateReservationStatus = onCall({ cors: true }, async (request) =>
     } else if (tableSlotRef && shouldDeleteTableSlot) {
       transaction.delete(tableSlotRef);
     }
-    transaction.update(reservationRef, {
+    const reservationUpdate: Record<string, unknown> = {
       status: nextStatus,
       slot,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       statusChangedAt: admin.firestore.FieldValue.serverTimestamp(),
       [RESERVATION_STATUS_TIMESTAMP_FIELDS[nextStatus]]:
         admin.firestore.FieldValue.serverTimestamp(),
-    });
+    };
+    if (
+      nextStatus !== "confirmed" &&
+      reservation.reminder?.status === "sending"
+    ) {
+      reservationUpdate["reminder.status"] = "pending";
+      reservationUpdate["reminder.sendingAt"] = null;
+      reservationUpdate["reminder.attemptId"] = null;
+    }
+    transaction.update(reservationRef, reservationUpdate);
     transaction.set(
       auditRef,
       reservationAuditData({
@@ -1018,7 +1101,7 @@ export const updateReservationStatus = onCall({ cors: true }, async (request) =>
   return { ok: true };
 });
 
-export const rescheduleReservation = onCall({ cors: true }, async (request) => {
+export const rescheduleReservation = onCall(RESERVATION_CALLABLE_OPTIONS, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
 
   const data = request.data as {
@@ -1036,11 +1119,17 @@ export const rescheduleReservation = onCall({ cors: true }, async (request) => {
 
   if (
     !restaurantId ||
-    !reservationId ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
-    !/^\d{2}:\d{2}$/.test(time)
+    !isValidReservationDocumentId(reservationId) ||
+    !isValidReservationDate(date) ||
+    parseTimeToMinutes(time) === null
   ) {
     throw new HttpsError("invalid-argument", "Nueva fecha u horario inválido");
+  }
+  if ((getReservationTimeMs(date, time) || 0) <= Date.now()) {
+    throw new HttpsError(
+      "failed-precondition",
+      "La reserva debe reprogramarse para un horario futuro"
+    );
   }
 
   const staff = await requireRestaurantAdmin(restaurantId, request.auth.uid);
@@ -1085,8 +1174,8 @@ export const rescheduleReservation = onCall({ cors: true }, async (request) => {
       );
     }
     if (
-      !/^\d{4}-\d{2}-\d{2}$/.test(previousDate) ||
-      !/^\d{2}:\d{2}$/.test(previousSlot)
+      !isValidReservationDate(previousDate) ||
+      parseTimeToMinutes(previousSlot) === null
     ) {
       throw new HttpsError(
         "failed-precondition",
@@ -1248,6 +1337,7 @@ export const rescheduleReservation = onCall({ cors: true }, async (request) => {
       "reminder.status": "pending",
       "reminder.sentAt": null,
       "reminder.sendingAt": null,
+      "reminder.attemptId": null,
       "reminder.error": null,
       "reminder.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -1271,7 +1361,7 @@ export const rescheduleReservation = onCall({ cors: true }, async (request) => {
 });
 
 export const getReservationForCancellation = onCall(
-  { cors: true },
+  RESERVATION_CALLABLE_OPTIONS,
   async (request) => {
     const data = request.data as {
       restaurantId?: unknown;
@@ -1319,13 +1409,16 @@ export const getReservationForCancellation = onCall(
       partySize: reservation.partySize,
       status: reservation.status,
       canCancel:
-        reservation.status === "pending" || reservation.status === "confirmed",
+        (reservation.status === "pending" ||
+          reservation.status === "confirmed") &&
+        (getReservationTimeMs(reservation.date, reservation.time) || 0) >
+          Date.now(),
     };
   }
 );
 
 export const cancelReservationByCustomer = onCall(
-  { cors: true },
+  RESERVATION_CALLABLE_OPTIONS,
   async (request) => {
     const data = request.data as {
       restaurantId?: unknown;
@@ -1383,6 +1476,13 @@ export const cancelReservationByCustomer = onCall(
       }
 
       const slot = String(reservation.slot || reservation.time || "");
+      const reservationTimeMs = getReservationTimeMs(reservation.date, slot);
+      if (reservationTimeMs === null || reservationTimeMs <= Date.now()) {
+        throw new HttpsError(
+          "failed-precondition",
+          "El horario de esta reserva ya pasó"
+        );
+      }
       if (currentStatus === "confirmed") {
         if (!/^\d{2}:\d{2}$/.test(slot)) {
           throw new HttpsError(
@@ -1460,7 +1560,7 @@ export const cancelReservationByCustomer = onCall(
         .digest("hex")
         .slice(0, 24)}`;
 
-      transaction.update(reservationRef, {
+      const cancellationUpdate: Record<string, unknown> = {
         status: "cancelled",
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         statusChangedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1469,7 +1569,13 @@ export const cancelReservationByCustomer = onCall(
           source: "email_link",
           requestedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
-      });
+      };
+      if (reservation.reminder?.status === "sending") {
+        cancellationUpdate["reminder.status"] = "pending";
+        cancellationUpdate["reminder.sendingAt"] = null;
+        cancellationUpdate["reminder.attemptId"] = null;
+      }
+      transaction.update(reservationRef, cancellationUpdate);
       transaction.set(
         auditRef,
         reservationAuditData({
@@ -1498,10 +1604,23 @@ export const sendReservationConfirmation = onDocumentCreated(
     secrets: [RESEND_API_KEY],
   },
   async (event) => {
-    const reservationSnap = event.data;
-    if (!reservationSnap) return;
+    const createdReservationSnap = event.data;
+    if (!createdReservationSnap) return;
 
-    const reservation = reservationSnap.data();
+    const reservationSnap = await createdReservationSnap.ref.get();
+    if (!reservationSnap.exists) return;
+
+    const reservation = reservationSnap.data() || {};
+    if (reservation.confirmation?.status === "sent") return;
+    if (reservation.status !== "pending" && reservation.status !== "confirmed") {
+      await reservationSnap.ref.update({
+        "confirmation.status": "failed",
+        "confirmation.error": "La reserva ya no está activa",
+        "confirmation.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+
     const email =
       typeof reservation.email === "string"
         ? reservation.email.trim().toLowerCase()
@@ -1554,7 +1673,12 @@ export const sendReservationConfirmation = onDocumentCreated(
            </table>
            <p style="margin:24px 0"><a href="${escapeHtml(cancellationUrl)}" style="background:#dc2626;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">Cancelar mi reserva</a></p>
            <p style="margin:0;font-size:13px;color:#71717a">Usá este enlace únicamente si necesitás cancelar. La cancelación libera tu lugar inmediatamente.</p>`
-        )
+        ),
+        undefined,
+        `reservation-confirmation-${crypto
+          .createHash("sha256")
+          .update(reservationSnap.ref.path)
+          .digest("hex")}`
       );
 
       if (!sent) {
@@ -1575,10 +1699,20 @@ export const sendReservationConfirmation = onDocumentCreated(
           reservationId: event.params.reservationId,
         },
       });
-      await reservationSnap.ref.update({
-        "confirmation.status": "failed",
-        "confirmation.error": "No se pudo enviar el email",
-        "confirmation.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
+      await admin.firestore().runTransaction(async (transaction) => {
+        const currentSnap = await transaction.get(reservationSnap.ref);
+        if (
+          !currentSnap.exists ||
+          currentSnap.data()?.confirmation?.status === "sent"
+        ) {
+          return;
+        }
+        transaction.update(reservationSnap.ref, {
+          "confirmation.status": "failed",
+          "confirmation.error": "No se pudo enviar el email",
+          "confirmation.updatedAt":
+            admin.firestore.FieldValue.serverTimestamp(),
+        });
       });
     }
   }
@@ -1594,20 +1728,6 @@ function getDateInBuenosAires(offsetDays = 0): string {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date(Date.now() + offsetDays * 24 * 60 * 60 * 1000));
-}
-
-function getReservationTimeMs(date: unknown, time: unknown): number | null {
-  if (
-    typeof date !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
-    typeof time !== "string" ||
-    !/^\d{2}:\d{2}$/.test(time)
-  ) {
-    return null;
-  }
-
-  const reservationTime = Date.parse(`${date}T${time}:00-03:00`);
-  return Number.isFinite(reservationTime) ? reservationTime : null;
 }
 
 export const sendReservationReminders = onSchedule(
@@ -1635,64 +1755,75 @@ export const sendReservationReminders = onSchedule(
     const restaurantNames = new Map<string, string>();
 
     for (const reservationSnap of snapshots.flatMap((snapshot) => snapshot.docs)) {
-      const reservation = reservationSnap.data();
-      const reservationTimeMs = getReservationTimeMs(
-        reservation.date,
-        reservation.time
+      const candidate = reservationSnap.data();
+      const candidateTimeMs = getReservationTimeMs(
+        candidate.date,
+        candidate.time
       );
       const minutesUntilReservation =
-        reservationTimeMs === null
+        candidateTimeMs === null
           ? null
-          : (reservationTimeMs - nowMs) / (60 * 1000);
+          : (candidateTimeMs - nowMs) / (60 * 1000);
 
       if (
-        reservation.status !== "confirmed" ||
+        candidate.status !== "confirmed" ||
         minutesUntilReservation === null ||
         minutesUntilReservation <= 0 ||
         minutesUntilReservation > RESERVATION_REMINDER_MINUTES ||
-        reservation.reminder?.status === "sent"
+        candidate.reminder?.status === "sent"
       ) {
         continue;
       }
 
-      const email =
-        typeof reservation.email === "string"
-          ? reservation.email.trim().toLowerCase()
-          : "";
+      const attemptId = crypto.randomUUID();
       const claimed = await db.runTransaction(async (transaction) => {
         const currentSnap = await transaction.get(reservationSnap.ref);
-        if (!currentSnap.exists) return false;
+        if (!currentSnap.exists) return null;
 
         const current = currentSnap.data() || {};
+        const currentTimeMs = getReservationTimeMs(current.date, current.time);
+        const claimNowMs = Date.now();
+        const currentMinutesUntilReservation =
+          currentTimeMs === null
+            ? null
+            : (currentTimeMs - claimNowMs) / (60 * 1000);
         const sendingAtMs =
           typeof current.reminder?.sendingAt?.toMillis === "function"
             ? current.reminder.sendingAt.toMillis()
             : 0;
         const hasActiveSendingLock =
           current.reminder?.status === "sending" &&
-          nowMs - sendingAtMs <
+          claimNowMs - sendingAtMs <
             RESERVATION_REMINDER_LOCK_MINUTES * 60 * 1000;
         if (
           current.status !== "confirmed" ||
+          currentMinutesUntilReservation === null ||
+          currentMinutesUntilReservation <= 0 ||
+          currentMinutesUntilReservation > RESERVATION_REMINDER_MINUTES ||
           current.reminder?.status === "sent" ||
           hasActiveSendingLock
         ) {
-          return false;
+          return null;
         }
 
         transaction.update(reservationSnap.ref, {
           "reminder.channel": "email",
           "reminder.status": "sending",
           "reminder.sendingAt": admin.firestore.FieldValue.serverTimestamp(),
+          "reminder.attemptId": attemptId,
           "reminder.error": null,
           "reminder.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
         });
-        return true;
+        return current;
       });
 
       if (!claimed) continue;
 
       try {
+        const email =
+          typeof claimed.email === "string"
+            ? claimed.email.trim().toLowerCase()
+            : "";
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
           throw new Error("Email inválido o ausente");
         }
@@ -1719,6 +1850,17 @@ export const sendReservationReminders = onSchedule(
           reservationSnap.id,
           cancellationToken
         );
+        const currentBeforeSend = await reservationSnap.ref.get();
+        const currentBeforeSendData = currentBeforeSend.data() || {};
+        if (
+          !currentBeforeSend.exists ||
+          currentBeforeSendData.status !== "confirmed" ||
+          currentBeforeSendData.date !== claimed.date ||
+          currentBeforeSendData.time !== claimed.time ||
+          currentBeforeSendData.reminder?.attemptId !== attemptId
+        ) {
+          continue;
+        }
 
         const sent = await sendEmail(
           RESEND_API_KEY.value(),
@@ -1726,10 +1868,10 @@ export const sendReservationReminders = onSchedule(
           `Recordatorio de reserva — ${restaurantName}`,
           emailWrapper(
             "Tu reserva es dentro de 2 horas",
-            `<p style="margin:0 0 16px;font-size:15px;color:#3f3f46;line-height:1.6">Hola <strong>${escapeHtml(reservation.name)}</strong>, te recordamos que tu reserva en <strong>${escapeHtml(restaurantName)}</strong> es el <strong>${escapeHtml(reservation.date)}</strong> a las <strong>${escapeHtml(reservation.time)}</strong>.</p>
+            `<p style="margin:0 0 16px;font-size:15px;color:#3f3f46;line-height:1.6">Hola <strong>${escapeHtml(claimed.name)}</strong>, te recordamos que tu reserva en <strong>${escapeHtml(restaurantName)}</strong> es el <strong>${escapeHtml(claimed.date)}</strong> a las <strong>${escapeHtml(claimed.time)}</strong>.</p>
              <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;border-collapse:collapse">
-               <tr><td style="padding:8px 0;border-bottom:1px solid #f4f4f5;color:#71717a">Personas</td><td style="padding:8px 0;border-bottom:1px solid #f4f4f5;text-align:right;font-weight:700">${escapeHtml(reservation.partySize)}</td></tr>
-               ${Number.isInteger(reservation.mesa) && reservation.mesa > 0 ? `<tr><td style="padding:8px 0;color:#71717a">Mesa</td><td style="padding:8px 0;text-align:right;font-weight:700">${escapeHtml(reservation.mesa)}</td></tr>` : ""}
+               <tr><td style="padding:8px 0;border-bottom:1px solid #f4f4f5;color:#71717a">Personas</td><td style="padding:8px 0;border-bottom:1px solid #f4f4f5;text-align:right;font-weight:700">${escapeHtml(claimed.partySize)}</td></tr>
+               ${Number.isInteger(claimed.mesa) && claimed.mesa > 0 ? `<tr><td style="padding:8px 0;color:#71717a">Mesa</td><td style="padding:8px 0;text-align:right;font-weight:700">${escapeHtml(claimed.mesa)}</td></tr>` : ""}
              </table>
              <p style="margin:24px 0"><a href="${escapeHtml(cancellationUrl)}" style="background:#dc2626;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">Cancelar mi reserva</a></p>
              <p style="margin:0;font-size:13px;color:#71717a">Si no podés asistir, cancelá desde este enlace para liberar tu lugar.</p>`
@@ -1737,29 +1879,58 @@ export const sendReservationReminders = onSchedule(
           undefined,
           `reservation-reminder-${crypto
             .createHash("sha256")
-            .update(reservationSnap.ref.path)
+            .update(
+              `${reservationSnap.ref.path}:${claimed.date}:${claimed.time}`
+            )
             .digest("hex")}`
         );
 
         if (!sent) throw new Error("Resend rechazó el recordatorio");
 
-        await reservationSnap.ref.update({
-          "reminder.status": "sent",
-          "reminder.sentAt": admin.firestore.FieldValue.serverTimestamp(),
-          "reminder.sendingAt": null,
-          "reminder.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
-          "reminder.error": null,
+        await db.runTransaction(async (transaction) => {
+          const currentSnap = await transaction.get(reservationSnap.ref);
+          const current = currentSnap.data() || {};
+          if (
+            !currentSnap.exists ||
+            current.status !== "confirmed" ||
+            current.date !== claimed.date ||
+            current.time !== claimed.time ||
+            current.reminder?.attemptId !== attemptId
+          ) {
+            return;
+          }
+          transaction.update(reservationSnap.ref, {
+            "reminder.status": "sent",
+            "reminder.sentAt": admin.firestore.FieldValue.serverTimestamp(),
+            "reminder.sendingAt": null,
+            "reminder.attemptId": null,
+            "reminder.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
+            "reminder.error": null,
+          });
         });
       } catch (error) {
         console.error("sendReservationReminders error:", error);
         Sentry.captureException(error, {
           extra: { reservationId: reservationSnap.id },
         });
-        await reservationSnap.ref.update({
-          "reminder.status": "failed",
-          "reminder.sendingAt": null,
-          "reminder.error": "No se pudo enviar el recordatorio",
-          "reminder.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
+        await db.runTransaction(async (transaction) => {
+          const currentSnap = await transaction.get(reservationSnap.ref);
+          const current = currentSnap.data() || {};
+          if (
+            !currentSnap.exists ||
+            current.date !== claimed.date ||
+            current.time !== claimed.time ||
+            current.reminder?.attemptId !== attemptId
+          ) {
+            return;
+          }
+          transaction.update(reservationSnap.ref, {
+            "reminder.status": "failed",
+            "reminder.sendingAt": null,
+            "reminder.attemptId": null,
+            "reminder.error": "No se pudo enviar el recordatorio",
+            "reminder.updatedAt": admin.firestore.FieldValue.serverTimestamp(),
+          });
         });
       }
     }

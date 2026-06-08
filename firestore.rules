@@ -464,12 +464,12 @@ service cloud.firestore {
       allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
       // Creación y cambios pasan por Cloud Functions para aplicar capacidad
       // por franja de forma transaccional.
-      allow create, update, delete: if isSuperAdmin();
+      allow create, update, delete: if false;
     }
 
     match /restaurants/{restaurantId}/reservationSettings/{docId} {
       allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
-      allow write: if isSuperAdmin();
+      allow write: if false;
     }
 
     // Tokens usados por enlaces públicos de cancelación. Solo Cloud Functions.

@@ -19,6 +19,7 @@ import {
   YAxis,
 } from "recharts";
 import {
+  AlertTriangle,
   BarChart3,
   Calendar,
   CalendarClock,
@@ -137,7 +138,18 @@ type ReservationMetrics = {
 const db = getDb();
 const functions = getFunctions(getApp(), "us-central1");
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(
+    parts.map((part) => [part.type, part.value])
+  );
+  return `${values.year}-${values.month}-${values.day}`;
+};
 const DEFAULT_SETTINGS: ReservationSettings = {
   openTime: "12:00",
   closeTime: "23:00",
@@ -222,7 +234,34 @@ const buildSlots = (settings: ReservationSettings) => {
 };
 
 const getFunctionErrorMessage = (error: unknown) => {
-  if (error instanceof Error && error.message) return error.message;
+  const value =
+    error && typeof error === "object"
+      ? (error as { code?: unknown; details?: unknown; message?: unknown })
+      : {};
+  const code =
+    typeof value.code === "string"
+      ? value.code.replace(/^(functions|firestore)\//, "")
+      : "";
+  const details = typeof value.details === "string" ? value.details.trim() : "";
+  const message =
+    typeof value.message === "string" ? value.message.trim() : "";
+
+  if (code === "failed-precondition" && /requires an index/i.test(message)) {
+    return "El índice de reservas todavía no está disponible. Reintentá en unos minutos.";
+  }
+  if (details) return details;
+  if (
+    message &&
+    !["internal", "unknown", "FirebaseError: internal"].includes(message)
+  ) {
+    return message.replace(/^Firebase:\s*/i, "");
+  }
+  if (code === "unauthenticated") return "Tu sesión venció. Volvé a iniciar sesión.";
+  if (code === "permission-denied") return "No tenés permisos para gestionar reservas.";
+  if (code === "unavailable") return "No se pudo conectar con Reservas. Reintentá.";
+  if (code === "internal") {
+    return "Reservas no pudo completar la operación. Reintentá en unos minutos.";
+  }
   return "No se pudo completar la operación.";
 };
 
@@ -252,6 +291,10 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
   const [metricsRange, setMetricsRange] = useState<MetricsRange>(30);
   const [metricsLoading, setMetricsLoading] = useState(true);
   const [metrics, setMetrics] = useState<ReservationMetrics | null>(null);
+  const [metricsRevision, setMetricsRevision] = useState(0);
+  const [reservationsError, setReservationsError] = useState<string | null>(
+    null
+  );
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -359,9 +402,19 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
       where("date", "==", viewDate),
       orderBy("time", "asc")
     );
-    return onSnapshot(q, (snap) => {
-      setReservations(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Reservation));
-    });
+    return onSnapshot(
+      q,
+      (snap) => {
+        setReservationsError(null);
+        setReservations(
+          snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Reservation)
+        );
+      },
+      (error) => {
+        setReservations([]);
+        setReservationsError(getFunctionErrorMessage(error));
+      }
+    );
   }, [restaurantId, viewDate]);
 
   useEffect(() => {
@@ -386,7 +439,7 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
     return () => {
       active = false;
     };
-  }, [restaurantId, metricsRange]);
+  }, [restaurantId, metricsRange, metricsRevision]);
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -413,6 +466,7 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
       setName(""); setPhone(""); setEmail(""); setDate(today()); setTime("20:00");
       setPartySize("2"); setMesa(""); setNotes("");
       setShowForm(false);
+      setMetricsRevision((current) => current + 1);
       toast.success("Reserva confirmada. Enviaremos el email automáticamente.");
     } catch (error) {
       toast.error(getFunctionErrorMessage(error));
@@ -427,6 +481,7 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
       setUpdatingId(id);
       const updateStatus = httpsCallable(functions, "updateReservationStatus");
       await updateStatus({ restaurantId, reservationId: id, status });
+      setMetricsRevision((current) => current + 1);
       toast.success(`Reserva actualizada a: ${STATUS_LABEL[status]}.`);
     } catch (error) {
       toast.error(getFunctionErrorMessage(error));
@@ -456,6 +511,7 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
       });
       setViewDate(rescheduleDraft.date);
       setRescheduleDraft(null);
+      setMetricsRevision((current) => current + 1);
       toast.success("Reserva reprogramada y registrada en el historial.");
     } catch (error) {
       toast.error(getFunctionErrorMessage(error));
@@ -537,6 +593,13 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
           </button>
         </div>
       </div>
+
+      {reservationsError && (
+        <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          <AlertTriangle size={17} className="mt-0.5 shrink-0" />
+          <span>{reservationsError}</span>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         {STATUS_ORDER.map((status) => {
@@ -924,7 +987,7 @@ export function ReservationsPanel({ restaurantId }: { restaurantId: string }) {
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre *" required className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
             <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="Teléfono *" required className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email *" required className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
-            <input type="date" value={date} onChange={(e) => { setDate(e.target.value); setViewDate(e.target.value); }} className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
+            <input type="date" min={today()} value={date} onChange={(e) => { setDate(e.target.value); setViewDate(e.target.value); }} className="h-10 rounded-lg border border-zinc-200 px-3 text-sm" />
             <select value={time} onChange={(e) => setTime(e.target.value)} className="h-10 rounded-lg border border-zinc-200 px-3 text-sm">
               {slots.map((slot) => {
                 const remaining = Math.max(
