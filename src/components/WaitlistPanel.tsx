@@ -123,9 +123,6 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const [openedWhatsAppIds, setOpenedWhatsAppIds] = useState<string[]>([]);
-  const [whatsAppFallbacks, setWhatsAppFallbacks] = useState<
-    Record<string, string>
-  >({});
   const [markingNotifiedId, setMarkingNotifiedId] = useState<string | null>(null);
   const [restaurantName, setRestaurantName] = useState("el restaurante");
   const [messageTemplate, setMessageTemplate] = useState(
@@ -272,14 +269,9 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
     }
   };
 
-  const openWhatsApp = (entry: WaitlistEntry) => {
+  const getWhatsAppUrl = (entry: WaitlistEntry) => {
     const normalizedPhone = normalizeWhatsAppPhone(entry.phone);
-    if (!normalizedPhone) {
-      toast.error(
-        "El telefono del cliente no es valido. Usa codigo de pais o un numero argentino completo."
-      );
-      return;
-    }
+    if (!normalizedPhone) return "";
 
     const message = renderWaitlistWhatsAppMessage(messageTemplate, {
       customerName: entry.name,
@@ -295,22 +287,7 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
       message,
       isMobile: isMobileWhatsAppDevice(window.navigator.userAgent),
     });
-    const openedWindow = window.open(url, "_blank");
-    if (!openedWindow) {
-      setWhatsAppFallbacks((current) => ({ ...current, [entry.id]: url }));
-      toast.error("El navegador bloqueo la nueva pestaña.");
-      return;
-    }
-    openedWindow.opener = null;
-    setWhatsAppFallbacks((current) => {
-      const next = { ...current };
-      delete next[entry.id];
-      return next;
-    });
-    setOpenedWhatsAppIds((current) =>
-      current.includes(entry.id) ? current : [...current, entry.id]
-    );
-    toast.success("WhatsApp abierto. Marca la entrada como avisada al enviarlo.");
+    return url;
   };
 
   const markNotified = async (id: string) => {
@@ -324,11 +301,6 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
       >(functions, "markWaitlistEntryNotified");
       await mark({ restaurantId, entryId: id });
       setOpenedWhatsAppIds((current) => current.filter((entryId) => entryId !== id));
-      setWhatsAppFallbacks((current) => {
-        const next = { ...current };
-        delete next[id];
-        return next;
-      });
       toast.success("Entrada marcada como avisada.");
     } catch (error) {
       toast.error(
@@ -465,7 +437,13 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
         <p className="text-sm text-zinc-500">No hay clientes en espera.</p>
       ) : (
         <div className="space-y-2">
-          {active.map((entry, idx) => (
+          {active.map((entry, idx) => {
+            const whatsAppUrl = getWhatsAppUrl(entry);
+            const whatsAppDisabled =
+              assigningId === entry.id ||
+              updatingId === entry.id ||
+              markingNotifiedId === entry.id;
+            return (
             <div
               key={entry.id}
               className="rounded-xl border border-zinc-200 bg-white p-4"
@@ -510,19 +488,40 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
                           : "Marcar avisada"}
                       </button>
                     ) : (
-                      <button
-                        onClick={() => openWhatsApp(entry)}
-                        disabled={
-                          assigningId === entry.id ||
-                          updatingId === entry.id ||
-                          markingNotifiedId === entry.id
-                        }
+                      <a
+                        href={!whatsAppDisabled && whatsAppUrl ? whatsAppUrl : undefined}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(event) => {
+                          if (whatsAppDisabled) {
+                            event.preventDefault();
+                            return;
+                          }
+                          if (!whatsAppUrl) {
+                            event.preventDefault();
+                            toast.error(
+                              "El telefono del cliente no es valido. Usa codigo de pais o un numero argentino completo."
+                            );
+                            return;
+                          }
+                          setOpenedWhatsAppIds((current) =>
+                            current.includes(entry.id)
+                              ? current
+                              : [...current, entry.id]
+                          );
+                          toast.success(
+                            "WhatsApp abierto. Marca la entrada como avisada al enviarlo."
+                          );
+                        }}
+                        aria-disabled={whatsAppDisabled}
                         title="Abrir aviso manual en WhatsApp"
-                        className="flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                        className={`flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 ${
+                          whatsAppDisabled ? "pointer-events-none opacity-50" : ""
+                        }`}
                       >
                         <MessageCircle size={14} />
                         Avisar por WhatsApp
-                      </button>
+                      </a>
                     )
                   )}
                   <button
@@ -606,32 +605,9 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
                   </button>
                 </div>
               )}
-              {whatsAppFallbacks[entry.id] && (
-                <div className="mt-3 border-t border-zinc-100 pt-3 text-right">
-                  <a
-                    href={whatsAppFallbacks[entry.id]}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => {
-                      setOpenedWhatsAppIds((current) =>
-                        current.includes(entry.id)
-                          ? current
-                          : [...current, entry.id]
-                      );
-                      setWhatsAppFallbacks((current) => {
-                        const next = { ...current };
-                        delete next[entry.id];
-                        return next;
-                      });
-                    }}
-                    className="text-sm font-bold text-emerald-700 underline underline-offset-2"
-                  >
-                    Abrir WhatsApp Web
-                  </a>
-                </div>
-              )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
