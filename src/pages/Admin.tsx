@@ -40,6 +40,7 @@ import { StaffManagementPanel } from "../components/StaffManagementPanel";
 import { MesaManagementPanel } from "../components/MesaManagementPanel.tsx";
 import { MenuManagementPanel } from "../components/MenuManagementPanel";
 import { StockPanel } from "../components/StockPanel";
+import { KardexPanel } from "../components/KardexPanel";
 import { AdminBilling } from "../components/AdminBilling";
 import { WaitlistPanel } from "../components/WaitlistPanel";
 import { ReservationsPanel } from "../components/ReservationsPanel";
@@ -1303,6 +1304,15 @@ return (
               description="Gestioná inventario e ingredientes."
             >
               <StockPanel restaurantId={restaurantId} plan={restaurant?.plan} />
+            </AdminSectionShell>
+          )}
+
+          {adminSection === "kardex" && (
+            <AdminSectionShell
+              title="Kardex"
+              description="Registro cronológico de todos los movimientos de inventario."
+            >
+              <KardexPanel restaurantId={restaurantId} plan={restaurant?.plan} />
             </AdminSectionShell>
           )}
 

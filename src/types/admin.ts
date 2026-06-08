@@ -10,4 +10,5 @@ export type AdminSection =
   | "shifts"
   | "staff-metrics"
   | "promotions"
-  | "afip";
+  | "afip"
+  | "kardex";

@@ -3,12 +3,41 @@ import {
   doc,
   serverTimestamp,
   writeBatch,
+  type WriteBatch,
 } from "firebase/firestore";
 import { getDb } from "./firebase";
 import { writeAuditLog, type AuditActor } from "./audit-logs";
-import type { StockItem, StockUnit } from "../types/stock";
+import type { KardexMovementType, StockItem, StockUnit } from "../types/stock";
 
 const db = getDb();
+
+const writeKardex = (
+  batch: WriteBatch,
+  restaurantId: string,
+  item: { id: string; name: string; unit: StockUnit },
+  quantityBefore: number,
+  quantityAfter: number,
+  actor: AuditActor,
+  typeOverride?: KardexMovementType
+) => {
+  const delta = quantityAfter - quantityBefore;
+  const movementType: KardexMovementType =
+    typeOverride ?? (delta > 0 ? "entrada" : delta < 0 ? "salida" : "ajuste");
+  const kardexRef = doc(collection(db, "restaurants", restaurantId, "kardex"));
+  batch.set(kardexRef, {
+    restaurantId,
+    stockItemId: item.id,
+    stockItemName: item.name,
+    unit: item.unit,
+    movementType,
+    quantityBefore,
+    quantityMoved: Math.abs(delta),
+    quantityAfter,
+    actorEmail: actor.actorEmail ?? null,
+    actorUid: actor.actorUid,
+    createdAt: serverTimestamp(),
+  });
+};
 
 export type CreateStockInput = {
   restaurantId: string;
@@ -45,6 +74,15 @@ export const createStockItem = async (
   };
   const batch = writeBatch(db);
   batch.set(stockRef, stockData);
+  writeKardex(
+    batch,
+    input.restaurantId,
+    { id: stockRef.id, name: input.name.trim(), unit: input.unit },
+    0,
+    Number(input.currentQuantity || 0),
+    actor,
+    "creacion"
+  );
   writeAuditLog(batch, {
     restaurantId: input.restaurantId,
     action: "stock_item_creado",
@@ -83,6 +121,14 @@ export const updateStockQuantity = async (
     currentQuantity: Number(quantity),
     updatedAt: serverTimestamp(),
   });
+  writeKardex(
+    batch,
+    restaurantId,
+    { id: item.id, name: item.name, unit: item.unit },
+    Number(item.currentQuantity || 0),
+    Number(quantity),
+    actor
+  );
   writeAuditLog(batch, {
     restaurantId,
     action: "stock_cantidad_actualizada",
