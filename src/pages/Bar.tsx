@@ -10,6 +10,8 @@ import {
   Flame,
   LogOut,
   AlertTriangle,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import { writeAuditLog } from "../lib/audit-logs";
@@ -23,6 +25,7 @@ import {
   doc,
   serverTimestamp,
   writeBatch,
+  updateDoc,
 } from "firebase/firestore";
 import { toast } from "sonner";
 import type {
@@ -80,6 +83,9 @@ const Bar = () => {
   const [loadingById, setLoadingById] = useState<Record<string, boolean>>({});
   const [loadingByItemKey, setLoadingByItemKey] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+  const [showDisponibilidad, setShowDisponibilidad] = useState(false);
+  const [barMenuItems, setBarMenuItems] = useState<{ id: string; nombre: string; category: string; active: boolean }[]>([]);
+  const [togglingByBarItemId, setTogglingByBarItemId] = useState<Record<string, boolean>>({});
   const [now, setNow] = useState(Date.now());
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -224,6 +230,41 @@ const Bar = () => {
     return () => unsubscribe();
   }, [restaurantId]);
 
+  useEffect(() => {
+    if (!restaurantId || !showDisponibilidad) return;
+    const q = query(collection(db, "restaurants", restaurantId, "menu"), orderBy("name", "asc"));
+    const unsub = onSnapshot(q, (snap) => {
+      setBarMenuItems(
+        snap.docs
+          .filter((d) => d.data().type === "drinks")
+          .map((d) => ({
+            id: d.id,
+            nombre: String(d.data().name ?? ""),
+            category: String(d.data().category ?? ""),
+            active: d.data().active !== false,
+          }))
+      );
+    });
+    return unsub;
+  }, [restaurantId, showDisponibilidad]);
+
+  const toggleDisponibilidadBar = async (itemId: string, currentActive: boolean) => {
+    if (togglingByBarItemId[itemId] || !restaurantId || !user) return;
+    if (!isOnline) { toast.error("Sin conexión."); return; }
+    setTogglingByBarItemId((prev) => ({ ...prev, [itemId]: true }));
+    try {
+      await updateDoc(doc(db, "restaurants", restaurantId, "menu", itemId), {
+        active: !currentActive,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.error("Error cambiando disponibilidad:", err);
+      toast.error("No se pudo cambiar la disponibilidad.");
+    } finally {
+      setTogglingByBarItemId((prev) => ({ ...prev, [itemId]: false }));
+    }
+  };
+
   const updateStatus = async (id: string, newStatus: EstadoBarra) => {
     if (loadingById[id] || !restaurantId || !user) return;
 
@@ -311,9 +352,8 @@ const Bar = () => {
         .filter(({ item, idx }) => isDrinkItem(item) && !order.cancelledItems?.some((c) => c.itemIndex === idx))
         .map(({ idx }) => idx);
 
-      const baseEstado = (order.estadoBarra || "pendiente") as EstadoBarra;
       const allStates = drinkIndices.map((idx) =>
-        (newItemEstadosBarra[String(idx)] as EstadoBarra | undefined) ?? baseEstado
+        (newItemEstadosBarra[String(idx)] as EstadoBarra | undefined) ?? ("pendiente" as EstadoBarra)
       );
 
       let derivedEstado: EstadoBarra = "pendiente";
@@ -527,6 +567,17 @@ const Bar = () => {
                   : "Pantalla puede dormirse"
                 : "Wake Lock no soportado"}
             </div>
+            <button
+              onClick={() => setShowDisponibilidad((v) => !v)}
+              className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-bold shadow-sm transition ${
+                showDisponibilidad
+                  ? "border-violet-400 bg-violet-600 text-white"
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {showDisponibilidad ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
+              Disponibilidad
+            </button>
             <div className="flex flex-col gap-3 xl:items-end">
               <div
                 className={`flex items-center justify-center gap-2 rounded-lg border px-4 py-2 text-sm font-bold shadow-sm ${
@@ -596,6 +647,48 @@ const Bar = () => {
       </div>
         
       <main className="mx-auto max-w-[1800px] px-4 py-4 md:px-6 md:py-6 lg:px-8">
+        {showDisponibilidad && (
+          <div className="mb-6 rounded-xl border border-violet-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-violet-100 px-5 py-4">
+              <div>
+                <p className="text-base font-bold text-slate-900">Disponibilidad de bebidas</p>
+                <p className="text-xs text-slate-500">Pausá una bebida para que no aparezca en el menú del cliente.</p>
+              </div>
+              <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-800">
+                {barMenuItems.filter((i) => !i.active).length} pausados
+              </span>
+            </div>
+            {barMenuItems.length === 0 ? (
+              <p className="px-5 py-6 text-sm text-slate-500">Cargando bebidas...</p>
+            ) : (
+              <ul className="divide-y divide-slate-100">
+                {barMenuItems.map((item) => (
+                  <li key={item.id} className="flex items-center justify-between gap-3 px-5 py-3">
+                    <div className="min-w-0">
+                      <p className={`text-sm font-semibold ${item.active ? "text-slate-900" : "text-slate-400 line-through"}`}>
+                        {item.nombre}
+                      </p>
+                      {item.category && (
+                        <p className="text-xs text-slate-400">{item.category}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => toggleDisponibilidadBar(item.id, item.active)}
+                      disabled={!!togglingByBarItemId[item.id] || !isOnline}
+                      className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition disabled:opacity-50 ${
+                        item.active
+                          ? "bg-emerald-100 text-emerald-800 hover:bg-red-100 hover:text-red-700"
+                          : "bg-red-100 text-red-700 hover:bg-emerald-100 hover:text-emerald-800"
+                      }`}
+                    >
+                      {togglingByBarItemId[item.id] ? "..." : item.active ? "Disponible" : "Pausado"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
         {!isOnline && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
             Sin conexión. Estás viendo datos guardados localmente. Las acciones quedan deshabilitadas hasta reconectar.
@@ -630,6 +723,7 @@ const Bar = () => {
                 .filter(({ item, idx }) => isDrinkItem(item) && !order.cancelledItems?.some((c) => c.itemIndex === idx));
               const bebidasSimples = bebidasConIdx.filter(({ item }) => item.drinkType === "simple");
               const tragos = bebidasConIdx.filter(({ item }) => item.drinkType !== "simple");
+              const hasPerItemEstados = !!(order.itemEstadosBarra && Object.keys(order.itemEstadosBarra).length > 0);
               const status = (order.estadoBarra || "pendiente") as EstadoBarra;
               const isNew = now - getCreatedAtMs(order.createdAt) < NEW_BADGE_MS;
 
@@ -698,8 +792,12 @@ const Bar = () => {
                           )}
                           <div className="space-y-3">
                             {items.map(({ item, idx }) => {
-                              const itemEstado = ((order.itemEstadosBarra?.[String(idx)]) as EstadoBarra | undefined)
-                                ?? (order.estadoBarra || "pendiente") as EstadoBarra;
+                              const rawEstado = order.itemEstadosBarra?.[String(idx)] as EstadoBarra | undefined;
+                              const itemEstado: EstadoBarra = rawEstado !== undefined
+                                ? rawEstado
+                                : hasPerItemEstados
+                                  ? "pendiente"
+                                  : (order.estadoBarra || "pendiente") as EstadoBarra;
                               const siguienteEstado = nextStatusForDrink(itemEstado, isSimple);
                               const loadKey = `${order.id}:${idx}`;
                               const isItemLoading = !!loadingByItemKey[loadKey];

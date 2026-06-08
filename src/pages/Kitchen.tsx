@@ -68,7 +68,7 @@ const Kitchen = () => {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [showDisponibilidad, setShowDisponibilidad] = useState(false);
-  const [menuItems, setMenuItems] = useState<{ id: string; nombre: string; category: string; active: boolean }[]>([]);
+  const [menuItems, setMenuItems] = useState<{ id: string; nombre: string; category: string; active: boolean; type: string }[]>([]);
   const [togglingById, setTogglingById] = useState<Record<string, boolean>>({});
   const [selectedStation, setSelectedStation] = useState<string | null>(null);
 
@@ -242,6 +242,7 @@ const Kitchen = () => {
           nombre: String(d.data().nombre ?? d.data().name ?? ""),
           category: String(d.data().category ?? d.data().displayCategory ?? ""),
           active: d.data().active !== false,
+          type: String(d.data().type ?? "food"),
         }))
       );
     });
@@ -266,8 +267,12 @@ const Kitchen = () => {
   };
 
   const getItemEstado = (pedido: Pedido, itemIndex: number): EstadoCocina => {
-    const base = (pedido.estadoCocina || "pendiente") as EstadoCocina;
-    return (pedido.itemEstados?.[String(itemIndex)] as EstadoCocina | undefined) ?? base;
+    const explicit = pedido.itemEstados?.[String(itemIndex)] as EstadoCocina | undefined;
+    if (explicit !== undefined) return explicit;
+    // Si ya hay al menos un ítem trackeado, los no tocados son "pendiente"
+    if (pedido.itemEstados && Object.keys(pedido.itemEstados).length > 0) return "pendiente";
+    // Compat. pedidos viejos sin per-item tracking
+    return (pedido.estadoCocina || "pendiente") as EstadoCocina;
   };
 
   const siguienteEstadoItem = (estado: EstadoCocina): EstadoCocina | null => {
@@ -296,8 +301,7 @@ const Kitchen = () => {
         .filter(({ item, idx }) => isFoodItem(item) && !pedido.cancelledItems?.some((c) => c.itemIndex === idx))
         .map(({ idx }) => idx);
 
-      const baseEstado = (pedido.estadoCocina || "pendiente") as EstadoCocina;
-      const allStates = foodIndices.map((idx) => (newItemEstados[String(idx)] as EstadoCocina | undefined) ?? baseEstado);
+      const allStates = foodIndices.map((idx) => (newItemEstados[String(idx)] as EstadoCocina | undefined) ?? ("pendiente" as EstadoCocina));
 
       let derivedEstado: EstadoCocina = "pendiente";
       if (allStates.every((s) => s === "listo")) {
@@ -647,14 +651,14 @@ const Kitchen = () => {
                 <p className="text-xs text-slate-500">Pausá un ítem para que no aparezca en el menú del cliente.</p>
               </div>
               <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-800">
-                {menuItems.filter((i) => !i.active).length} pausados
+                {menuItems.filter((i) => i.type !== "drinks" && !i.active).length} pausados
               </span>
             </div>
             {menuItems.length === 0 ? (
               <p className="px-5 py-6 text-sm text-slate-500">Cargando productos...</p>
             ) : (
               <ul className="divide-y divide-slate-100">
-                {menuItems.map((item) => (
+                {menuItems.filter((i) => i.type !== "drinks").map((item) => (
                   <li key={item.id} className="flex items-center justify-between gap-3 px-5 py-3">
                     <div className="min-w-0">
                       <p className={`text-sm font-semibold ${item.active ? "text-slate-900" : "text-slate-400 line-through"}`}>

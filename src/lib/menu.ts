@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteField,
   doc,
   serverTimestamp,
   writeBatch,
@@ -99,9 +100,16 @@ export const updateMenuItem = async (
   data: Partial<Omit<MenuItem, "id">>,
   actor: AuditActor
 ) => {
+  // Firestore update() rechaza `undefined`. `null` se convierte a deleteField()
+  // para limpiar campos opcionales que el admin dejó vacíos.
+  const firestoreData: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data as Record<string, unknown>)) {
+    if (v === undefined) continue;
+    firestoreData[k] = v === null ? deleteField() : v;
+  }
   const batch = writeBatch(db);
   batch.update(doc(db, "restaurants", restaurantId, "menu", itemId), {
-    ...data,
+    ...firestoreData,
     updatedAt: serverTimestamp(),
   });
   writeAuditLog(batch, {

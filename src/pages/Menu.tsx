@@ -294,11 +294,12 @@ const Menu = () => {
   const isSearching = normalizedSearchQuery.length > 0;
 
   const searchResults = useMemo(() => {
-    if (!normalizedSearchQuery) return allItems;
+    const activeItems = allItems.filter((item) => item.availabilityStatus !== "paused");
+    if (!normalizedSearchQuery) return activeItems;
 
     const terms = normalizedSearchQuery.split(/\s+/).filter(Boolean);
 
-    return allItems.filter((item) => {
+    return activeItems.filter((item) => {
       const searchableText = normalizeSearchText(
         [
           item.name,
