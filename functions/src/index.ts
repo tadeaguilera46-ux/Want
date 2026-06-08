@@ -50,6 +50,11 @@ const WAITLIST_CALLABLE_OPTIONS = {
   secrets: [TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM],
 };
 
+const WAITLIST_ASSIGN_CALLABLE_OPTIONS = {
+  cors: RESERVATION_CALLABLE_OPTIONS.cors,
+  invoker: "public" as const,
+};
+
 // Entorno AFIP: "homologacion" en dev, "produccion" en prod
 const AFIP_ENV = (process.env.AFIP_ENV ?? "produccion") as "homologacion" | "produccion";
 
@@ -2158,6 +2163,154 @@ export const notifyWaitlistEntry = onCall(
         "internal",
         "No se pudo enviar el aviso. Revisá la configuración de mensajería."
       );
+    }
+  }
+);
+
+export const assignWaitlistEntryToTable = onCall(
+  WAITLIST_ASSIGN_CALLABLE_OPTIONS,
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
+
+    const data = request.data as {
+      restaurantId?: unknown;
+      entryId?: unknown;
+      mesa?: unknown;
+    };
+    const restaurantId =
+      typeof data.restaurantId === "string" ? data.restaurantId.trim() : "";
+    const entryId =
+      typeof data.entryId === "string" ? data.entryId.trim() : "";
+    const mesa = Number(data.mesa);
+
+    if (
+      !isValidReservationDocumentId(restaurantId) ||
+      !isValidReservationDocumentId(entryId) ||
+      !Number.isInteger(mesa) ||
+      mesa < 1 ||
+      mesa > 500
+    ) {
+      throw new HttpsError("invalid-argument", "Asignacion de mesa invalida");
+    }
+
+    const staff = await requireRestaurantAdmin(restaurantId, request.auth.uid);
+    const db = admin.firestore();
+    const entryRef = db.doc(
+      `restaurants/${restaurantId}/waitlist/${entryId}`
+    );
+    const mesaRef = db.doc(`restaurants/${restaurantId}/mesas/${mesa}`);
+    const sessionRef = db
+      .collection(`restaurants/${restaurantId}/sessions`)
+      .doc(crypto.randomUUID());
+    const auditRef = db
+      .collection(`restaurants/${restaurantId}/auditLogs`)
+      .doc();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    try {
+      await db.runTransaction(async (transaction) => {
+        const [entrySnap, mesaSnap] = await Promise.all([
+          transaction.get(entryRef),
+          transaction.get(mesaRef),
+        ]);
+
+        if (!entrySnap.exists) {
+          throw new HttpsError("not-found", "Entrada de espera inexistente");
+        }
+        if (!mesaSnap.exists) {
+          throw new HttpsError("not-found", "Mesa inexistente");
+        }
+
+        const entry = entrySnap.data() || {};
+        const mesaData = mesaSnap.data() || {};
+
+        if (entry.status !== "waiting" && entry.status !== "notified") {
+          throw new HttpsError(
+            "failed-precondition",
+            "La entrada de espera ya fue cerrada"
+          );
+        }
+        if (
+          mesaData.restaurantId !== restaurantId ||
+          mesaData.numero !== mesa ||
+          mesaData.active === false ||
+          mesaData.estado !== "available" ||
+          typeof mesaData.activeSessionId === "string"
+        ) {
+          throw new HttpsError(
+            "failed-precondition",
+            "La mesa seleccionada ya no esta disponible"
+          );
+        }
+
+        transaction.create(sessionRef, {
+          restaurantId,
+          tableNumber: mesa,
+          status: "active",
+          billRequested: false,
+          ordersLocked: false,
+          lockedReason: null,
+          openedAt: now,
+          closedAt: null,
+          cleanedAt: null,
+          closedReason: null,
+          createdAt: now,
+          updatedAt: now,
+        });
+        transaction.update(mesaRef, {
+          estado: "occupied",
+          activeSessionId: sessionRef.id,
+          lastSessionId: null,
+          cleanedAt: null,
+          updatedAt: now,
+        });
+        transaction.update(entryRef, {
+          status: "cancelled",
+          assignedAt: now,
+          updatedAt: now,
+          assignment: {
+            mesa,
+            sessionId: sessionRef.id,
+            actorUid: request.auth!.uid,
+            assignedAt: now,
+          },
+        });
+        transaction.set(auditRef, {
+          restaurantId,
+          action: "waitlist_mesa_asignada",
+          actorUid: request.auth!.uid,
+          actorEmail: staff.email || request.auth!.token.email || null,
+          actorRole: "admin",
+          userUid: request.auth!.uid,
+          userEmail: staff.email || request.auth!.token.email || null,
+          userRole: "admin",
+          mesa,
+          pedidoId: null,
+          cuentaId: null,
+          sessionId: sessionRef.id,
+          entityType: "waitlist",
+          entityId: entryId,
+          description: `Se asigno ${entry.name || entryId} a mesa ${mesa}`,
+          reason: null,
+          changes: {
+            before: { status: entry.status, mesa: null, sessionId: null },
+            after: {
+              status: "cancelled",
+              mesa,
+              sessionId: sessionRef.id,
+            },
+          },
+          metadata: {},
+          createdAt: now,
+        });
+      });
+
+      return { ok: true, mesa, sessionId: sessionRef.id };
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      console.error("assignWaitlistEntryToTable error:", error);
+      Sentry.captureException(error, { extra: { restaurantId, entryId, mesa } });
+      throw new HttpsError("internal", "No se pudo asignar la mesa");
     }
   }
 );
