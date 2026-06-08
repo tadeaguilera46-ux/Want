@@ -10,18 +10,28 @@ import {
 } from "firebase/firestore";
 import { getApp } from "firebase/app";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { Bell, Check, Clock, Plus, Users, X } from "lucide-react";
+import { Bell, Check, Clock, Plus, Users } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import { toast } from "sonner";
 import { useAuth } from "../lib/auth-context";
 import { writeAuditLog } from "../lib/audit-logs";
+
+type WaitlistStatus =
+  | "waiting"
+  | "notified"
+  | "seated"
+  | "cancelled"
+  | "abandoned"
+  | "no_response";
+
+type WaitlistClosureStatus = "cancelled" | "abandoned" | "no_response";
 
 type WaitlistEntry = {
   id: string;
   name: string;
   partySize: number;
   phone?: string;
-  status: "waiting" | "notified" | "seated" | "cancelled";
+  status: WaitlistStatus;
   notification?: {
     status?: "sending" | "sent" | "failed";
     channel?: "sms" | "whatsapp";
@@ -96,6 +106,7 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
   const [assignmentEntryId, setAssignmentEntryId] = useState<string | null>(null);
   const [selectedMesa, setSelectedMesa] = useState("");
   const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   useEffect(() => {
     const q = query(
@@ -140,7 +151,9 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
 
   const active = entries.filter((e) => e.status === "waiting" || e.status === "notified");
   const done = entries
-    .filter((e) => e.status === "seated" || e.status === "cancelled")
+    .filter((e) =>
+      ["seated", "cancelled", "abandoned", "no_response"].includes(e.status)
+    )
     .slice(-5);
   const availableTables = tables
     .filter(
@@ -195,7 +208,10 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
     }
   };
 
-  const setStatus = async (id: string, status: WaitlistEntry["status"]) => {
+  const setStatus = async (
+    id: string,
+    status: "notified" | WaitlistClosureStatus
+  ) => {
     if (!user) return;
     const entry = entries.find((current) => current.id === id);
     if (status === "notified") {
@@ -219,25 +235,43 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
       return;
     }
 
-    const batch = writeBatch(db);
-    batch.update(doc(db, "restaurants", restaurantId, "waitlist", id), { status });
-    writeAuditLog(batch, {
-      restaurantId,
-      action: "waitlist_estado_actualizado",
-      actorUid: user.uid,
-      actorEmail: user.email,
-      actorRole: "admin",
-      entityType: "waitlist",
-      entityId: id,
-      description: `Se actualizo entrada ${id} a ${status}`,
-      changes: {
-        before: { status: entry?.status ?? null },
-        after: { status },
-      },
-    });
-    await batch.commit();
-    if (status === "notified") toast.success("Mesa avisada.");
-    if (status === "cancelled") toast.success("Entrada cancelada.");
+    const timestampField: Record<WaitlistClosureStatus, string> = {
+      cancelled: "cancelledAt",
+      abandoned: "abandonedAt",
+      no_response: "noResponseAt",
+    };
+
+    try {
+      setUpdatingId(id);
+      const now = serverTimestamp();
+      const batch = writeBatch(db);
+      batch.update(doc(db, "restaurants", restaurantId, "waitlist", id), {
+        status,
+        closedAt: now,
+        updatedAt: now,
+        [timestampField[status]]: now,
+      });
+      writeAuditLog(batch, {
+        restaurantId,
+        action: "waitlist_estado_actualizado",
+        actorUid: user.uid,
+        actorEmail: user.email,
+        actorRole: "admin",
+        entityType: "waitlist",
+        entityId: id,
+        description: `Se actualizo entrada ${id} a ${status}`,
+        changes: {
+          before: { status: entry?.status ?? null },
+          after: { status },
+        },
+      });
+      await batch.commit();
+      toast.success(`Estado actualizado: ${statusLabel[status]}.`);
+    } catch {
+      toast.error("No se pudo actualizar el estado.");
+    } finally {
+      setUpdatingId(null);
+    }
   };
 
   const openAssignment = (entryId: string) => {
@@ -271,17 +305,21 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
     }
   };
 
-  const statusBadge: Record<WaitlistEntry["status"], string> = {
+  const statusBadge: Record<WaitlistStatus, string> = {
     waiting: "border-zinc-200 bg-zinc-100 text-zinc-700",
     notified: "border-emerald-200 bg-emerald-100 text-emerald-700",
     seated: "border-blue-200 bg-blue-100 text-blue-700",
     cancelled: "border-red-200 bg-red-100 text-red-600",
+    abandoned: "border-orange-200 bg-orange-100 text-orange-700",
+    no_response: "border-amber-200 bg-amber-100 text-amber-700",
   };
-  const statusLabel: Record<WaitlistEntry["status"], string> = {
+  const statusLabel: Record<WaitlistStatus, string> = {
     waiting: "Esperando",
     notified: "Avisado",
     seated: "Sentado",
-    cancelled: "Cancelado",
+    cancelled: "Canceló",
+    abandoned: "Abandonó",
+    no_response: "No respondió",
   };
 
   return (
@@ -389,13 +427,21 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
                   >
                     <Check size={14} />
                   </button>
-                  <button
-                    onClick={() => setStatus(entry.id, "cancelled")}
-                    title="Cancelar"
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-500 hover:bg-red-100"
+                  <select
+                    value=""
+                    onChange={(event) => {
+                      const status = event.target.value as WaitlistClosureStatus;
+                      if (status) void setStatus(entry.id, status);
+                    }}
+                    disabled={updatingId === entry.id}
+                    aria-label={`Cerrar registro de ${entry.name}`}
+                    className="h-8 rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-xs font-semibold text-zinc-600 outline-none hover:bg-zinc-100 disabled:opacity-50"
                   >
-                    <X size={14} />
-                  </button>
+                    <option value="">Cerrar como...</option>
+                    <option value="cancelled">Canceló</option>
+                    <option value="abandoned">Abandonó</option>
+                    <option value="no_response">No respondió</option>
+                  </select>
                 </div>
               </div>
               {assignmentEntryId === entry.id && (
@@ -446,12 +492,16 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
           <div className="space-y-1">
             {done.map((entry) => (
               <div key={entry.id} className="flex items-center justify-between rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-2">
-                <p className={`text-sm text-zinc-500 ${entry.status === "cancelled" ? "line-through" : ""}`}>
-                  {entry.name} · {entry.partySize}p
-                  {entry.assignment?.mesa ? ` · Mesa ${entry.assignment.mesa}` : ""}
-                  {entry.status === "seated" ? " · Sentado" : ""}
-                </p>
-                <p className="text-xs text-zinc-400">{fmtTime(entry)}</p>
+                <div>
+                  <p className="text-sm text-zinc-600">
+                    {entry.name} · {entry.partySize}p
+                    {entry.assignment?.mesa ? ` · Mesa ${entry.assignment.mesa}` : ""}
+                  </p>
+                  <p className="text-xs text-zinc-400">{fmtTime(entry)}</p>
+                </div>
+                <span className={`rounded-full border px-2.5 py-0.5 text-xs font-bold ${statusBadge[entry.status]}`}>
+                  {statusLabel[entry.status]}
+                </span>
               </div>
             ))}
           </div>
