@@ -11,7 +11,7 @@ import {
   PROMO_CATEGORY_NONE,
   type Promotion,
   type TwoForOnePromo,
-} from "@/components/PromotionsPanel";
+} from "@/lib/promotions";
 
 export const PROMOS_CATEGORY_KEY = "promociones";
 

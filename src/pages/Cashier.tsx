@@ -48,9 +48,9 @@ import type {
   CashierPaymentMethod,
 } from "../types/cashier";
 import {
-  isTwoForOneActive,
+  calcTwoForOneDiscount,
   type TwoForOnePromo,
-} from "../components/PromotionsPanel";
+} from "../lib/promotions";
 import { writeAuditLog } from "../lib/audit-logs";
 
 const db = getDb();
@@ -636,38 +636,14 @@ const Cashier = () => {
   }, [discountType, discountValue, realSubtotal]);
 
   const twoForOneDiscount = useMemo(() => {
-    const activePromos = twoForOnePromos.filter(isTwoForOneActive);
-    if (activePromos.length === 0) return 0;
-
-    // Agrupar items no cancelados por nombre y sumar cantidades
-    const grouped = new Map<string, { price: number; quantity: number }>();
-    for (const item of selectedItems) {
-      if (item._cancelled) continue;
-      const name = getItemName(item);
-      const price = getItemPrice(item);
-      const qty = getItemQuantity(item);
-      const existing = grouped.get(name);
-      if (existing) {
-        existing.quantity += qty;
-      } else {
-        grouped.set(name, { price, quantity: qty });
-      }
-    }
-
-    let discount = 0;
-    for (const [itemName, { price, quantity }] of grouped) {
-      const matches = activePromos.some(
-        (p) =>
-          !p.productName ||
-          p.productName.toLowerCase() === itemName.toLowerCase()
-      );
-      if (!matches) continue;
-      // Por cada par, 1 es gratis
-      const freeCount = Math.floor(quantity / 2);
-      discount += freeCount * price;
-    }
-
-    return discount;
+    const items = selectedItems
+      .filter((item) => !item._cancelled)
+      .map((item) => ({
+        name: getItemName(item),
+        price: getItemPrice(item),
+        quantity: getItemQuantity(item),
+      }));
+    return calcTwoForOneDiscount(items, twoForOnePromos);
   }, [selectedItems, twoForOnePromos]);
 
   const extraAmount = useMemo(() => {

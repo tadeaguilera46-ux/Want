@@ -14,6 +14,16 @@ import { getDb } from "../lib/firebase";
 import { toast } from "sonner";
 import { useAuth } from "../lib/auth-context";
 import { writeAuditLog } from "../lib/audit-logs";
+import {
+  PROMO_CATEGORY_NONE,
+  isPromotionActive,
+  isTwoForOneActive,
+  type Promotion,
+  type TwoForOnePromo,
+} from "../lib/promotions";
+
+export { PROMO_CATEGORY_NONE, isPromotionActive, isTwoForOneActive };
+export type { Promotion, TwoForOnePromo };
 
 type MenuItemOption = {
   id: string;
@@ -192,9 +202,6 @@ function MenuItemPicker({
   );
 }
 
-// Sentinel: el descuento no aplica a ninguna categoría, solo al producto seleccionado
-export const PROMO_CATEGORY_NONE = "__none__";
-
 function CategoryPicker({
   restaurantId,
   value,
@@ -240,56 +247,8 @@ function CategoryPicker({
   );
 }
 
-export type Promotion = {
-  id: string;
-  name: string;
-  category: string;
-  productName: string;
-  discountType: "percentage" | "fixed";
-  discountValue: number;
-  fromTime: string;
-  toTime: string;
-  days: number[];
-  active: boolean;
-};
-
-export type TwoForOnePromo = {
-  id: string;
-  name: string;
-  productName: string;
-  fromTime: string;
-  toTime: string;
-  days: number[];
-  active: boolean;
-};
-
 const db = getDb();
 const DAYS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
-
-const isActiveSchedule = (promo: {
-  active: boolean;
-  days: number[];
-  fromTime: string;
-  toTime: string;
-}): boolean => {
-  if (!promo.active) return false;
-  const now = new Date();
-  const day = now.getDay();
-  if (promo.days.length > 0 && !promo.days.includes(day)) return false;
-  const [fh, fm] = promo.fromTime.split(":").map(Number);
-  const [th, tm] = promo.toTime.split(":").map(Number);
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-  const fromMin = fh * 60 + fm;
-  const toMin = th * 60 + tm;
-  if (fromMin <= toMin) return nowMin >= fromMin && nowMin <= toMin;
-  return nowMin >= fromMin || nowMin <= toMin;
-};
-
-export const isPromotionActive = (promo: Promotion): boolean =>
-  isActiveSchedule(promo);
-
-export const isTwoForOneActive = (promo: TwoForOnePromo): boolean =>
-  isActiveSchedule(promo);
 
 export function PromotionsPanel({ restaurantId }: { restaurantId: string }) {
   const { user } = useAuth();
