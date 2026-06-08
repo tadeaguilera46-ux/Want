@@ -111,6 +111,7 @@ export const KardexPanel = ({ restaurantId, plan }: Props) => {
                 <th className="px-4 py-2.5 text-right">Movimiento</th>
                 <th className="px-4 py-2.5 text-right">Antes</th>
                 <th className="px-4 py-2.5 text-right">Después</th>
+                <th className="px-4 py-2.5">Motivo</th>
                 <th className="px-4 py-2.5">Responsable</th>
               </tr>
             </thead>
@@ -147,6 +148,9 @@ export const KardexPanel = ({ restaurantId, plan }: Props) => {
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-zinc-700">
                       {fmtQty(entry.quantityAfter, entry.unit)}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-zinc-500">
+                      {entry.reason ?? "-"}
                     </td>
                     <td className="px-4 py-2.5 text-xs text-zinc-400">
                       {entry.actorEmail ?? "-"}

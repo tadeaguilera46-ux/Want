@@ -18,7 +18,8 @@ const writeKardex = (
   quantityBefore: number,
   quantityAfter: number,
   actor: AuditActor,
-  typeOverride?: KardexMovementType
+  typeOverride?: KardexMovementType,
+  reason?: string | null
 ) => {
   const delta = quantityAfter - quantityBefore;
   const movementType: KardexMovementType =
@@ -35,6 +36,7 @@ const writeKardex = (
     quantityAfter,
     actorEmail: actor.actorEmail ?? null,
     actorUid: actor.actorUid,
+    reason: reason ?? null,
     createdAt: serverTimestamp(),
   });
 };
@@ -106,7 +108,8 @@ export const updateStockQuantity = async (
   restaurantId: string,
   item: StockItem,
   quantity: number,
-  actor: AuditActor
+  actor: AuditActor,
+  reason?: string | null
 ) => {
   const stockDoc = doc(
     db,
@@ -127,7 +130,9 @@ export const updateStockQuantity = async (
     { id: item.id, name: item.name, unit: item.unit },
     Number(item.currentQuantity || 0),
     Number(quantity),
-    actor
+    actor,
+    undefined,
+    reason
   );
   writeAuditLog(batch, {
     restaurantId,
@@ -135,7 +140,8 @@ export const updateStockQuantity = async (
     ...actor,
     entityType: "stock_item",
     entityId: item.id,
-    description: `Se actualizo stock de ${item.name}`,
+    description: `Se actualizo stock de ${item.name}${reason ? ` — ${reason}` : ""}`,
+    reason: reason ?? undefined,
     changes: {
       before: { currentQuantity: Number(item.currentQuantity || 0) },
       after: { currentQuantity: Number(quantity) },
@@ -148,35 +154,22 @@ export const addStock = async (
   restaurantId: string,
   item: StockItem,
   amount: number,
-  actor: AuditActor
+  actor: AuditActor,
+  reason?: string | null
 ) => {
   const next = Number(item.currentQuantity || 0) + Number(amount || 0);
-
-  await updateStockQuantity(
-    restaurantId,
-    item,
-    next,
-    actor
-  );
+  await updateStockQuantity(restaurantId, item, next, actor, reason);
 };
 
 export const removeStock = async (
   restaurantId: string,
   item: StockItem,
   amount: number,
-  actor: AuditActor
+  actor: AuditActor,
+  reason?: string | null
 ) => {
-  const next = Math.max(
-    0,
-    Number(item.currentQuantity || 0) - Number(amount || 0)
-  );
-
-  await updateStockQuantity(
-    restaurantId,
-    item,
-    next,
-    actor
-  );
+  const next = Math.max(0, Number(item.currentQuantity || 0) - Number(amount || 0));
+  await updateStockQuantity(restaurantId, item, next, actor, reason);
 };
 
 export const toggleStockItem = async (

@@ -52,6 +52,11 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
   const [supplier, setSupplier] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+
+  const getReasonFor = (id: string) => reasons[id] ?? "ajuste";
+  const setReasonFor = (id: string, v: string) =>
+    setReasons((prev) => ({ ...prev, [id]: v }));
 
   useEffect(() => {
     const q = query(
@@ -355,6 +360,19 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
                       {item.currentQuantity} {item.unit}
                     </div>
 
+                    <select
+                      value={getReasonFor(item.id)}
+                      onChange={(e) => setReasonFor(item.id, e.target.value)}
+                      disabled={!stockEnabled}
+                      className="h-10 rounded-lg border border-zinc-200 bg-white px-2 text-xs text-zinc-700 focus:outline-none disabled:opacity-50"
+                    >
+                      <option value="compra">Compra</option>
+                      <option value="consumo">Consumo</option>
+                      <option value="desperdicio">Desperdicio</option>
+                      <option value="devolucion">Devolución</option>
+                      <option value="ajuste">Ajuste</option>
+                    </select>
+
                     <button
                       disabled={!stockEnabled}
                       onClick={() =>
@@ -363,7 +381,7 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
                           actorUid: user.uid,
                           actorEmail: user.email,
                           actorRole: "admin",
-                        })
+                        }, getReasonFor(item.id))
                       }
                       className="h-10 rounded-lg border border-zinc-200 px-4 font-semibold text-zinc-900 disabled:opacity-50"
                     >
@@ -378,7 +396,7 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
                           actorUid: user.uid,
                           actorEmail: user.email,
                           actorRole: "admin",
-                        })
+                        }, getReasonFor(item.id))
                       }
                       className="h-10 rounded-lg border border-zinc-200 px-4 font-semibold text-zinc-900 disabled:opacity-50"
                     >

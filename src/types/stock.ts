@@ -14,6 +14,7 @@ export type KardexEntry = {
   quantityAfter: number;
   actorEmail?: string | null;
   actorUid?: string;
+  reason?: string | null;
   createdAt?: unknown;
 };
 
