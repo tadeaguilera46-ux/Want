@@ -21,7 +21,7 @@ type WaitlistEntry = {
   name: string;
   partySize: number;
   phone?: string;
-  status: "waiting" | "notified" | "cancelled";
+  status: "waiting" | "notified" | "seated" | "cancelled";
   notification?: {
     status?: "sending" | "sent" | "failed";
     channel?: "sms" | "whatsapp";
@@ -139,7 +139,9 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
   }, [restaurantId]);
 
   const active = entries.filter((e) => e.status === "waiting" || e.status === "notified");
-  const done = entries.filter((e) => e.status === "cancelled").slice(-5);
+  const done = entries
+    .filter((e) => e.status === "seated" || e.status === "cancelled")
+    .slice(-5);
   const availableTables = tables
     .filter(
       (table) =>
@@ -272,11 +274,13 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
   const statusBadge: Record<WaitlistEntry["status"], string> = {
     waiting: "border-zinc-200 bg-zinc-100 text-zinc-700",
     notified: "border-emerald-200 bg-emerald-100 text-emerald-700",
+    seated: "border-blue-200 bg-blue-100 text-blue-700",
     cancelled: "border-red-200 bg-red-100 text-red-600",
   };
   const statusLabel: Record<WaitlistEntry["status"], string> = {
     waiting: "Esperando",
     notified: "Avisado",
+    seated: "Sentado",
     cancelled: "Cancelado",
   };
 
@@ -442,9 +446,10 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
           <div className="space-y-1">
             {done.map((entry) => (
               <div key={entry.id} className="flex items-center justify-between rounded-lg border border-zinc-100 bg-zinc-50 px-4 py-2">
-                <p className={`text-sm text-zinc-500 ${entry.assignment?.mesa ? "" : "line-through"}`}>
+                <p className={`text-sm text-zinc-500 ${entry.status === "cancelled" ? "line-through" : ""}`}>
                   {entry.name} · {entry.partySize}p
                   {entry.assignment?.mesa ? ` · Mesa ${entry.assignment.mesa}` : ""}
+                  {entry.status === "seated" ? " · Sentado" : ""}
                 </p>
                 <p className="text-xs text-zinc-400">{fmtTime(entry)}</p>
               </div>

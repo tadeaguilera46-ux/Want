@@ -2265,8 +2265,9 @@ export const assignWaitlistEntryToTable = onCall(
           updatedAt: now,
         });
         transaction.update(entryRef, {
-          status: "cancelled",
+          status: "seated",
           assignedAt: now,
+          seatedAt: now,
           updatedAt: now,
           assignment: {
             mesa,
@@ -2295,7 +2296,7 @@ export const assignWaitlistEntryToTable = onCall(
           changes: {
             before: { status: entry.status, mesa: null, sessionId: null },
             after: {
-              status: "cancelled",
+              status: "seated",
               mesa,
               sessionId: sessionRef.id,
             },
