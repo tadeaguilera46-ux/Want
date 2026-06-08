@@ -22,6 +22,7 @@ export type MenuItem = {
   image?: string;
   active: boolean;
   station?: string;
+  drinkType?: "simple" | "cocktail";
   ingredients?: MenuIngredient[];
   variants?: MenuVariant[];
   comboItems?: string[];

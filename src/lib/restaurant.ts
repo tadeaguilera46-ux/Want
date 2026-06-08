@@ -39,6 +39,7 @@ export type PedidoItem = {
   category: PedidoCategory;
   displayCategory?: string;
   station?: string | null;
+  drinkType?: string | null;
   observacion?: string;
   note?: string;
   stockMovements?: PedidoStockMovement[];

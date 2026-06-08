@@ -27,7 +27,7 @@ import {
   type MenuType,
 } from "../lib/menu";
 import { KITCHEN_STATIONS } from "../lib/store";
-import type { MenuIngredient, RecipeUnit } from "../lib/store";
+import type { DrinkType, MenuIngredient, RecipeUnit } from "../lib/store";
 import type { StockItem } from "../types/stock";
 import { toast } from "sonner";
 import { useAuth } from "../lib/auth-context";
@@ -54,6 +54,7 @@ type DraftItem = {
   description: string;
   image: string;
   station?: string;
+  drinkType?: DrinkType;
   ingredients: MenuIngredient[];
   availableFrom?: string;
   availableTo?: string;
@@ -357,6 +358,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
   const [image, setImage] = useState("");
   const [ingredients, setIngredients] = useState<MenuIngredient[]>([]);
   const [station, setStation] = useState<string>("");
+  const [drinkType, setDrinkType] = useState<DrinkType>("cocktail");
   const [comboItemIds, setComboItemIds] = useState<string[]>([]);
 
   const [uploadingCreateImage, setUploadingCreateImage] = useState(false);
@@ -555,6 +557,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
         image: image.trim(),
         active: true,
         station: station.trim() || undefined,
+        drinkType: type === "drinks" ? drinkType : undefined,
         ingredients,
         variants: [],
         comboItems: type === "combo" ? comboItemIds : [],
@@ -571,6 +574,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       setDescription("");
       setImage("");
       setStation("");
+      setDrinkType("cocktail");
       setIngredients([]);
       setComboItemIds([]);
     } catch (error) {
@@ -589,6 +593,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
       description: item.description || "",
       image: item.image || "",
       station: item.station || "",
+      drinkType: (item.drinkType as DrinkType | undefined) || "cocktail",
       ingredients: item.ingredients || [],
       availableFrom: item.availableFrom || "",
       availableTo: item.availableTo || "",
@@ -633,6 +638,7 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
         description: draft.description.trim(),
         image: draft.image.trim(),
         station: draft.station?.trim() || undefined,
+        drinkType: draft.type === "drinks" ? (draft.drinkType || "cocktail") : undefined,
         ingredients: draft.ingredients,
         availableFrom: draft.availableFrom?.trim() || undefined,
         availableTo: draft.availableTo?.trim() || undefined,
@@ -758,6 +764,17 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
             <option key={s.id} value={s.id}>{s.label}</option>
           ))}
         </select>
+
+        {type === "drinks" && (
+          <select
+            value={drinkType}
+            onChange={(e) => setDrinkType(e.target.value as DrinkType)}
+            className="h-11 rounded-lg border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10 lg:col-span-2"
+          >
+            <option value="cocktail">Trago / preparado</option>
+            <option value="simple">Bebida simple (sin preparación)</option>
+          </select>
+        )}
 
         <textarea
           placeholder="Descripción del producto"
@@ -1090,6 +1107,24 @@ export function MenuManagementPanel({ restaurantId }: { restaurantId: string }) 
                             ))}
                           </select>
                         </div>
+
+                        {draft?.type === "drinks" && (
+                          <div className="mb-2">
+                            <select
+                              value={draft?.drinkType || "cocktail"}
+                              disabled={isSaving}
+                              onChange={(e) =>
+                                setDraft((prev) =>
+                                  prev ? { ...prev, drinkType: e.target.value as DrinkType } : prev
+                                )
+                              }
+                              className="h-10 w-full rounded-xl border border-zinc-200 px-3 text-sm outline-none focus:ring-2 focus:ring-black/10"
+                            >
+                              <option value="cocktail">Trago / preparado</option>
+                              <option value="simple">Bebida simple (sin preparación)</option>
+                            </select>
+                          </div>
+                        )}
 
                         {draft && (
                           <IngredientsEditor

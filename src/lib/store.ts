@@ -20,6 +20,8 @@ export type MenuVariant = {
   active: boolean;
 };
 
+export type DrinkType = "simple" | "cocktail";
+
 export const KITCHEN_STATIONS: { id: string; label: string }[] = [
   { id: "parrilla", label: "Parrilla" },
   { id: "frio", label: "Frío" },
@@ -41,6 +43,7 @@ export type MenuItem = {
   type?: MenuOperationalType;
   active?: boolean;
   station?: string;
+  drinkType?: DrinkType;
   ingredients?: MenuIngredient[];
   variants?: MenuVariant[];
   comboItems?: string[];
