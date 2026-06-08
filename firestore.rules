@@ -62,6 +62,11 @@ service cloud.firestore {
         || isAdmin(restaurantId);
     }
 
+    function isWaitlistStaff(restaurantId) {
+      // No existe rol reception todavía; Waitlist queda aislado para sumarlo acá.
+      return isRunnerCashierOrAdmin(restaurantId);
+    }
+
     function isKitchenBarRunnerCashierOrAdmin(restaurantId) {
       return isKitchen(restaurantId)
         || isBar(restaurantId)
@@ -115,31 +120,33 @@ service cloud.firestore {
       return value == null || value is string;
     }
 
+    function isValidWaitlistWhatsAppSettings(value) {
+      return value is map
+        && value.keys().hasAll(['restaurantPhone', 'messageTemplate'])
+        && value.keys().hasOnly(['restaurantPhone', 'messageTemplate'])
+        && value.restaurantPhone is string
+        && value.restaurantPhone.size() <= 40
+        && value.messageTemplate is string
+        && value.messageTemplate.size() > 0
+        && value.messageTemplate.size() <= 1000;
+    }
+
     function isValidRestaurantUpdate() {
       return request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['name', 'logoUrl', 'coverUrl', 'welcomeMessage',
-                    'primaryColor', 'secondaryColor', 'updatedAt'])
+                    'primaryColor', 'secondaryColor', 'waitlistWhatsApp',
+                    'updatedAt'])
         && isValidOptionalString(request.resource.data.name)
         && isValidOptionalString(request.resource.data.logoUrl)
         && isValidOptionalString(request.resource.data.coverUrl)
         && isValidOptionalString(request.resource.data.welcomeMessage)
         && isValidOptionalColor(request.resource.data.primaryColor)
-        && isValidOptionalColor(request.resource.data.secondaryColor);
-    }
-
-    function isValidWaitlistCreate(restaurantId) {
-      return request.resource.data.keys().hasOnly([
-          'restaurantId', 'name', 'partySize', 'phone', 'status', 'arrivedAt'
-        ])
-        && request.resource.data.restaurantId == restaurantId
-        && request.resource.data.status == "waiting"
-        && request.resource.data.name is string
-        && request.resource.data.name.size() > 0
-        && request.resource.data.partySize is int
-        && request.resource.data.partySize > 0
-        && request.resource.data.partySize <= 30
-        && isValidOptionalString(request.resource.data.phone)
-        && request.resource.data.arrivedAt == request.time;
+        && isValidOptionalColor(request.resource.data.secondaryColor)
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['waitlistWhatsApp'])
+          || isValidWaitlistWhatsAppSettings(request.resource.data.waitlistWhatsApp)
+        );
     }
 
     function sessionExists(restaurantId, sessionId) {
@@ -417,7 +424,8 @@ service cloud.firestore {
         && request.resource.data.minimumQuantity >= 0
         && request.resource.data.active is bool;
 
-      allow delete: if false;
+      allow delete: if (isSuperAdmin() || isAdmin(restaurantId))
+        && isPremiumRestaurant(restaurantId);
     }
 
     match /restaurants/{restaurantId}/auditLogs/{auditLogId} {
@@ -467,12 +475,10 @@ service cloud.firestore {
 
     // Lista de espera (Waitlist)
     match /restaurants/{restaurantId}/waitlist/{entryId} {
-      allow read: if isSuperAdmin() || isAdmin(restaurantId);
-      allow create: if (isSuperAdmin() || isAdmin(restaurantId))
-        && isValidWaitlistCreate(restaurantId);
-      // Cambios de estado pasan por Cloud Functions para validar transiciones,
+      allow read: if isSuperAdmin() || isWaitlistStaff(restaurantId);
+      // Las escrituras pasan por Cloud Functions para validar transiciones,
       // evitar carreras con avisos/asignaciones y conservar historial.
-      allow update, delete: if false;
+      allow create, update, delete: if false;
     }
 
     // Reservas

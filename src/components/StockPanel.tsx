@@ -6,6 +6,7 @@ import {
   PackagePlus,
   PauseCircle,
   PlayCircle,
+  Trash2,
 } from "lucide-react";
 import {
   collection,
@@ -20,6 +21,7 @@ import { toast } from "sonner";
 import {
   addStock,
   createStockItem,
+  deleteStockItem,
   removeStock,
   toggleStockItem,
 } from "../lib/stock";
@@ -53,10 +55,16 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [reasons, setReasons] = useState<Record<string, string>>({});
+  const [amounts, setAmounts] = useState<Record<string, number>>({});
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const getReasonFor = (id: string) => reasons[id] ?? "ajuste";
   const setReasonFor = (id: string, v: string) =>
     setReasons((prev) => ({ ...prev, [id]: v }));
+
+  const getAmountFor = (id: string) => amounts[id] ?? 1;
+  const setAmountFor = (id: string, v: number) =>
+    setAmounts((prev) => ({ ...prev, [id]: Math.max(1, v) }));
 
   useEffect(() => {
     const q = query(
@@ -373,11 +381,21 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
                       <option value="ajuste">Ajuste</option>
                     </select>
 
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={getAmountFor(item.id)}
+                      onChange={(e) => setAmountFor(item.id, Number(e.target.value))}
+                      disabled={!stockEnabled}
+                      className="h-10 w-16 rounded-lg border border-zinc-200 px-2 text-center text-sm font-semibold text-zinc-900 disabled:opacity-50"
+                    />
+
                     <button
                       disabled={!stockEnabled}
                       onClick={() =>
                         user &&
-                        addStock(restaurantId, item, 1, {
+                        addStock(restaurantId, item, getAmountFor(item.id), {
                           actorUid: user.uid,
                           actorEmail: user.email,
                           actorRole: "admin",
@@ -385,14 +403,14 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
                       }
                       className="h-10 rounded-lg border border-zinc-200 px-4 font-semibold text-zinc-900 disabled:opacity-50"
                     >
-                      +1
+                      +{getAmountFor(item.id)}
                     </button>
 
                     <button
                       disabled={!stockEnabled}
                       onClick={() =>
                         user &&
-                        removeStock(restaurantId, item, 1, {
+                        removeStock(restaurantId, item, getAmountFor(item.id), {
                           actorUid: user.uid,
                           actorEmail: user.email,
                           actorRole: "admin",
@@ -400,7 +418,7 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
                       }
                       className="h-10 rounded-lg border border-zinc-200 px-4 font-semibold text-zinc-900 disabled:opacity-50"
                     >
-                      -1
+                      -{getAmountFor(item.id)}
                     </button>
 
                     <button
@@ -431,6 +449,40 @@ export const StockPanel = ({ restaurantId, plan }: Props) => {
                         </>
                       )}
                     </button>
+
+                    {deletingId === item.id ? (
+                      <>
+                        <button
+                          onClick={() => {
+                            if (!user) return;
+                            deleteStockItem(restaurantId, item, {
+                              actorUid: user.uid,
+                              actorEmail: user.email,
+                              actorRole: "admin",
+                            }).catch(() => toast.error("No se pudo eliminar el insumo"));
+                            setDeletingId(null);
+                          }}
+                          className="h-10 rounded-lg bg-red-600 px-4 text-sm font-bold text-white"
+                        >
+                          Confirmar
+                        </button>
+                        <button
+                          onClick={() => setDeletingId(null)}
+                          className="h-10 rounded-lg border border-zinc-200 px-3 text-sm text-zinc-600"
+                        >
+                          Cancelar
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        disabled={!stockEnabled}
+                        onClick={() => setDeletingId(item.id)}
+                        className="flex h-10 w-10 items-center justify-center rounded-lg border border-zinc-200 text-zinc-400 hover:border-red-200 hover:text-red-500 disabled:opacity-50"
+                        title="Eliminar insumo"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

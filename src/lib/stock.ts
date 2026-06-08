@@ -172,6 +172,29 @@ export const removeStock = async (
   await updateStockQuantity(restaurantId, item, next, actor, reason);
 };
 
+export const deleteStockItem = async (
+  restaurantId: string,
+  item: StockItem,
+  actor: AuditActor
+) => {
+  const stockDoc = doc(db, "restaurants", restaurantId, "stock", item.id);
+  const batch = writeBatch(db);
+  batch.delete(stockDoc);
+  writeAuditLog(batch, {
+    restaurantId,
+    action: "stock_item_eliminado",
+    ...actor,
+    entityType: "stock_item",
+    entityId: item.id,
+    description: `Se eliminó insumo ${item.name}`,
+    changes: {
+      before: { name: item.name, currentQuantity: item.currentQuantity, active: item.active },
+      after: { exists: false },
+    },
+  });
+  await batch.commit();
+};
+
 export const toggleStockItem = async (
   restaurantId: string,
   item: StockItem,
