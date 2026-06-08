@@ -1,6 +1,6 @@
 export type StockUnit = "kg" | "g" | "l" | "ml" | "unit";
 
-export type KardexMovementType = "entrada" | "salida" | "ajuste" | "creacion";
+export type KardexMovementType = "entrada" | "salida" | "ajuste" | "creacion" | "devolucion";
 
 export type KardexEntry = {
   id: string;

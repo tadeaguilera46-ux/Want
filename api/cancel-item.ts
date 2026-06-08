@@ -12,7 +12,9 @@ if (!Sentry.isInitialized()) {
 
 type StockMovement = {
   stockItemId: string;
+  stockItemName?: string;
   quantity: number;
+  unit?: string;
 };
 
 type PedidoItem = {
@@ -195,15 +197,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       transaction.update(pedidoRef, updateData);
 
-      // Return stock for this item
+      // Return stock for this item and write kardex entries
       for (const movement of item.stockMovements ?? []) {
         const stockSnap = stockSnaps.get(movement.stockItemId);
         const stockRef = stockRefs.get(movement.stockItemId);
         if (!stockSnap?.exists || !stockRef) continue;
-        const currentQty = Number(stockSnap.data()!.currentQuantity ?? 0);
+        const stockData = stockSnap.data()!;
+        const currentQty = Number(stockData.currentQuantity ?? 0);
+        const returnedQty = Number(movement.quantity ?? 0);
         transaction.update(stockRef, {
-          currentQuantity: currentQty + movement.quantity,
+          currentQuantity: currentQty + returnedQty,
           updatedAt: FieldValue.serverTimestamp(),
+        });
+        const kardexRef = db.collection(`restaurants/${restaurantId}/kardex`).doc();
+        transaction.set(kardexRef, {
+          restaurantId,
+          stockItemId: movement.stockItemId,
+          stockItemName: movement.stockItemName ?? stockData.name ?? movement.stockItemId,
+          unit: movement.unit ?? stockData.unit ?? "unit",
+          movementType: "devolucion",
+          quantityBefore: currentQty,
+          quantityMoved: returnedQty,
+          quantityAfter: currentQty + returnedQty,
+          actorEmail: (actorEmail ?? "").trim(),
+          actorUid: actorUid.trim(),
+          reason: `Cancelación: ${reason.trim()}`,
+          createdAt: FieldValue.serverTimestamp(),
         });
       }
     });
