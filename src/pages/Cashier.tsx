@@ -25,6 +25,7 @@ import {
   Trash2,
   Wallet,
   X,
+  Users,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useOnlineStatus } from "../hooks/useOnlineStatus";
@@ -251,6 +252,9 @@ const Cashier = () => {
     contextRestaurantId || searchParams.get("restaurantId") || "";
 
   const invoiceRequestsPath = `/staff/cashier/invoices?restaurantId=${encodeURIComponent(
+    restaurantId
+  )}`;
+  const waitlistPath = `/staff/waitlist?restaurantId=${encodeURIComponent(
     restaurantId
   )}`;
 
@@ -1787,6 +1791,14 @@ window.onload = () => { window.print(); };
             </div>
 
             <div className="flex gap-2">
+              <Link
+                to={waitlistPath}
+                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-5 font-bold text-zinc-800 shadow-sm transition hover:bg-zinc-50 sm:flex-none"
+              >
+                <Users size={17} />
+                Lista de espera
+              </Link>
+
               <button
                 onClick={() => setShowCierreModal(true)}
                 className="flex h-12 flex-1 items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-5 font-bold text-zinc-800 shadow-sm transition hover:bg-zinc-50 sm:flex-none"

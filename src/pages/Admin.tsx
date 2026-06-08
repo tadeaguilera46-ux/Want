@@ -43,6 +43,7 @@ import { StockPanel } from "../components/StockPanel";
 import { KardexPanel } from "../components/KardexPanel";
 import { AdminBilling } from "../components/AdminBilling";
 import { WaitlistPanel } from "../components/WaitlistPanel";
+import { WaitlistWhatsAppSettings } from "../components/WaitlistWhatsAppSettings";
 import { ReservationsPanel } from "../components/ReservationsPanel";
 import { ShiftsPanel } from "../components/ShiftsPanel";
 import { StaffMetricsPanel } from "../components/StaffMetricsPanel";
@@ -1321,6 +1322,7 @@ return (
               title="Lista de espera"
               description="Registrá clientes que esperan mesa y avisales cuando esté lista."
             >
+              <WaitlistWhatsAppSettings restaurantId={restaurantId} />
               <WaitlistPanel restaurantId={restaurantId} />
             </AdminSectionShell>
           )}

@@ -5,16 +5,20 @@ import {
   onSnapshot,
   orderBy,
   query,
-  serverTimestamp,
-  writeBatch,
 } from "firebase/firestore";
 import { getApp } from "firebase/app";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { Bell, Check, Clock, Plus, Users } from "lucide-react";
+import { Check, Clock, MessageCircle, Plus, Users } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import { toast } from "sonner";
 import { useAuth } from "../lib/auth-context";
-import { writeAuditLog } from "../lib/audit-logs";
+import {
+  buildWaitlistWhatsAppUrl,
+  DEFAULT_WAITLIST_WHATSAPP_MESSAGE,
+  isMobileWhatsAppDevice,
+  normalizeWhatsAppPhone,
+  renderWaitlistWhatsAppMessage,
+} from "../lib/waitlist-whatsapp";
 
 type WaitlistStatus =
   | "waiting"
@@ -26,6 +30,11 @@ type WaitlistStatus =
 
 type WaitlistClosureStatus = "cancelled" | "abandoned" | "no_response";
 
+type WaitlistTimestamp = {
+  seconds?: number;
+  toMillis?: () => number;
+};
+
 type WaitlistEntry = {
   id: string;
   name: string;
@@ -33,14 +42,17 @@ type WaitlistEntry = {
   phone?: string;
   status: WaitlistStatus;
   notification?: {
-    status?: "sending" | "sent" | "failed";
-    channel?: "sms" | "whatsapp";
+    status?: "manual";
+    channel?: "whatsapp";
   };
   assignment?: {
     mesa?: number;
     sessionId?: string;
+    assignedAt?: WaitlistTimestamp | number | null;
   };
-  arrivedAt: { seconds?: number; toMillis?: () => number } | number | null;
+  arrivedAt: WaitlistTimestamp | number | null;
+  closedAt?: WaitlistTimestamp | number | null;
+  seatedAt?: WaitlistTimestamp | number | null;
 };
 
 type WaitlistTable = {
@@ -94,6 +106,15 @@ const waitMins = (entry: WaitlistEntry) => {
   return Math.floor((Date.now() - ms) / 60000);
 };
 
+const timestampMillis = (
+  raw: WaitlistTimestamp | number | null | undefined
+) => {
+  if (!raw) return 0;
+  if (typeof raw === "number") return raw;
+  if (typeof raw.toMillis === "function") return raw.toMillis();
+  return typeof raw.seconds === "number" ? raw.seconds * 1000 : 0;
+};
+
 export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
   const { user } = useAuth();
   const [entries, setEntries] = useState<WaitlistEntry[]>([]);
@@ -101,7 +122,15 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
   const [partySize, setPartySize] = useState("2");
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
-  const [notifyingId, setNotifyingId] = useState<string | null>(null);
+  const [openedWhatsAppIds, setOpenedWhatsAppIds] = useState<string[]>([]);
+  const [whatsAppFallbacks, setWhatsAppFallbacks] = useState<
+    Record<string, string>
+  >({});
+  const [markingNotifiedId, setMarkingNotifiedId] = useState<string | null>(null);
+  const [restaurantName, setRestaurantName] = useState("el restaurante");
+  const [messageTemplate, setMessageTemplate] = useState(
+    DEFAULT_WAITLIST_WHATSAPP_MESSAGE
+  );
   const [tables, setTables] = useState<WaitlistTable[]>([]);
   const [assignmentEntryId, setAssignmentEntryId] = useState<string | null>(null);
   const [selectedMesa, setSelectedMesa] = useState("");
@@ -109,18 +138,45 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   useEffect(() => {
+    setEntries([]);
     const q = query(
       collection(db, "restaurants", restaurantId, "waitlist"),
       orderBy("arrivedAt", "asc")
     );
-    return onSnapshot(q, (snap) => {
-      setEntries(
-        snap.docs.map((d) => ({ id: d.id, ...d.data() }) as WaitlistEntry)
+    return onSnapshot(
+      q,
+      (snap) => {
+        setEntries(
+          snap.docs.map((d) => ({ id: d.id, ...d.data() }) as WaitlistEntry)
+        );
+      },
+      () => {
+        setEntries([]);
+        toast.error("No se pudo cargar la lista de espera.");
+      }
+    );
+  }, [restaurantId]);
+
+  useEffect(() => {
+    return onSnapshot(doc(db, "restaurants", restaurantId), (snapshot) => {
+      const data = snapshot.data();
+      const waitlistWhatsApp = data?.waitlistWhatsApp;
+      setRestaurantName(
+        typeof data?.name === "string" && data.name.trim()
+          ? data.name.trim()
+          : "el restaurante"
+      );
+      setMessageTemplate(
+        typeof waitlistWhatsApp?.messageTemplate === "string" &&
+          waitlistWhatsApp.messageTemplate.trim()
+          ? waitlistWhatsApp.messageTemplate
+          : DEFAULT_WAITLIST_WHATSAPP_MESSAGE
       );
     });
   }, [restaurantId]);
 
   useEffect(() => {
+    setTables([]);
     return onSnapshot(
       collection(db, "restaurants", restaurantId, "mesas"),
       (snap) => {
@@ -145,6 +201,10 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
             };
           })
         );
+      },
+      () => {
+        setTables([]);
+        toast.error("No se pudieron cargar las mesas.");
       }
     );
   }, [restaurantId]);
@@ -154,7 +214,16 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
     .filter((e) =>
       ["seated", "cancelled", "abandoned", "no_response"].includes(e.status)
     )
-    .slice(-5);
+    .sort(
+      (a, b) =>
+        timestampMillis(
+          b.closedAt ?? b.seatedAt ?? b.assignment?.assignedAt ?? b.arrivedAt
+        ) -
+        timestampMillis(
+          a.closedAt ?? a.seatedAt ?? a.assignment?.assignedAt ?? a.arrivedAt
+        )
+    )
+    .slice(0, 5);
   const availableTables = tables
     .filter(
       (table) =>
@@ -167,108 +236,131 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !user) return;
+    const normalizedPartySize = Number(partySize);
+    if (
+      !Number.isInteger(normalizedPartySize) ||
+      normalizedPartySize < 1 ||
+      normalizedPartySize > 30
+    ) {
+      toast.error("La cantidad de personas debe estar entre 1 y 30.");
+      return;
+    }
     try {
       setSaving(true);
-      const entryRef = doc(collection(db, "restaurants", restaurantId, "waitlist"));
-      const entryData = {
-        name: name.trim(),
-        partySize: Number(partySize) || 2,
-        phone: phone.trim() || null,
-        status: "waiting",
-        arrivedAt: serverTimestamp(),
-        restaurantId,
-      };
-      const batch = writeBatch(db);
-      batch.set(entryRef, entryData);
-      writeAuditLog(batch, {
-        restaurantId,
-        action: "waitlist_creada",
-        actorUid: user.uid,
-        actorEmail: user.email,
-        actorRole: "admin",
-        entityType: "waitlist",
-        entityId: entryRef.id,
-        description: `Se agrego ${name.trim()} a lista de espera`,
-        changes: {
-          before: { exists: false },
-          after: {
-            partySize: Number(partySize) || 2,
-            status: "waiting",
-          },
+      const createEntry = httpsCallable<
+        {
+          restaurantId: string;
+          name: string;
+          partySize: number;
+          phone: string;
         },
+        { ok: boolean; entryId: string }
+      >(functions, "createWaitlistEntry");
+      await createEntry({
+        restaurantId,
+        name: name.trim(),
+        partySize: normalizedPartySize,
+        phone: phone.trim(),
       });
-      await batch.commit();
       setName("");
       setPhone("");
       setPartySize("2");
-    } catch {
-      toast.error("No se pudo agregar.");
+    } catch (error) {
+      toast.error(getFunctionErrorMessage(error, "No se pudo agregar."));
     } finally {
       setSaving(false);
     }
   };
 
-  const setStatus = async (
-    id: string,
-    status: "notified" | WaitlistClosureStatus
-  ) => {
-    if (!user) return;
-    const entry = entries.find((current) => current.id === id);
-    if (status === "notified") {
-      try {
-        setNotifyingId(id);
-        const notify = httpsCallable<
-          { restaurantId: string; entryId: string },
-          { ok: boolean; channel: "sms" | "whatsapp" }
-        >(functions, "notifyWaitlistEntry");
-        const result = await notify({ restaurantId, entryId: id });
-        toast.success(
-          result.data.channel === "whatsapp"
-            ? "Aviso enviado por WhatsApp."
-            : "Aviso enviado por SMS."
-        );
-      } catch (error) {
-        toast.error(getFunctionErrorMessage(error, "No se pudo enviar el aviso."));
-      } finally {
-        setNotifyingId(null);
-      }
+  const openWhatsApp = (entry: WaitlistEntry) => {
+    const normalizedPhone = normalizeWhatsAppPhone(entry.phone);
+    if (!normalizedPhone) {
+      toast.error(
+        "El telefono del cliente no es valido. Usa codigo de pais o un numero argentino completo."
+      );
       return;
     }
 
-    const timestampField: Record<WaitlistClosureStatus, string> = {
-      cancelled: "cancelledAt",
-      abandoned: "abandonedAt",
-      no_response: "noResponseAt",
-    };
+    const message = renderWaitlistWhatsAppMessage(messageTemplate, {
+      customerName: entry.name,
+      restaurantName,
+      partySize: entry.partySize,
+      tableName: entry.assignment?.mesa
+        ? `Mesa ${entry.assignment.mesa}`
+        : "a confirmar",
+      waitMinutes: waitMins(entry),
+    });
+    const url = buildWaitlistWhatsAppUrl({
+      phone: normalizedPhone,
+      message,
+      isMobile: isMobileWhatsAppDevice(window.navigator.userAgent),
+    });
+    const openedWindow = window.open(url, "_blank");
+    if (!openedWindow) {
+      setWhatsAppFallbacks((current) => ({ ...current, [entry.id]: url }));
+      toast.error("El navegador bloqueo la nueva pestaña.");
+      return;
+    }
+    openedWindow.opener = null;
+    setWhatsAppFallbacks((current) => {
+      const next = { ...current };
+      delete next[entry.id];
+      return next;
+    });
+    setOpenedWhatsAppIds((current) =>
+      current.includes(entry.id) ? current : [...current, entry.id]
+    );
+    toast.success("WhatsApp abierto. Marca la entrada como avisada al enviarlo.");
+  };
+
+  const markNotified = async (id: string) => {
+    if (!user) return;
 
     try {
+      setMarkingNotifiedId(id);
+      const mark = httpsCallable<
+        { restaurantId: string; entryId: string },
+        { ok: boolean }
+      >(functions, "markWaitlistEntryNotified");
+      await mark({ restaurantId, entryId: id });
+      setOpenedWhatsAppIds((current) => current.filter((entryId) => entryId !== id));
+      setWhatsAppFallbacks((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
+      toast.success("Entrada marcada como avisada.");
+    } catch (error) {
+      toast.error(
+        getFunctionErrorMessage(error, "No se pudo marcar la entrada como avisada.")
+      );
+    } finally {
+      setMarkingNotifiedId(null);
+    }
+  };
+
+  const setStatus = async (id: string, status: WaitlistClosureStatus) => {
+    if (!user) return;
+    try {
       setUpdatingId(id);
-      const now = serverTimestamp();
-      const batch = writeBatch(db);
-      batch.update(doc(db, "restaurants", restaurantId, "waitlist", id), {
-        status,
-        closedAt: now,
-        updatedAt: now,
-        [timestampField[status]]: now,
-      });
-      writeAuditLog(batch, {
-        restaurantId,
-        action: "waitlist_estado_actualizado",
-        actorUid: user.uid,
-        actorEmail: user.email,
-        actorRole: "admin",
-        entityType: "waitlist",
-        entityId: id,
-        description: `Se actualizo entrada ${id} a ${status}`,
-        changes: {
-          before: { status: entry?.status ?? null },
-          after: { status },
+      const closeEntry = httpsCallable<
+        {
+          restaurantId: string;
+          entryId: string;
+          status: WaitlistClosureStatus;
         },
-      });
-      await batch.commit();
-      toast.success(`Estado actualizado: ${statusLabel[status]}.`);
-    } catch {
-      toast.error("No se pudo actualizar el estado.");
+        { ok: boolean; status: WaitlistClosureStatus }
+      >(functions, "closeWaitlistEntry");
+      const result = await closeEntry({ restaurantId, entryId: id, status });
+      if (assignmentEntryId === id) {
+        setAssignmentEntryId(null);
+        setSelectedMesa("");
+      }
+      toast.success(`Estado actualizado: ${statusLabel[result.data.status]}.`);
+    } catch (error) {
+      toast.error(
+        getFunctionErrorMessage(error, "No se pudo actualizar el estado.")
+      );
     } finally {
       setUpdatingId(null);
     }
@@ -387,11 +479,9 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
                   <div className="flex flex-wrap items-center gap-2 mt-0.5">
                     <span className="text-xs text-zinc-500">{entry.partySize} personas</span>
                     {entry.phone && <span className="text-xs text-zinc-400">{entry.phone}</span>}
-                    {entry.notification?.status === "sent" && (
+                    {entry.notification?.status === "manual" && (
                       <span className="text-xs font-semibold text-emerald-600">
-                        {entry.notification.channel === "whatsapp"
-                          ? "WhatsApp enviado"
-                          : "SMS enviado"}
+                        Avisada por WhatsApp
                       </span>
                     )}
                     <span className="flex items-center gap-1 text-xs text-zinc-400">
@@ -402,28 +492,48 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
                 <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-bold ${statusBadge[entry.status]}`}>
                   {statusLabel[entry.status]}
                 </span>
-                <div className="flex gap-1.5 shrink-0">
+                <div className="flex shrink-0 flex-wrap gap-1.5">
                   {entry.status === "waiting" && (
-                    <button
-                      onClick={() => setStatus(entry.id, "notified")}
-                      disabled={notifyingId === entry.id}
-                      title={
-                        entry.phone
-                          ? "Mesa lista — enviar aviso"
-                          : "Agregá un teléfono con código de país"
-                      }
-                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-                    >
-                      <Bell
-                        size={14}
-                        className={notifyingId === entry.id ? "animate-pulse" : ""}
-                      />
-                    </button>
+                    openedWhatsAppIds.includes(entry.id) ? (
+                      <button
+                        onClick={() => markNotified(entry.id)}
+                        disabled={
+                          markingNotifiedId === entry.id ||
+                          assigningId === entry.id ||
+                          updatingId === entry.id
+                        }
+                        className="flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                      >
+                        <Check size={14} />
+                        {markingNotifiedId === entry.id
+                          ? "Marcando..."
+                          : "Marcar avisada"}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => openWhatsApp(entry)}
+                        disabled={
+                          assigningId === entry.id ||
+                          updatingId === entry.id ||
+                          markingNotifiedId === entry.id
+                        }
+                        title="Abrir aviso manual en WhatsApp"
+                        className="flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                      >
+                        <MessageCircle size={14} />
+                        Avisar por WhatsApp
+                      </button>
+                    )
                   )}
                   <button
                     onClick={() => openAssignment(entry.id)}
+                    disabled={
+                      assigningId === entry.id ||
+                      updatingId === entry.id ||
+                      markingNotifiedId === entry.id
+                    }
                     title="Asignar mesa"
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 bg-zinc-50 text-zinc-600 hover:bg-zinc-100 disabled:opacity-50"
                   >
                     <Check size={14} />
                   </button>
@@ -433,14 +543,20 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
                       const status = event.target.value as WaitlistClosureStatus;
                       if (status) void setStatus(entry.id, status);
                     }}
-                    disabled={updatingId === entry.id}
+                    disabled={
+                      updatingId === entry.id ||
+                      assigningId === entry.id ||
+                      markingNotifiedId === entry.id
+                    }
                     aria-label={`Cerrar registro de ${entry.name}`}
                     className="h-8 rounded-lg border border-zinc-200 bg-zinc-50 px-2 text-xs font-semibold text-zinc-600 outline-none hover:bg-zinc-100 disabled:opacity-50"
                   >
                     <option value="">Cerrar como...</option>
                     <option value="cancelled">Canceló</option>
                     <option value="abandoned">Abandonó</option>
-                    <option value="no_response">No respondió</option>
+                    {entry.status === "notified" && (
+                      <option value="no_response">No respondió</option>
+                    )}
                   </select>
                 </div>
               </div>
@@ -449,7 +565,12 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
                   <select
                     value={selectedMesa}
                     onChange={(event) => setSelectedMesa(event.target.value)}
-                    disabled={assigningId === entry.id || availableTables.length === 0}
+                    disabled={
+                      assigningId === entry.id ||
+                      updatingId === entry.id ||
+                      markingNotifiedId === entry.id ||
+                      availableTables.length === 0
+                    }
                     className="h-9 rounded-lg border border-zinc-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-black/10 disabled:opacity-50"
                   >
                     {availableTables.length === 0 ? (
@@ -473,11 +594,40 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
                   <button
                     type="button"
                     onClick={() => assignTable(entry.id)}
-                    disabled={assigningId === entry.id || availableTables.length === 0}
+                    disabled={
+                      assigningId === entry.id ||
+                      updatingId === entry.id ||
+                      markingNotifiedId === entry.id ||
+                      availableTables.length === 0
+                    }
                     className="h-9 rounded-lg bg-zinc-950 px-3 text-sm font-bold text-white disabled:opacity-50"
                   >
                     {assigningId === entry.id ? "Asignando..." : "Asignar mesa"}
                   </button>
+                </div>
+              )}
+              {whatsAppFallbacks[entry.id] && (
+                <div className="mt-3 border-t border-zinc-100 pt-3 text-right">
+                  <a
+                    href={whatsAppFallbacks[entry.id]}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => {
+                      setOpenedWhatsAppIds((current) =>
+                        current.includes(entry.id)
+                          ? current
+                          : [...current, entry.id]
+                      );
+                      setWhatsAppFallbacks((current) => {
+                        const next = { ...current };
+                        delete next[entry.id];
+                        return next;
+                      });
+                    }}
+                    className="text-sm font-bold text-emerald-700 underline underline-offset-2"
+                  >
+                    Abrir WhatsApp Web
+                  </a>
                 </div>
               )}
             </div>

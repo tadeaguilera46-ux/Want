@@ -37,6 +37,7 @@ const AdminAnalytics = lazy(() => import("./pages/AdminAnalytics"));
 const Cashier = lazy(() => import("./pages/Cashier"));
 const CashierInvoices = lazy(() => import("./pages/CashierInvoices"));
 const AdminAuditLogs = lazy(() => import("./pages/AdminAuditLogs"));
+const Waitlist = lazy(() => import("./pages/Waitlist"));
 
 // Super Admin
 const SuperAdmin = lazy(() => import("./pages/SuperAdmin"));
@@ -217,6 +218,16 @@ const App = () => (
                     <CashierInvoices />
                   </StaffRoute>
                 </PlanGuard>
+              </SubscriptionGuard>
+            }
+          />
+          <Route
+            path="/staff/waitlist"
+            element={
+              <SubscriptionGuard>
+                <StaffRoute allowedRoles={["admin", "cashier", "runner"]}>
+                  <Waitlist />
+                </StaffRoute>
               </SubscriptionGuard>
             }
           />

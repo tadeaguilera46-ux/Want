@@ -12,6 +12,12 @@ import { generateKeyPairAndCsr, encryptPrivateKey, decryptPrivateKey } from "./a
 import { getAfipToken } from "./afip/wsaa.js";
 import { getLastInvoiceNumber, issueFECAE } from "./afip/wsfe.js";
 import { INVOICE_TYPE_CODES, type InvoiceRequest, type AfipConfig, type AfipInvoiceResult } from "./afip/types.js";
+import {
+  isOpenWaitlistStatus,
+  isWaitlistClosureStatus,
+  isWaitlistTableAvailable,
+  normalizeWaitlistWhatsAppPhone,
+} from "./waitlist.js";
 
 admin.initializeApp();
 
@@ -27,9 +33,6 @@ const MP_ACCESS_TOKEN = defineSecret("MP_ACCESS_TOKEN");
 const MP_WEBHOOK_SECRET = defineSecret("MP_WEBHOOK_SECRET");
 const RESEND_API_KEY = defineSecret("RESEND_API_KEY");
 const AFIP_MASTER_KEY = defineSecret("AFIP_MASTER_KEY");
-const TWILIO_ACCOUNT_SID = defineSecret("TWILIO_ACCOUNT_SID");
-const TWILIO_AUTH_TOKEN = defineSecret("TWILIO_AUTH_TOKEN");
-const TWILIO_FROM = defineSecret("TWILIO_FROM");
 
 const RESERVATION_CALLABLE_OPTIONS: {
   cors: Array<string | RegExp>;
@@ -44,16 +47,14 @@ const RESERVATION_CALLABLE_OPTIONS: {
   invoker: "public",
 };
 
-const WAITLIST_CALLABLE_OPTIONS = {
-  cors: RESERVATION_CALLABLE_OPTIONS.cors,
-  invoker: "public" as const,
-  secrets: [TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM],
-};
-
 const WAITLIST_ASSIGN_CALLABLE_OPTIONS = {
   cors: RESERVATION_CALLABLE_OPTIONS.cors,
   invoker: "public" as const,
 };
+
+// Reception is not a StaffRole today. Add it here and to StaffRoute when the
+// product introduces that role; Waitlist permissions stay isolated here.
+const WAITLIST_STAFF_ROLES = ["admin", "cashier", "runner"];
 
 // Entorno AFIP: "homologacion" en dev, "produccion" en prod
 const AFIP_ENV = (process.env.AFIP_ENV ?? "produccion") as "homologacion" | "produccion";
@@ -215,58 +216,6 @@ function normalizeReservationPhone(value: unknown): string {
   return digits.length >= 7 && digits.length <= 15 ? digits : "";
 }
 
-function normalizeMessagingPhone(value: unknown): string {
-  if (typeof value !== "string") return "";
-  const normalized = value.trim();
-  if (!normalized.startsWith("+")) return "";
-  const digits = normalized.slice(1).replace(/\D/g, "");
-  return digits.length >= 8 && digits.length <= 15 ? `+${digits}` : "";
-}
-
-async function sendWaitlistMessage({
-  phone,
-  body,
-}: {
-  phone: string;
-  body: string;
-}): Promise<{ channel: "sms" | "whatsapp"; messageSid: string }> {
-  const accountSid = TWILIO_ACCOUNT_SID.value().trim();
-  const authToken = TWILIO_AUTH_TOKEN.value().trim();
-  const from = TWILIO_FROM.value().trim();
-  const channel = from.startsWith("whatsapp:") ? "whatsapp" : "sms";
-  const to = channel === "whatsapp" ? `whatsapp:${phone}` : phone;
-
-  if (!accountSid || !authToken || !from) {
-    throw new Error("Twilio no está configurado");
-  }
-
-  const response = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${accountSid}:${authToken}`).toString("base64")}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({ From: from, To: to, Body: body }),
-    }
-  );
-  const result = (await response.json()) as {
-    sid?: unknown;
-    message?: unknown;
-  };
-
-  if (!response.ok || typeof result.sid !== "string") {
-    throw new Error(
-      typeof result.message === "string"
-        ? result.message
-        : "Twilio rechazó el aviso"
-    );
-  }
-
-  return { channel, messageSid: result.sid };
-}
-
 function normalizeReservationSettings(value: unknown): ReservationSettings {
   const settings =
     value && typeof value === "object"
@@ -354,6 +303,31 @@ async function requireRestaurantAdmin(
   }
 
   return staffSnap.data() || {};
+}
+
+async function requireRestaurantWaitlistStaff(
+  restaurantId: string,
+  uid: string
+): Promise<FirebaseFirestore.DocumentData> {
+  if (!isValidReservationDocumentId(restaurantId)) {
+    throw new HttpsError("invalid-argument", "restaurantId inválido");
+  }
+
+  const staffSnap = await admin
+    .firestore()
+    .doc(`restaurants/${restaurantId}/staff/${uid}`)
+    .get();
+  const staff = staffSnap.data() || {};
+
+  if (
+    !staffSnap.exists ||
+    staff.active !== true ||
+    !WAITLIST_STAFF_ROLES.includes(staff.role)
+  ) {
+    throw new HttpsError("permission-denied", "No tenés permisos");
+  }
+
+  return staff;
 }
 
 function reservationAuditData({
@@ -2003,8 +1977,8 @@ export const sendReservationReminders = onSchedule(
   }
 );
 
-export const notifyWaitlistEntry = onCall(
-  WAITLIST_CALLABLE_OPTIONS,
+export const markWaitlistEntryNotified = onCall(
+  WAITLIST_ASSIGN_CALLABLE_OPTIONS,
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
 
@@ -2024,146 +1998,163 @@ export const notifyWaitlistEntry = onCall(
       throw new HttpsError("invalid-argument", "Entrada de espera inválida");
     }
 
-    const staff = await requireRestaurantAdmin(restaurantId, request.auth.uid);
+    const staff = await requireRestaurantWaitlistStaff(
+      restaurantId,
+      request.auth.uid
+    );
     const db = admin.firestore();
     const entryRef = db.doc(
       `restaurants/${restaurantId}/waitlist/${entryId}`
     );
-    const restaurantRef = db.doc(`restaurants/${restaurantId}`);
-    const attemptId = crypto.randomUUID();
+    const auditRef = db
+      .collection(`restaurants/${restaurantId}/auditLogs`)
+      .doc();
+    const now = admin.firestore.FieldValue.serverTimestamp();
 
-    const claimed = await db.runTransaction(async (transaction) => {
+    await db.runTransaction(async (transaction) => {
       const entrySnap = await transaction.get(entryRef);
       if (!entrySnap.exists) {
         throw new HttpsError("not-found", "Entrada de espera inexistente");
       }
 
       const entry = entrySnap.data() || {};
+      if (entry.restaurantId !== restaurantId) {
+        throw new HttpsError(
+          "failed-precondition",
+          "La entrada de espera no pertenece al restaurante"
+        );
+      }
       if (entry.status !== "waiting") {
         throw new HttpsError(
           "failed-precondition",
-          "Sólo se puede avisar a clientes que están esperando"
+          "La entrada ya fue avisada o cerrada"
         );
       }
-
-      const phoneNormalized = normalizeMessagingPhone(entry.phone);
-      if (!phoneNormalized) {
+      if (!normalizeWaitlistWhatsAppPhone(entry.phone)) {
         throw new HttpsError(
           "failed-precondition",
-          "Ingresá el teléfono con código de país, por ejemplo +549..."
-        );
-      }
-      if (entry.notification?.status === "sending") {
-        throw new HttpsError(
-          "already-exists",
-          "El aviso ya se está enviando"
+          "El teléfono del cliente no es válido para WhatsApp"
         );
       }
 
       transaction.update(entryRef, {
-        "notification.status": "sending",
-        "notification.attemptId": attemptId,
-        "notification.error": null,
-        "notification.updatedAt":
-          admin.firestore.FieldValue.serverTimestamp(),
+        status: "notified",
+        notifiedAt: now,
+        updatedAt: now,
+        notification: {
+          status: "manual",
+          channel: "whatsapp",
+          markedByUid: request.auth!.uid,
+          markedAt: now,
+        },
       });
-
-      return {
-        name: typeof entry.name === "string" ? entry.name : "cliente",
-        phoneNormalized,
-      };
+      transaction.set(auditRef, {
+        restaurantId,
+        action: "waitlist_cliente_avisado",
+        actorUid: request.auth!.uid,
+        actorEmail: staff.email || request.auth!.token.email || null,
+        actorRole: staff.role,
+        userUid: request.auth!.uid,
+        userEmail: staff.email || request.auth!.token.email || null,
+        userRole: staff.role,
+        mesa: null,
+        pedidoId: null,
+        cuentaId: null,
+        sessionId: null,
+        entityType: "waitlist",
+        entityId: entryId,
+        description: `Se marcó a ${entry.name || "cliente"} como avisado por WhatsApp manual`,
+        reason: null,
+        changes: {
+          before: { status: entry.status },
+          after: { status: "notified", channel: "whatsapp", mode: "manual" },
+        },
+        metadata: { mode: "manual_whatsapp" },
+        createdAt: now,
+      });
     });
 
-    try {
-      const restaurantSnap = await restaurantRef.get();
-      const restaurantName =
-        typeof restaurantSnap.data()?.name === "string"
-          ? restaurantSnap.data()?.name
-          : "el restaurante";
-      const sent = await sendWaitlistMessage({
-        phone: claimed.phoneNormalized,
-        body: `Hola ${claimed.name}, tu mesa en ${restaurantName} ya está lista. Por favor acercate al ingreso.`,
-      });
-      const auditRef = db
-        .collection(`restaurants/${restaurantId}/auditLogs`)
-        .doc();
+    return { ok: true };
+  }
+);
 
-      await db.runTransaction(async (transaction) => {
-        const currentSnap = await transaction.get(entryRef);
-        const current = currentSnap.data() || {};
-        if (
-          !currentSnap.exists ||
-          current.status !== "waiting" ||
-          current.notification?.attemptId !== attemptId
-        ) {
-          throw new HttpsError(
-            "failed-precondition",
-            "La entrada cambió mientras se enviaba el aviso"
-          );
-        }
+export const createWaitlistEntry = onCall(
+  WAITLIST_ASSIGN_CALLABLE_OPTIONS,
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
 
-        transaction.update(entryRef, {
-          status: "notified",
-          notifiedAt: admin.firestore.FieldValue.serverTimestamp(),
-          "notification.status": "sent",
-          "notification.channel": sent.channel,
-          "notification.messageSid": sent.messageSid,
-          "notification.attemptId": null,
-          "notification.sentAt": admin.firestore.FieldValue.serverTimestamp(),
-          "notification.updatedAt":
-            admin.firestore.FieldValue.serverTimestamp(),
-        });
-        transaction.set(auditRef, {
-          restaurantId,
-          action: "waitlist_cliente_avisado",
-          actorUid: request.auth!.uid,
-          actorEmail: staff.email || request.auth!.token.email || null,
-          actorRole: "admin",
-          userUid: request.auth!.uid,
-          userEmail: staff.email || request.auth!.token.email || null,
-          userRole: "admin",
-          mesa: null,
-          pedidoId: null,
-          cuentaId: null,
-          sessionId: null,
-          entityType: "waitlist",
-          entityId: entryId,
-          description: `Se avisó a ${claimed.name} por ${sent.channel}`,
-          reason: null,
-          changes: {
-            before: { status: "waiting" },
-            after: { status: "notified", channel: sent.channel },
-          },
-          metadata: { messageSid: sent.messageSid },
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      });
+    const data = request.data as {
+      restaurantId?: unknown;
+      name?: unknown;
+      partySize?: unknown;
+      phone?: unknown;
+    };
+    const restaurantId =
+      typeof data.restaurantId === "string" ? data.restaurantId.trim() : "";
+    const name = typeof data.name === "string" ? data.name.trim() : "";
+    const partySize = Number(data.partySize);
+    const phone = typeof data.phone === "string" ? data.phone.trim() : "";
 
-      return { ok: true, channel: sent.channel };
-    } catch (error) {
-      await db.runTransaction(async (transaction) => {
-        const currentSnap = await transaction.get(entryRef);
-        if (
-          currentSnap.exists &&
-          currentSnap.data()?.notification?.attemptId === attemptId
-        ) {
-          transaction.update(entryRef, {
-            "notification.status": "failed",
-            "notification.attemptId": null,
-            "notification.error": "No se pudo enviar el aviso",
-            "notification.updatedAt":
-              admin.firestore.FieldValue.serverTimestamp(),
-          });
-        }
-      });
-      if (error instanceof HttpsError) throw error;
-      console.error("notifyWaitlistEntry error:", error);
-      Sentry.captureException(error, { extra: { restaurantId, entryId } });
-      throw new HttpsError(
-        "internal",
-        "No se pudo enviar el aviso. Revisá la configuración de mensajería."
-      );
+    if (
+      !isValidReservationDocumentId(restaurantId) ||
+      !name ||
+      name.length > 120 ||
+      !Number.isInteger(partySize) ||
+      partySize < 1 ||
+      partySize > 30 ||
+      phone.length > 40
+    ) {
+      throw new HttpsError("invalid-argument", "Entrada de espera inválida");
     }
+
+    const staff = await requireRestaurantWaitlistStaff(
+      restaurantId,
+      request.auth.uid
+    );
+    const db = admin.firestore();
+    const entryRef = db.collection(`restaurants/${restaurantId}/waitlist`).doc();
+    const auditRef = db
+      .collection(`restaurants/${restaurantId}/auditLogs`)
+      .doc();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const batch = db.batch();
+
+    batch.set(entryRef, {
+      restaurantId,
+      name,
+      partySize,
+      phone: phone || null,
+      status: "waiting",
+      arrivedAt: now,
+      updatedAt: now,
+    });
+    batch.set(auditRef, {
+      restaurantId,
+      action: "waitlist_creada",
+      actorUid: request.auth.uid,
+      actorEmail: staff.email || request.auth.token.email || null,
+      actorRole: staff.role,
+      userUid: request.auth.uid,
+      userEmail: staff.email || request.auth.token.email || null,
+      userRole: staff.role,
+      mesa: null,
+      pedidoId: null,
+      cuentaId: null,
+      sessionId: null,
+      entityType: "waitlist",
+      entityId: entryRef.id,
+      description: `Se agregó ${name} a lista de espera`,
+      reason: null,
+      changes: {
+        before: { exists: false },
+        after: { partySize, status: "waiting" },
+      },
+      metadata: {},
+      createdAt: now,
+    });
+    await batch.commit();
+
+    return { ok: true, entryId: entryRef.id };
   }
 );
 
@@ -2193,7 +2184,10 @@ export const assignWaitlistEntryToTable = onCall(
       throw new HttpsError("invalid-argument", "Asignacion de mesa invalida");
     }
 
-    const staff = await requireRestaurantAdmin(restaurantId, request.auth.uid);
+    const staff = await requireRestaurantWaitlistStaff(
+      restaurantId,
+      request.auth.uid
+    );
     const db = admin.firestore();
     const entryRef = db.doc(
       `restaurants/${restaurantId}/waitlist/${entryId}`
@@ -2224,19 +2218,19 @@ export const assignWaitlistEntryToTable = onCall(
         const entry = entrySnap.data() || {};
         const mesaData = mesaSnap.data() || {};
 
-        if (entry.status !== "waiting" && entry.status !== "notified") {
+        if (entry.restaurantId !== restaurantId) {
+          throw new HttpsError(
+            "failed-precondition",
+            "La entrada de espera no pertenece al restaurante"
+          );
+        }
+        if (!isOpenWaitlistStatus(entry.status)) {
           throw new HttpsError(
             "failed-precondition",
             "La entrada de espera ya fue cerrada"
           );
         }
-        if (
-          mesaData.restaurantId !== restaurantId ||
-          mesaData.numero !== mesa ||
-          mesaData.active === false ||
-          mesaData.estado !== "available" ||
-          typeof mesaData.activeSessionId === "string"
-        ) {
+        if (!isWaitlistTableAvailable(mesaData, restaurantId, mesa)) {
           throw new HttpsError(
             "failed-precondition",
             "La mesa seleccionada ya no esta disponible"
@@ -2268,6 +2262,7 @@ export const assignWaitlistEntryToTable = onCall(
           status: "seated",
           assignedAt: now,
           seatedAt: now,
+          closedAt: now,
           updatedAt: now,
           assignment: {
             mesa,
@@ -2281,10 +2276,10 @@ export const assignWaitlistEntryToTable = onCall(
           action: "waitlist_mesa_asignada",
           actorUid: request.auth!.uid,
           actorEmail: staff.email || request.auth!.token.email || null,
-          actorRole: "admin",
+          actorRole: staff.role,
           userUid: request.auth!.uid,
           userEmail: staff.email || request.auth!.token.email || null,
-          userRole: "admin",
+          userRole: staff.role,
           mesa,
           pedidoId: null,
           cuentaId: null,
@@ -2312,6 +2307,121 @@ export const assignWaitlistEntryToTable = onCall(
       console.error("assignWaitlistEntryToTable error:", error);
       Sentry.captureException(error, { extra: { restaurantId, entryId, mesa } });
       throw new HttpsError("internal", "No se pudo asignar la mesa");
+    }
+  }
+);
+
+export const closeWaitlistEntry = onCall(
+  WAITLIST_ASSIGN_CALLABLE_OPTIONS,
+  async (request) => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "No autenticado");
+
+    const data = request.data as {
+      restaurantId?: unknown;
+      entryId?: unknown;
+      status?: unknown;
+    };
+    const restaurantId =
+      typeof data.restaurantId === "string" ? data.restaurantId.trim() : "";
+    const entryId =
+      typeof data.entryId === "string" ? data.entryId.trim() : "";
+    const status = data.status;
+    const closedAtFieldByStatus: Record<
+      "cancelled" | "abandoned" | "no_response",
+      string
+    > = {
+      cancelled: "cancelledAt",
+      abandoned: "abandonedAt",
+      no_response: "noResponseAt",
+    };
+
+    if (
+      !isValidReservationDocumentId(restaurantId) ||
+      !isValidReservationDocumentId(entryId) ||
+      !isWaitlistClosureStatus(status)
+    ) {
+      throw new HttpsError("invalid-argument", "Cierre de espera inválido");
+    }
+
+    const staff = await requireRestaurantWaitlistStaff(
+      restaurantId,
+      request.auth.uid
+    );
+    const db = admin.firestore();
+    const entryRef = db.doc(
+      `restaurants/${restaurantId}/waitlist/${entryId}`
+    );
+    const auditRef = db
+      .collection(`restaurants/${restaurantId}/auditLogs`)
+      .doc();
+    const now = admin.firestore.FieldValue.serverTimestamp();
+
+    try {
+      await db.runTransaction(async (transaction) => {
+        const entrySnap = await transaction.get(entryRef);
+        if (!entrySnap.exists) {
+          throw new HttpsError("not-found", "Entrada de espera inexistente");
+        }
+
+        const entry = entrySnap.data() || {};
+        if (entry.restaurantId !== restaurantId) {
+          throw new HttpsError(
+            "failed-precondition",
+            "La entrada de espera no pertenece al restaurante"
+          );
+        }
+        if (!isOpenWaitlistStatus(entry.status)) {
+          throw new HttpsError(
+            "failed-precondition",
+            "La entrada de espera ya fue cerrada"
+          );
+        }
+        if (status === "no_response" && entry.status !== "notified") {
+          throw new HttpsError(
+            "failed-precondition",
+            "Sólo se puede marcar sin respuesta después de enviar el aviso"
+          );
+        }
+        transaction.update(entryRef, {
+          status,
+          closedAt: now,
+          updatedAt: now,
+          [closedAtFieldByStatus[status]]: now,
+        });
+        transaction.set(auditRef, {
+          restaurantId,
+          action: "waitlist_estado_actualizado",
+          actorUid: request.auth!.uid,
+          actorEmail: staff.email || request.auth!.token.email || null,
+          actorRole: staff.role,
+          userUid: request.auth!.uid,
+          userEmail: staff.email || request.auth!.token.email || null,
+          userRole: staff.role,
+          mesa: null,
+          pedidoId: null,
+          cuentaId: null,
+          sessionId: null,
+          entityType: "waitlist",
+          entityId: entryId,
+          description: `Se actualizó entrada ${entryId} a ${status}`,
+          reason: null,
+          changes: {
+            before: { status: entry.status },
+            after: { status },
+          },
+          metadata: {},
+          createdAt: now,
+        });
+      });
+
+      return { ok: true, status };
+    } catch (error) {
+      if (error instanceof HttpsError) throw error;
+      console.error("closeWaitlistEntry error:", error);
+      Sentry.captureException(error, {
+        extra: { restaurantId, entryId, status },
+      });
+      throw new HttpsError("internal", "No se pudo cerrar la entrada de espera");
     }
   }
 );

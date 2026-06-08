@@ -11,6 +11,7 @@ import {
   LogOut,
   Volume2,
   AlertTriangle,
+  Users,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../lib/auth-context";
@@ -1172,6 +1173,18 @@ const Runner = () => {
                     }`}
                   />
                 </div>
+
+                <button
+                  onClick={() =>
+                    navigate(
+                      `/staff/waitlist?restaurantId=${encodeURIComponent(restaurantId)}`
+                    )
+                  }
+                  className="flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-sm transition hover:bg-slate-50"
+                >
+                  <Users size={14} />
+                  Lista de espera
+                </button>
 
                 <button
                   onClick={handleLogout}
