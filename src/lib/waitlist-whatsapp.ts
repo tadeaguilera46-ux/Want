@@ -54,7 +54,7 @@ export const normalizeWhatsAppPhone = (value: unknown) => {
     return digits.length >= 8 && digits.length <= 15 ? digits : "";
   }
 
-  let national = removeArgentineLocalMobilePrefix(digits.replace(/^0+/, ""));
+  const national = removeArgentineLocalMobilePrefix(digits.replace(/^0+/, ""));
   if (national.startsWith("9") && national.length === 11) {
     return `54${national}`;
   }
