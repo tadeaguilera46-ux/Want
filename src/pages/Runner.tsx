@@ -236,7 +236,7 @@ const Runner = () => {
             .filter(({ idx }) => order.itemEstadosBarra![String(idx)] === "listo")
             .map(({ item }) => item);
           if (listoItems.length > 0) {
-            tasks.push({ id: `${order.id}__drinks`, type: "drinks", order, items: listoItems });
+            tasks.push({ id: `${order.id}__drinks:${listoItems.length}`, type: "drinks", order, items: listoItems });
           }
         } else if (order.estadoBarra === "listo") {
           tasks.push({ id: `${order.id}__drinks`, type: "drinks", order, items: drinkItems });

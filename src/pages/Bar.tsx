@@ -9,6 +9,7 @@ import {
   Martini,
   Flame,
   LogOut,
+  AlertTriangle,
 } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import { writeAuditLog } from "../lib/audit-logs";
@@ -54,6 +55,16 @@ const statusLabels: Record<EstadoBarra, string> = {
 };
 
 const normalizeObservation = (value?: string) => value?.trim() || "";
+
+const CRITICAL_KEYWORDS = [
+  "alergi", "celiac", "celiaquí", "gluten", "lactosa",
+  "maní", "mani", "nuez", "nueces", "cacahuete",
+  "diabétic", "diabetic", "intoleranc", "fruto seco",
+  "sin azúcar", "sin azucar", "anafilax",
+];
+
+const isCriticalObservation = (text: string) =>
+  CRITICAL_KEYWORDS.some((kw) => text.toLowerCase().includes(kw));
 
 const isDrinkItem = (item: { category?: string }) => {
   return item.category === "drinks";
@@ -733,21 +744,27 @@ const Bar = () => {
                                     </div>
                                   </div>
 
-                                  {hasObservation && (
-                                    <div className="mt-3 rounded-xl border border-amber-300 bg-amber-100 px-3 py-2.5">
-                                      <div className="flex items-start gap-2">
-                                        <MessageSquareText size={14} className="mt-0.5 shrink-0 text-amber-900" />
-                                        <div className="min-w-0">
-                                          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-amber-900">
-                                            OBS
-                                          </p>
-                                          <p className="text-sm font-semibold leading-snug text-amber-950 break-words">
-                                            {observation}
-                                          </p>
+                                  {hasObservation && (() => {
+                                    const critical = isCriticalObservation(observation);
+                                    return (
+                                      <div className={`mt-3 rounded-xl border px-3 py-2.5 ${critical ? "border-red-400 bg-red-100" : "border-amber-300 bg-amber-100"}`}>
+                                        <div className="flex items-start gap-2">
+                                          {critical
+                                            ? <AlertTriangle size={14} className="mt-0.5 shrink-0 text-red-700" />
+                                            : <MessageSquareText size={14} className="mt-0.5 shrink-0 text-amber-900" />
+                                          }
+                                          <div className="min-w-0">
+                                            <p className={`mb-1 text-[11px] font-semibold uppercase tracking-wide ${critical ? "text-red-700" : "text-amber-900"}`}>
+                                              {critical ? "¡ALERGIA / ALERTA!" : "OBS"}
+                                            </p>
+                                            <p className={`text-sm font-semibold leading-snug break-words ${critical ? "text-red-900" : "text-amber-950"}`}>
+                                              {observation}
+                                            </p>
+                                          </div>
                                         </div>
                                       </div>
-                                    </div>
-                                  )}
+                                    );
+                                  })()}
                                 </div>
                               );
                             })}

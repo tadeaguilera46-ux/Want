@@ -234,7 +234,7 @@ const Kitchen = () => {
   // Load menu items for the disponibilidad panel
   useEffect(() => {
     if (!restaurantId || !showDisponibilidad) return;
-    const q = query(collection(db, "restaurants", restaurantId, "menu"), orderBy("nombre", "asc"));
+    const q = query(collection(db, "restaurants", restaurantId, "menu"), orderBy("name", "asc"));
     const unsub = onSnapshot(q, (snap) => {
       setMenuItems(
         snap.docs.map((d) => ({
@@ -493,6 +493,12 @@ const Kitchen = () => {
     }
     return KITCHEN_STATIONS.filter((s) => stationIds.has(s.id));
   }, [pedidosVisibles]);
+
+  useEffect(() => {
+    if (selectedStation !== null && !availableStations.some((s) => s.id === selectedStation)) {
+      setSelectedStation(null);
+    }
+  }, [availableStations, selectedStation]);
 
   if (!restaurantId) {
     return (
