@@ -455,7 +455,15 @@ service cloud.firestore {
       allow read: if isSuperAdmin() || isActiveStaff(restaurantId);
       allow create: if isSuperAdmin() || isAdmin(restaurantId)
         && request.resource.data.restaurantId == restaurantId;
-      allow update: if isSuperAdmin() || isActiveStaff(restaurantId);
+      // Entrar en estado notified pasa por Cloud Functions para enviar el aviso.
+      allow update: if isSuperAdmin()
+        || (
+          isActiveStaff(restaurantId)
+          && (
+            request.resource.data.status != "notified"
+            || resource.data.status == "notified"
+          )
+        );
       allow delete: if isSuperAdmin() || isAdmin(restaurantId);
     }
 

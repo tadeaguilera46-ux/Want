@@ -8,6 +8,8 @@ import {
   serverTimestamp,
   writeBatch,
 } from "firebase/firestore";
+import { getApp } from "firebase/app";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { Bell, Check, Clock, Plus, Users, X } from "lucide-react";
 import { getDb } from "../lib/firebase";
 import { toast } from "sonner";
@@ -20,10 +22,28 @@ type WaitlistEntry = {
   partySize: number;
   phone?: string;
   status: "waiting" | "notified" | "cancelled";
+  notification?: {
+    status?: "sending" | "sent" | "failed";
+    channel?: "sms" | "whatsapp";
+  };
   arrivedAt: { seconds?: number; toMillis?: () => number } | number | null;
 };
 
 const db = getDb();
+const functions = getFunctions(getApp(), "us-central1");
+
+const getFunctionErrorMessage = (error: unknown) => {
+  if (
+    error &&
+    typeof error === "object" &&
+    "details" in error &&
+    typeof error.details === "string"
+  ) {
+    return error.details;
+  }
+  if (error instanceof Error && error.message) return error.message;
+  return "No se pudo enviar el aviso.";
+};
 
 const fmtTime = (entry: WaitlistEntry) => {
   const raw = entry.arrivedAt;
@@ -56,6 +76,7 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
   const [partySize, setPartySize] = useState("2");
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
+  const [notifyingId, setNotifyingId] = useState<string | null>(null);
 
   useEffect(() => {
     const q = query(
@@ -119,6 +140,27 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
   const setStatus = async (id: string, status: WaitlistEntry["status"]) => {
     if (!user) return;
     const entry = entries.find((current) => current.id === id);
+    if (status === "notified") {
+      try {
+        setNotifyingId(id);
+        const notify = httpsCallable<
+          { restaurantId: string; entryId: string },
+          { ok: boolean; channel: "sms" | "whatsapp" }
+        >(functions, "notifyWaitlistEntry");
+        const result = await notify({ restaurantId, entryId: id });
+        toast.success(
+          result.data.channel === "whatsapp"
+            ? "Aviso enviado por WhatsApp."
+            : "Aviso enviado por SMS."
+        );
+      } catch (error) {
+        toast.error(getFunctionErrorMessage(error));
+      } finally {
+        setNotifyingId(null);
+      }
+      return;
+    }
+
     const batch = writeBatch(db);
     batch.update(doc(db, "restaurants", restaurantId, "waitlist", id), { status });
     writeAuditLog(batch, {
@@ -184,7 +226,7 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
           <input
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            placeholder="Teléfono (opcional)"
+            placeholder="+549... (para avisar)"
             className="h-11 rounded-lg border border-zinc-200 px-3 text-sm outline-none focus:ring-2 focus:ring-black/10"
           />
           <button
@@ -215,6 +257,13 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
                 <div className="flex flex-wrap items-center gap-2 mt-0.5">
                   <span className="text-xs text-zinc-500">{entry.partySize} personas</span>
                   {entry.phone && <span className="text-xs text-zinc-400">{entry.phone}</span>}
+                  {entry.notification?.status === "sent" && (
+                    <span className="text-xs font-semibold text-emerald-600">
+                      {entry.notification.channel === "whatsapp"
+                        ? "WhatsApp enviado"
+                        : "SMS enviado"}
+                    </span>
+                  )}
                   <span className="flex items-center gap-1 text-xs text-zinc-400">
                     <Clock size={11} /> {fmtTime(entry)} · {waitMins(entry)} min
                   </span>
@@ -227,10 +276,18 @@ export function WaitlistPanel({ restaurantId }: { restaurantId: string }) {
                 {entry.status === "waiting" && (
                   <button
                     onClick={() => setStatus(entry.id, "notified")}
-                    title="Mesa lista — avisar"
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                    disabled={notifyingId === entry.id}
+                    title={
+                      entry.phone
+                        ? "Mesa lista — enviar aviso"
+                        : "Agregá un teléfono con código de país"
+                    }
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                   >
-                    <Bell size={14} />
+                    <Bell
+                      size={14}
+                      className={notifyingId === entry.id ? "animate-pulse" : ""}
+                    />
                   </button>
                 )}
                 {entry.status === "notified" && (
