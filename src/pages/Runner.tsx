@@ -226,22 +226,27 @@ const Runner = () => {
         );
       const drinkItems = drinkItemsWithIdx.map(({ item }) => item);
 
-      if (foodItems.length > 0 && order.estadoCocina === "listo") {
-        tasks.push({ id: `${order.id}__food`, type: "food", order, items: foodItems });
+      const foodReady = foodItems.length === 0 || order.estadoCocina === "listo";
+
+      let drinksReady: boolean;
+      if (drinkItems.length === 0) {
+        drinksReady = true;
+      } else if (order.itemEstadosBarra && Object.keys(order.itemEstadosBarra).length > 0) {
+        drinksReady = drinkItemsWithIdx.every(
+          ({ idx }) => order.itemEstadosBarra![String(idx)] === "listo"
+        );
+      } else {
+        drinksReady = order.estadoBarra === "listo";
       }
 
+      // Solo mostrar al Runner cuando TODO el pedido esté listo
+      if (!foodReady || !drinksReady) return;
+
+      if (foodItems.length > 0) {
+        tasks.push({ id: `${order.id}__food`, type: "food", order, items: foodItems });
+      }
       if (drinkItems.length > 0) {
-        if (order.itemEstadosBarra && Object.keys(order.itemEstadosBarra).length > 0) {
-          // Per-item: show only the "listo" drinks
-          const listoItems = drinkItemsWithIdx
-            .filter(({ idx }) => order.itemEstadosBarra![String(idx)] === "listo")
-            .map(({ item }) => item);
-          if (listoItems.length > 0) {
-            tasks.push({ id: `${order.id}__drinks:${listoItems.length}`, type: "drinks", order, items: listoItems });
-          }
-        } else if (order.estadoBarra === "listo") {
-          tasks.push({ id: `${order.id}__drinks`, type: "drinks", order, items: drinkItems });
-        }
+        tasks.push({ id: `${order.id}__drinks`, type: "drinks", order, items: drinkItems });
       }
     });
 
@@ -388,13 +393,31 @@ const Runner = () => {
 
         if (shouldPlaySound) void playSound();
 
-        const pedidosActivos = data.filter(
-          (pedido) =>
-            pedido.estadoCocina === "listo" ||
-            pedido.estadoBarra === "listo" ||
-            (pedido.itemEstadosBarra &&
-              Object.values(pedido.itemEstadosBarra).some((s) => s === "listo"))
-        );
+        const pedidosActivos = data.filter((pedido) => {
+          const pFoodItems = pedido.items?.filter(isFoodItem) || [];
+          const pDrinkItemsWithIdx = (pedido.items || [])
+            .map((item, idx) => ({ item, idx }))
+            .filter(({ item, idx }) =>
+              isDrinkItem(item) && !pedido.cancelledItems?.some((c) => c.itemIndex === idx)
+            );
+
+          if (pFoodItems.length === 0 && pDrinkItemsWithIdx.length === 0) return false;
+
+          const pFoodReady = pFoodItems.length === 0 || pedido.estadoCocina === "listo";
+
+          let pDrinksReady: boolean;
+          if (pDrinkItemsWithIdx.length === 0) {
+            pDrinksReady = true;
+          } else if (pedido.itemEstadosBarra && Object.keys(pedido.itemEstadosBarra).length > 0) {
+            pDrinksReady = pDrinkItemsWithIdx.every(
+              ({ idx }) => pedido.itemEstadosBarra![String(idx)] === "listo"
+            );
+          } else {
+            pDrinksReady = pedido.estadoBarra === "listo";
+          }
+
+          return pFoodReady && pDrinksReady;
+        });
 
         setOrders(pedidosActivos);
       },
