@@ -321,6 +321,7 @@ const Cashier = () => {
   const [showAddProductModal, setShowAddProductModal] = useState(false);
   const [showDiscountAccordion, setShowDiscountAccordion] = useState(false);
   const [showNotaAccordion, setShowNotaAccordion] = useState(false);
+  const [showManualForm, setShowManualForm] = useState(false);
   const [cancelItemTarget, setCancelItemTarget] = useState<{ pedidoId: string; itemIndex: number; name: string } | null>(null);
   const [cancelItemReason, setCancelItemReason] = useState("");
 
@@ -1978,87 +1979,96 @@ window.onload = () => { window.print(); };
               )}
             </section>
 
-            <section className="rounded-xl border border-white/10 bg-[#1a1a1a] p-4">
-              <div className="mb-4 flex items-center gap-2">
-                <Plus size={16} className="text-zinc-500" />
-                <h2 className="text-sm font-bold uppercase tracking-[0.15em] text-zinc-400">
-                  Crear cuenta manual
-                </h2>
-              </div>
-
-              <div className="space-y-2">
-                <input
-                  value={manualMesa}
-                  onChange={(e) => setManualMesa(e.target.value)}
-                  type="number"
-                  min={1}
-                  placeholder="Número de mesa"
-                  className="h-11 w-full rounded-lg border border-white/15 bg-white/5 px-4 text-sm text-white placeholder-zinc-600 outline-none focus:ring-1 focus:ring-white/20"
+            <section className="rounded-xl border border-white/10 bg-[#1a1a1a]">
+              <button
+                onClick={() => setShowManualForm((v) => !v)}
+                className="flex w-full items-center justify-between px-4 py-3.5 text-sm font-bold text-zinc-400 hover:text-white"
+              >
+                <div className="flex items-center gap-2">
+                  <Plus size={15} className="text-zinc-500" />
+                  <span className="uppercase tracking-[0.15em]">Crear cuenta manual</span>
+                </div>
+                <Plus
+                  size={14}
+                  className={`transition-transform duration-150 ${showManualForm ? "rotate-45" : ""}`}
                 />
+              </button>
 
-                <div className="grid grid-cols-[1fr_80px] gap-2">
-                  <select
-                    value={manualSelectedMenuId}
-                    onChange={(e) => setManualSelectedMenuId(e.target.value)}
-                    className="h-11 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white outline-none"
-                  >
-                    <option value="" className="bg-zinc-900">Seleccionar producto</option>
-                    {menuItems.map((item) => (
-                      <option key={item.id} value={item.id} className="bg-zinc-900">
-                        {item.name} · {formatPriceARS(item.price)}
-                      </option>
-                    ))}
-                  </select>
-
+              {showManualForm && (
+                <div className="border-t border-white/10 px-4 pb-4 pt-3 space-y-2">
                   <input
-                    value={manualQuantity}
-                    onChange={(e) => setManualQuantity(e.target.value)}
+                    value={manualMesa}
+                    onChange={(e) => setManualMesa(e.target.value)}
                     type="number"
                     min={1}
-                    className="h-11 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white outline-none"
+                    placeholder="Número de mesa"
+                    className="h-11 w-full rounded-lg border border-white/15 bg-white/5 px-4 text-sm text-white placeholder-zinc-600 outline-none focus:ring-1 focus:ring-white/20"
                   />
-                </div>
 
-                <button
-                  onClick={addDraftManualItem}
-                  className="h-10 w-full rounded-lg border border-white/15 bg-white/5 text-sm font-bold text-zinc-300 hover:bg-white/10"
-                >
-                  + Agregar producto
-                </button>
+                  <div className="grid grid-cols-[1fr_80px] gap-2">
+                    <select
+                      value={manualSelectedMenuId}
+                      onChange={(e) => setManualSelectedMenuId(e.target.value)}
+                      className="h-11 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white outline-none"
+                    >
+                      <option value="" className="bg-zinc-900">Seleccionar producto</option>
+                      {menuItems.map((item) => (
+                        <option key={item.id} value={item.id} className="bg-zinc-900">
+                          {item.name} · {formatPriceARS(item.price)}
+                        </option>
+                      ))}
+                    </select>
 
-                {manualItems.length > 0 && (
-                  <div className="space-y-1.5 rounded-lg border border-white/10 bg-white/5 p-3">
-                    {manualItems.map((item) => (
-                      <div key={item.menuItem.id} className="flex items-center justify-between gap-3 text-sm">
-                        <span className="font-semibold text-zinc-300">
-                          {item.menuItem.name} ×{item.quantity}
-                        </span>
-                        <button
-                          onClick={() =>
-                            setManualItems((prev) =>
-                              prev.filter((current) => current.menuItem.id !== item.menuItem.id)
-                            )
-                          }
-                          className="text-red-500/60 hover:text-red-400"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    ))}
-                    <div className="border-t border-white/10 pt-2 text-right text-sm font-bold text-zinc-200">
-                      {formatPriceARS(manualTotal)}
-                    </div>
+                    <input
+                      value={manualQuantity}
+                      onChange={(e) => setManualQuantity(e.target.value)}
+                      type="number"
+                      min={1}
+                      className="h-11 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white outline-none"
+                    />
                   </div>
-                )}
 
-                <button
-                  onClick={createManualBill}
-                  disabled={processing || !isOnline}
-                  className="h-11 w-full rounded-lg bg-white/10 text-sm font-bold text-white hover:bg-white/15 disabled:opacity-50"
-                >
-                  Crear cuenta
-                </button>
-              </div>
+                  <button
+                    onClick={addDraftManualItem}
+                    className="h-10 w-full rounded-lg border border-white/15 bg-white/5 text-sm font-bold text-zinc-300 hover:bg-white/10"
+                  >
+                    + Agregar producto
+                  </button>
+
+                  {manualItems.length > 0 && (
+                    <div className="space-y-1.5 rounded-lg border border-white/10 bg-white/5 p-3">
+                      {manualItems.map((item) => (
+                        <div key={item.menuItem.id} className="flex items-center justify-between gap-3 text-sm">
+                          <span className="font-semibold text-zinc-300">
+                            {item.menuItem.name} ×{item.quantity}
+                          </span>
+                          <button
+                            onClick={() =>
+                              setManualItems((prev) =>
+                                prev.filter((current) => current.menuItem.id !== item.menuItem.id)
+                              )
+                            }
+                            className="text-red-500/60 hover:text-red-400"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+                      <div className="border-t border-white/10 pt-2 text-right text-sm font-bold text-zinc-200">
+                        {formatPriceARS(manualTotal)}
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={createManualBill}
+                    disabled={processing || !isOnline}
+                    className="h-11 w-full rounded-lg bg-white/10 text-sm font-bold text-white hover:bg-white/15 disabled:opacity-50"
+                  >
+                    Crear cuenta
+                  </button>
+                </div>
+              )}
             </section>
           </div>
 
