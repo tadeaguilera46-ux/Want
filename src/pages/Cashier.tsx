@@ -1883,7 +1883,7 @@ window.onload = () => { window.print(); };
                       <div key={cuenta.id} className="relative">
                         <button
                           onClick={() => setSelectedCuentaId(cuenta.id)}
-                          className={`w-full rounded-xl border p-4 text-left transition ${
+                          className={`w-full rounded-xl border py-4 pl-4 pr-14 text-left transition ${
                             selected
                               ? "border-zinc-950 bg-zinc-950 text-white"
                               : isDangerBill
