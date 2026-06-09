@@ -277,12 +277,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const cuentaData = cuentaSnap.data() || {};
         const estadoCuenta = cuentaData.estado;
 
-        if (
-          estadoCuenta === "pendiente" ||
-          estadoCuenta === "en_camino" ||
-          estadoCuenta === "pagada" ||
-          estadoCuenta === "cerrada"
-        ) {
+        if (estadoCuenta === "pagada" || estadoCuenta === "cerrada") {
           throw new UserFacingError(
             "La cuenta ya fue solicitada. No se pueden agregar más pedidos desde esta mesa, hasta estar paga."
           );
