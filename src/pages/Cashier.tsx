@@ -316,6 +316,7 @@ const Cashier = () => {
   const [splitParts, setSplitParts] = useState("2");
   const [splitMode, setSplitMode] = useState<"partes" | "productos">("partes");
   const [splitProductSelection, setSplitProductSelection] = useState<Record<string, boolean>>({});
+  const [splitPaidKeys, setSplitPaidKeys] = useState<Record<string, true>>({});
   const [cancelItemTarget, setCancelItemTarget] = useState<{ pedidoId: string; itemIndex: number; name: string } | null>(null);
   const [cancelItemReason, setCancelItemReason] = useState("");
 
@@ -574,6 +575,7 @@ const Cashier = () => {
     setInvoiceCity(selectedCuenta.invoice?.city || "");
     setSplitMode("partes");
     setSplitProductSelection({});
+    setSplitPaidKeys({});
   }, [selectedCuenta?.id]);
 
   const selectedOrders = useMemo(() => {
@@ -1032,6 +1034,8 @@ const Cashier = () => {
       });
       setShowReopenModal(false);
       setReopenReason("");
+      setSplitPaidKeys({});
+      setSplitProductSelection({});
       toast.success("Cuenta reabierta.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo reabrir.");
@@ -2453,27 +2457,30 @@ window.onload = () => { window.print(); };
                           <p className="text-xs text-zinc-500">Seleccioná los productos a cobrar en esta parte:</p>
                           {selectedItems.filter((i) => !i._cancelled).map((item) => {
                             const key = `${item._pedidoId}:${item._itemIndex}`;
-                            const checked = !!splitProductSelection[key];
+                            const paid = !!splitPaidKeys[key];
+                            const checked = !paid && !!splitProductSelection[key];
                             const subtotal = getItemSubtotal(item as CashierOrderItem);
                             return (
                               <label
                                 key={key}
-                                className="flex cursor-pointer items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2"
+                                className={`flex items-center justify-between rounded-lg border px-3 py-2 ${paid ? "cursor-default border-zinc-100 bg-zinc-50 opacity-50" : "cursor-pointer border-zinc-200 bg-zinc-50"}`}
                               >
                                 <div className="flex items-center gap-2">
                                   <input
                                     type="checkbox"
                                     checked={checked}
+                                    disabled={paid}
                                     onChange={(e) =>
-                                      setSplitProductSelection((prev) => ({ ...prev, [key]: e.target.checked }))
+                                      !paid && setSplitProductSelection((prev) => ({ ...prev, [key]: e.target.checked }))
                                     }
-                                    className="h-4 w-4 rounded accent-zinc-900"
+                                    className="h-4 w-4 rounded accent-zinc-900 disabled:cursor-not-allowed"
                                   />
-                                  <span className="text-sm font-semibold text-zinc-800">
+                                  <span className={`text-sm font-semibold ${paid ? "line-through text-zinc-400" : "text-zinc-800"}`}>
                                     {getItemName(item as CashierOrderItem)} × {getItemQuantity(item as CashierOrderItem)}
                                   </span>
+                                  {paid && <span className="text-xs text-zinc-400">Ya cobrado</span>}
                                 </div>
-                                <span className="text-sm font-bold">{formatPriceARS(subtotal)}</span>
+                                <span className={`text-sm font-bold ${paid ? "text-zinc-400" : ""}`}>{formatPriceARS(subtotal)}</span>
                               </label>
                             );
                           })}
@@ -2485,6 +2492,12 @@ window.onload = () => { window.print(); };
                               </div>
                               <button
                                 onClick={() => {
+                                  const keysBeingPaid = Object.keys(splitProductSelection).filter((k) => splitProductSelection[k]);
+                                  setSplitPaidKeys((prev) => {
+                                    const next = { ...prev };
+                                    for (const k of keysBeingPaid) next[k] = true;
+                                    return next;
+                                  });
                                   setPaymentAmount(String(Math.round(splitProductSubtotal)));
                                   setSplitProductSelection({});
                                 }}
