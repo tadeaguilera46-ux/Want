@@ -41,6 +41,7 @@ import {
   markCashierBillPrinted,
   reopenCashierBill,
   requestCashierInvoice,
+  unlockSessionForCashierAdd,
   updateCashierBillAdjustments,
 } from "../lib/cashier";
 import type { MetodoPago, PedidoItem } from "../lib/restaurant";
@@ -894,6 +895,11 @@ const Cashier = () => {
       setError(null);
 
       const category = getMenuItemType(menuItem);
+
+      await unlockSessionForCashierAdd({
+        restaurantId,
+        sessionId: selectedCuenta.sessionId,
+      });
 
    await crearPedido({
       restaurantId,

@@ -1,4 +1,4 @@
-import { doc, runTransaction, serverTimestamp } from "firebase/firestore";
+import { doc, runTransaction, serverTimestamp, updateDoc } from "firebase/firestore";
 import { getDb } from "./firebase";
 import { pedirCuenta } from "./bill";
 import {
@@ -462,5 +462,21 @@ export const reopenCashierBill = async ({
         after,
       },
     });
+  });
+};
+
+export const unlockSessionForCashierAdd = async ({
+  restaurantId,
+  sessionId,
+}: {
+  restaurantId: string;
+  sessionId: string;
+}) => {
+  const db = getDb();
+  const sessionRef = doc(db, "restaurants", restaurantId, "sessions", sessionId);
+  await updateDoc(sessionRef, {
+    ordersLocked: false,
+    billRequested: false,
+    updatedAt: serverTimestamp(),
   });
 };
