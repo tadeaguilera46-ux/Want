@@ -318,6 +318,9 @@ const Cashier = () => {
   const [splitMode, setSplitMode] = useState<"partes" | "productos">("partes");
   const [splitProductSelection, setSplitProductSelection] = useState<Record<string, boolean>>({});
   const [splitPaidKeys, setSplitPaidKeys] = useState<Record<string, true>>({});
+  const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [showDiscountAccordion, setShowDiscountAccordion] = useState(false);
+  const [showNotaAccordion, setShowNotaAccordion] = useState(false);
   const [cancelItemTarget, setCancelItemTarget] = useState<{ pedidoId: string; itemIndex: number; name: string } | null>(null);
   const [cancelItemReason, setCancelItemReason] = useState("");
 
@@ -2087,103 +2090,121 @@ window.onload = () => { window.print(); };
             </section>
           </div>
 
-          <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+          <section className="overflow-hidden rounded-xl border border-zinc-800 bg-[#111111] shadow-2xl">
             {!selectedCuenta ? (
               <div className="flex h-full min-h-[520px] flex-col items-center justify-center text-center">
-                <Receipt size={52} className="mb-4 text-zinc-300" />
-                <h2 className="text-2xl font-bold text-zinc-950">
-                  Seleccioná una cuenta
-                </h2>
-                <p className="mt-2 max-w-sm text-sm text-zinc-500">
-                  Elegí una mesa para ver detalle, aplicar descuentos,
-                  agregar productos o cobrar.
-                </p>
+                <Receipt size={52} className="mb-4 text-zinc-700" />
+                <h2 className="text-2xl font-bold text-zinc-300">Seleccioná una cuenta</h2>
+                <p className="mt-2 max-w-sm text-sm text-zinc-600">Elegí una mesa para cobrar.</p>
               </div>
             ) : (
-              <div className="space-y-8">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-500">
-                      Cuenta activa
-                    </p>
-                    <h2 className="mt-1 text-5xl font-bold tracking-tight text-zinc-950">
-                      Mesa {selectedCuenta.mesa}
-                    </h2>
-                    <p className="mt-3 text-sm text-zinc-500">
-                      Método elegido por cliente:{" "}
-                      <span className="font-bold text-zinc-950">
-                        {selectedPaymentLabel}
-                      </span>
-                    </p>
-                    <p className="mt-1 text-sm text-zinc-500">
-                      Estado:{" "}
-                      <span className="font-bold capitalize text-zinc-950">
-                        {selectedCuenta.estado}
-                      </span>
-                    </p>
+              <>
+                {/* ── HEADER ─────────────────────────────── */}
+                <div className="border-b border-white/10 px-6 py-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {/* status badge */}
+                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-0.5 text-xs font-bold ${
+                          selectedCuenta.estado === "pagada"
+                            ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                            : "border-lime-500/30 bg-lime-500/10 text-lime-400"
+                        }`}>
+                          <span className={`h-1.5 w-1.5 rounded-full ${selectedCuenta.estado === "pagada" ? "bg-emerald-400" : "bg-lime-400"}`} />
+                          {selectedCuenta.estado === "pagada" ? "PAGADA" : "EN CURSO"}
+                        </span>
+                        {selectedCuenta.metodo && (
+                          <span className="text-xs font-semibold text-zinc-500">{selectedPaymentLabel}</span>
+                        )}
+                        {selectedCuenta.internalNote && (
+                          <span className="max-w-xs truncate text-xs text-amber-400" title={selectedCuenta.internalNote}>
+                            "{selectedCuenta.internalNote}"
+                          </span>
+                        )}
+                      </div>
+                      <h2 className="mt-1 text-5xl font-bold tracking-tight text-white">Mesa {selectedCuenta.mesa}</h2>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handlePrint}
+                        disabled={!isOnline}
+                        className="flex h-9 items-center gap-2 rounded-lg border border-white/15 px-4 text-sm font-semibold text-zinc-300 transition hover:border-white/30 hover:text-white disabled:opacity-40"
+                      >
+                        <Printer size={15} />
+                        Pre-cuenta
+                      </button>
+                      {selectedCuenta.sessionId &&
+                        selectedCuenta.estado !== "pagada" &&
+                        selectedCuenta.estado !== "cerrada" && (
+                        <button
+                          onClick={() => setShowAddProductModal(true)}
+                          className="flex h-9 items-center gap-2 rounded-lg border border-white/20 bg-white/10 px-4 text-sm font-semibold text-white transition hover:bg-white/15"
+                        >
+                          <Plus size={15} />
+                          Agregar producto
+                        </button>
+                      )}
+                    </div>
                   </div>
-
-                  <button
-                     onClick={handlePrint}
-                     disabled={!isOnline}
-                    className="flex h-12 items-center disabled:opacity-50 gap-2 rounded-lg border border-zinc-200 bg-white px-4 font-semibold text-zinc-700 transition hover:bg-zinc-50"
-                  >
-                    <Printer size={18} />
-                    Imprimir pre-cuenta
-                  </button>
                 </div>
 
-                <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-                  <h3 className="mb-3 text-lg font-bold text-zinc-950">
-                    Detalle consumido
-                  </h3>
+                {/* ── 2-COLUMN GRID ──────────────────────── */}
+                <div className="grid lg:grid-cols-[1fr_420px]">
 
-                  {selectedItems.length === 0 ? (
-                    <p className="text-sm text-zinc-500">
-                      No se encontraron productos asociados a esta cuenta.
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {selectedItems.map((item, index) => {
-                        const name = getItemName(item);
-                        const quantity = getItemQuantity(item);
-                        const price = getItemPrice(item);
-                        const subtotal = getItemSubtotal(item);
-                        const cancelled = item._cancelled;
-                        const canCancel =
-                          !cancelled &&
-                          selectedCuenta.estado !== "pagada" &&
-                          selectedCuenta.estado !== "cerrada";
+                  {/* ── LEFT: Detalle + Ajustes ─────────── */}
+                  <div className="border-r border-white/10 p-6">
+                    {/* 01 Detalle consumido */}
+                    <div className="mb-4 flex items-center justify-between">
+                      <p className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-500">
+                        01 Detalle consumido
+                      </p>
+                      <span className="text-xs font-semibold text-zinc-600">
+                        {selectedItems.filter((i) => !i._cancelled).length} ítems
+                        {" · "}
+                        {selectedItems
+                          .filter((i) => !i._cancelled)
+                          .reduce((s, i) => s + getItemQuantity(i as CashierOrderItem), 0)}{" "}
+                        u.
+                      </span>
+                    </div>
 
-                        return (
-                          <div
-                            key={`${name}-${index}`}
-                            className={`rounded-lg border px-4 py-3 ${cancelled ? "border-zinc-100 bg-zinc-50 opacity-60" : "border-zinc-200 bg-white"}`}
-                          >
-                            <div className="flex items-start justify-between gap-3">
+                    {selectedItems.length === 0 ? (
+                      <p className="text-sm text-zinc-600">Sin productos.</p>
+                    ) : (
+                      <div className="space-y-0.5">
+                        {selectedItems.map((item, index) => {
+                          const name = getItemName(item);
+                          const quantity = getItemQuantity(item);
+                          const price = getItemPrice(item);
+                          const subtotal = getItemSubtotal(item);
+                          const cancelled = item._cancelled;
+                          const canCancel =
+                            !cancelled &&
+                            selectedCuenta.estado !== "pagada" &&
+                            selectedCuenta.estado !== "cerrada";
+                          return (
+                            <div
+                              key={`${name}-${index}`}
+                              className={`flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 ${cancelled ? "opacity-40" : "hover:bg-white/5"}`}
+                            >
                               <div className="flex-1 min-w-0">
-                                <p className={`font-bold ${cancelled ? "line-through text-zinc-400" : "text-zinc-950"}`}>
+                                <p className={`text-sm font-semibold leading-snug ${cancelled ? "line-through text-zinc-500" : "text-white"}`}>
                                   {name}
                                 </p>
-                                <p className={`mt-1 text-xs font-semibold ${cancelled ? "text-zinc-400" : "text-zinc-500"}`}>
-                                  {quantity} x {formatPriceARS(price)}
+                                <p className="mt-0.5 text-xs text-zinc-500">
+                                  {quantity} × {formatPriceARS(price)}
                                 </p>
                                 {item.observacion && !cancelled && (
-                                  <p className="mt-1 text-xs text-amber-700">
-                                    Obs: {item.observacion}
-                                  </p>
+                                  <p className="mt-0.5 text-xs text-amber-400">Obs: {item.observacion}</p>
                                 )}
                                 {cancelled && (
-                                  <p className="mt-1 text-xs font-semibold text-red-500">
-                                    Cancelado
-                                  </p>
+                                  <p className="mt-0.5 text-xs font-semibold text-red-500">Cancelado</p>
                                 )}
                               </div>
-
-                              <div className="flex items-center gap-2 shrink-0">
-                                <p className={`font-bold ${cancelled ? "line-through text-zinc-400" : "text-zinc-950"}`}>
+                              <div className="flex items-center gap-3 shrink-0">
+                                <span className={`text-sm font-bold ${cancelled ? "line-through text-zinc-600" : "text-zinc-200"}`}>
                                   {formatPriceARS(subtotal)}
-                                </p>
+                                </span>
                                 {canCancel && (
                                   <button
                                     onClick={() => {
@@ -2194,675 +2215,689 @@ window.onload = () => { window.print(); };
                                       });
                                       setCancelItemReason("");
                                     }}
-                                    className="flex h-7 w-7 items-center justify-center rounded-lg border border-red-200 text-red-400 hover:bg-red-50 hover:text-red-600"
-                                    title="Cancelar ítem"
+                                    className="flex h-6 w-6 items-center justify-center rounded border border-red-500/25 text-red-500/50 hover:border-red-500/60 hover:text-red-400"
                                   >
-                                    <X size={13} />
+                                    <X size={12} />
                                   </button>
                                 )}
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                          );
+                        })}
+                      </div>
+                    )}
 
-                {selectedCuenta.sessionId &&
-                  selectedCuenta.estado !== "pagada" &&
-                  selectedCuenta.estado !== "cerrada" && (
-                <div className="rounded-xl border border-zinc-200 bg-white p-4">
-                  <h3 className="mb-3 text-lg font-bold text-zinc-950">
-                    Agregar producto a esta cuenta
-                  </h3>
-
-                  <div className="grid gap-2 sm:grid-cols-[1fr_100px_auto]">
-                    <select
-                      value={addSelectedMenuId}
-                      onChange={(e) => setAddSelectedMenuId(e.target.value)}
-                      className="h-12 rounded-lg border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
-                    >
-                      <option value="">Seleccionar producto</option>
-                      {menuItems.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name} · {formatPriceARS(item.price)}
-                        </option>
-                      ))}
-                    </select>
-
-                    <input
-                      value={addQuantity}
-                      onChange={(e) => setAddQuantity(e.target.value)}
-                      type="number"
-                      min={1}
-                      className="h-12 rounded-lg border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
-                    />
-
-                    <button
-                      onClick={addItemToSelectedBill}
-                      disabled={processing || !isOnline}
-                      className="h-12 rounded-lg bg-zinc-950 px-5 font-bold text-white disabled:opacity-50"
-                    >
-                      Agregar
-                    </button>
-                  </div>
-                </div>
-                )}
-
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-xl border border-zinc-200 bg-white p-4">
-                    <h3 className="mb-3 text-lg font-bold text-zinc-950">
-                      Descuento / ajuste
-                    </h3>
-
-                    <div className="space-y-3">
-                      <select
-                        value={discountType}
-                        onChange={(e) =>
-                          setDiscountType(e.target.value as CashierDiscountType)
-                        }
-                        className="h-12 w-full rounded-lg border border-zinc-200 px-3"
-                      >
-                        <option value="none">Sin descuento</option>
-                        <option value="fixed">Descuento fijo</option>
-                        <option value="percentage">Descuento %</option>
-                      </select>
-
-                      <input
-                        value={discountValue}
-                        onChange={(e) => setDiscountValue(e.target.value)}
-                        type="number"
-                        min={0}
-                        placeholder="Valor del descuento"
-                        className="h-12 w-full rounded-lg border border-zinc-200 px-4"
-                      />
-
-                      <input
-                        value={discountReason}
-                        onChange={(e) => setDiscountReason(e.target.value)}
-                        placeholder="Motivo obligatorio si hay descuento"
-                        className="h-12 w-full rounded-lg border border-zinc-200 px-4"
-                      />
-
-                      <input
-                        value={manualExtraAmount}
-                        onChange={(e) => setManualExtraAmount(e.target.value)}
-                        type="number"
-                        min={0}
-                        placeholder="Extra manual opcional"
-                        className="h-12 w-full rounded-lg border border-zinc-200 px-4"
-                      />
-
-                      <input
-                        value={manualExtraReason}
-                        onChange={(e) => setManualExtraReason(e.target.value)}
-                        placeholder="Motivo del extra"
-                        className="h-12 w-full rounded-lg border border-zinc-200 px-4"
-                      />
-
-                      <button
-                          onClick={saveAdjustments}
-                          disabled={processing || !isOnline}
-                        className="h-12 w-full rounded-lg bg-zinc-950 font-bold text-white disabled:opacity-50"
-                      >
-                        Guardar ajustes
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* FC-008: Nota interna */}
-                  <div className="rounded-xl border border-zinc-200 bg-white p-4">
-                    <h3 className="mb-3 text-sm font-bold text-zinc-700">
-                      Nota interna (solo visible para el staff)
-                    </h3>
-                    <div className="flex gap-2">
-                      <input
-                        value={internalNote}
-                        onChange={(e) => setInternalNote(e.target.value)}
-                        placeholder="Ej: cliente VIP, no cobrar cubierto, paga con factura A..."
-                        className="h-10 flex-1 rounded-lg border border-zinc-200 px-3 text-sm"
-                      />
-                      <button
-                        onClick={handleSaveInternalNote}
-                        disabled={processing}
-                        className="h-10 rounded-lg border border-zinc-200 bg-zinc-50 px-4 text-xs font-bold text-zinc-700 hover:bg-zinc-100 disabled:opacity-50"
-                      >
-                        Guardar
-                      </button>
-                    </div>
-                    {selectedCuenta.internalNote && (
-                      <p className="mt-2 text-xs text-zinc-500">
-                        Nota actual: <span className="font-semibold text-zinc-700">{selectedCuenta.internalNote}</span>
+                    {/* 02 Ajustes y notas */}
+                    <div className="mt-8 space-y-1">
+                      <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-zinc-500">
+                        02 Ajustes y notas
                       </p>
-                    )}
-                  </div>
 
-                  <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
-                    <h3 className="mb-3 text-lg font-bold text-zinc-950">
-                      Resumen
-                    </h3>
-
-                    <div className="space-y-3">
-                      <div className="flex justify-between text-sm">
-                        <span>Subtotal</span>
-                        <strong>{formatPriceARS(realSubtotal)}</strong>
-                      </div>
-
-                      <div className="flex justify-between text-sm text-red-600">
-                        <span>Descuento</span>
-                        <strong>-{formatPriceARS(discountAmount)}</strong>
-                      </div>
-
-                      {twoForOneDiscount > 0 && (
-                        <div className="flex justify-between text-sm text-red-600">
-                          <span>2x1</span>
-                          <strong>-{formatPriceARS(twoForOneDiscount)}</strong>
-                        </div>
-                      )}
-
-                      <div className="flex justify-between text-sm">
-                        <span>Extra</span>
-                        <strong>{formatPriceARS(extraAmount)}</strong>
-                      </div>
-
-                      <div className="flex justify-between text-sm">
-                        <span>Pagado</span>
-                        <strong>{formatPriceARS(paidTotal)}</strong>
-                      </div>
-
-                      <div className="border-t border-zinc-200 pt-4">
-                        <p className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-500">
-                          Total final
-                        </p>
-                        <p className="mt-1 text-5xl font-bold text-zinc-950">
-                          {formatPriceARS(finalTotal)}
-                        </p>
-                        <p className="mt-2 text-sm font-bold text-zinc-600">
-                          Saldo pendiente: {formatPriceARS(remainingAmount)}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* F-002/FC-002: División de cuenta */}
-                <div className="rounded-xl border border-zinc-200 bg-white p-4">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-zinc-700">Dividir cuenta</h3>
-                    <button
-                      onClick={() => setShowSplitBill((v) => !v)}
-                      className="text-xs font-semibold text-zinc-500 hover:text-zinc-900"
-                    >
-                      {showSplitBill ? "Ocultar" : "Mostrar"}
-                    </button>
-                  </div>
-                  {showSplitBill && (
-                    <div className="space-y-3">
-                      {/* Mode tabs */}
-                      <div className="flex rounded-lg border border-zinc-200 p-0.5">
-                        {(["partes", "productos"] as const).map((mode) => (
-                          <button
-                            key={mode}
-                            onClick={() => { setSplitMode(mode); setSplitProductSelection({}); }}
-                            className={`flex-1 rounded-md py-1.5 text-xs font-bold transition ${splitMode === mode ? "bg-zinc-950 text-white" : "text-zinc-500 hover:text-zinc-900"}`}
-                          >
-                            {mode === "partes" ? "Por partes iguales" : "Por productos"}
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* Partial payments progress */}
-                      {(selectedCuenta.payments?.length ?? 0) > 0 && (
-                        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
-                          <p className="text-xs font-semibold text-emerald-700">
-                            Cobrado hasta ahora: {formatPriceARS(paidTotal)} · Saldo: {formatPriceARS(remainingAmount)}
-                          </p>
-                          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-emerald-200">
-                            <div
-                              className="h-full rounded-full bg-emerald-600 transition-all"
-                              style={{ width: `${Math.min(100, (paidTotal / finalTotal) * 100)}%` }}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Por partes iguales */}
-                      {splitMode === "partes" && (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-3">
-                            <label className="text-sm text-zinc-600">Dividir entre</label>
-                            <input
-                              type="number"
-                              min={2}
-                              max={20}
-                              value={splitParts}
-                              onChange={(e) => setSplitParts(e.target.value)}
-                              className="h-9 w-20 rounded-lg border border-zinc-200 px-3 text-center text-sm font-bold"
-                            />
-                            <span className="text-sm text-zinc-600">personas</span>
-                          </div>
-                          {Number(splitParts) >= 2 && remainingAmount > 0 && (
-                            <div className="rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3">
-                              <p className="text-xs text-zinc-500">Cada persona paga</p>
-                              <p className="text-2xl font-bold text-zinc-950">
-                                {formatPriceARS(Math.ceil(remainingAmount / Number(splitParts)))}
-                              </p>
-                              <p className="mt-1 text-xs text-zinc-400">
-                                Saldo {formatPriceARS(remainingAmount)} ÷ {splitParts} personas
-                              </p>
-                              <button
-                                onClick={() => setPaymentAmount(String(Math.ceil(remainingAmount / Number(splitParts))))}
-                                className="mt-2 w-full rounded-lg border border-zinc-300 bg-white py-2 text-xs font-bold text-zinc-700 hover:bg-zinc-100"
-                              >
-                                Cobrar esta parte ({formatPriceARS(Math.ceil(remainingAmount / Number(splitParts)))})
-                              </button>
-                            </div>
-                          )}
-                          {remainingAmount <= 0 && (
-                            <p className="text-xs font-semibold text-emerald-600">Cuenta completamente cobrada.</p>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Por productos */}
-                      {splitMode === "productos" && (
-                        <div className="space-y-2">
-                          <p className="text-xs text-zinc-500">Seleccioná los productos a cobrar en esta parte:</p>
-                          {selectedItems.filter((i) => !i._cancelled).flatMap((item) => {
-                            const itemKey = `${item._pedidoId}:${item._itemIndex}`;
-                            const qty = getItemQuantity(item as CashierOrderItem);
-                            const itemSubtotal = getItemSubtotal(item as CashierOrderItem);
-                            const unitPrice = qty > 0 ? itemSubtotal / qty : 0;
-                            const name = getItemName(item as CashierOrderItem);
-                            return Array.from({ length: qty }, (_, unitIdx) => {
-                              const key = `${itemKey}:${unitIdx}`;
-                              const paid = !!splitPaidKeys[key];
-                              const checked = !paid && !!splitProductSelection[key];
-                              return (
-                                <label
-                                  key={key}
-                                  className={`flex items-center justify-between rounded-lg border px-3 py-2 ${paid ? "cursor-default border-zinc-100 bg-zinc-50 opacity-50" : "cursor-pointer border-zinc-200 bg-zinc-50"}`}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={checked}
-                                      disabled={paid}
-                                      onChange={(e) =>
-                                        !paid && setSplitProductSelection((prev) => ({ ...prev, [key]: e.target.checked }))
-                                      }
-                                      className="h-4 w-4 rounded accent-zinc-900 disabled:cursor-not-allowed"
-                                    />
-                                    <span className={`text-sm font-semibold ${paid ? "line-through text-zinc-400" : "text-zinc-800"}`}>
-                                      {name}{qty > 1 ? ` (${unitIdx + 1}/${qty})` : ""}
-                                    </span>
-                                    {paid && <span className="text-xs text-zinc-400">Ya cobrado</span>}
-                                  </div>
-                                  <span className={`text-sm font-bold ${paid ? "text-zinc-400" : ""}`}>{formatPriceARS(unitPrice)}</span>
-                                </label>
-                              );
-                            });
-                          })}
-                          {splitProductSubtotal > 0 && (
-                            <div className="rounded-lg border border-zinc-200 bg-white px-4 py-3">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-semibold text-zinc-700">Subtotal selección</span>
-                                <span className="text-lg font-bold text-zinc-950">{formatPriceARS(splitProductSubtotal)}</span>
-                              </div>
-                              <button
-                                onClick={() => {
-                                  const keysBeingPaid = Object.keys(splitProductSelection).filter((k) => splitProductSelection[k]);
-                                  setSplitPaidKeys((prev) => {
-                                    const next = { ...prev };
-                                    for (const k of keysBeingPaid) next[k] = true;
-                                    return next;
-                                  });
-                                  setPaymentAmount(String(Math.round(splitProductSubtotal)));
-                                  setSplitProductSelection({});
-                                }}
-                                className="mt-2 w-full rounded-lg bg-zinc-950 py-2 text-xs font-bold text-white hover:bg-zinc-800"
-                              >
-                                Cobrar esta selección ({formatPriceARS(splitProductSubtotal)})
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="rounded-xl border border-zinc-200 bg-white p-4">
-                  <h3 className="mb-4 text-lg font-bold text-zinc-950">
-                    Registrar pago
-                  </h3>
-
-                  <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
-                    <select
-                      value={paymentMethod}
-                      onChange={(e) => {
-                        setPaymentMethod(e.target.value as CashierPaymentMethod);
-                        setCashReceived("");
-                      }}
-                      className="h-12 rounded-lg border border-zinc-200 px-3"
-                    >
-                      <option value="cash">Efectivo</option>
-                      <option value="debit">Débito</option>
-                      <option value="credit">Crédito</option>
-                      <option value="transfer">Transferencia</option>
-                      <option value="mercado_pago">Mercado Pago</option>
-                      <option value="mixed">Mixto</option>
-                      <option value="other">Otro</option>
-                    </select>
-
-                    <div className="flex gap-2">
-                      <input
-                        value={paymentAmount}
-                        onChange={(e) => setPaymentAmount(e.target.value)}
-                        type="number"
-                        min={0.01}
-                        placeholder="Monto a cobrar"
-                        className={`h-12 flex-1 rounded-lg border px-4 ${
-                          isPaymentAmountInvalid
-                            ? "border-red-300 bg-red-50"
-                            : "border-zinc-200"
-                        }`}
-                      />
-                      {/* FC-003: Botón cobro exacto */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setPaymentAmount(String(remainingAmount));
-                          setCashReceived("");
-                        }}
-                        className="h-12 rounded-lg border border-zinc-200 bg-zinc-50 px-3 text-xs font-bold text-zinc-600 hover:bg-zinc-100"
-                        title="Cobro exacto"
-                      >
-                        Exacto
-                      </button>
-                    </div>
-
-                    <button
-                      onClick={handleMarkPaid}
-                      disabled={
-                        processing ||
-                        !isOnline ||
-                        selectedCuenta.estado === "pagada" ||
-                        isPaymentAmountInvalid
-                      }
-                      className="flex h-12 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 font-bold text-white disabled:opacity-50"
-                    >
-                      <Wallet size={18} />
-                      Cobrar
-                    </button>
-                  </div>
-
-                  {/* FC-001: Calculadora de vuelto — solo visible con efectivo */}
-                  {paymentMethod === "cash" && Number(paymentAmount) >= remainingAmount && remainingAmount > 0 && (
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      <div>
-                        <label className="mb-1 block text-xs font-semibold text-zinc-500">
-                          Efectivo recibido del cliente
-                        </label>
-                        <input
-                          value={cashReceived}
-                          onChange={(e) => setCashReceived(e.target.value)}
-                          type="number"
-                          min={Number(paymentAmount)}
-                          placeholder={formatPriceARS(Number(paymentAmount))}
-                          className="h-11 w-full rounded-lg border border-zinc-200 px-4 text-sm"
-                        />
-                      </div>
-                      <div
-                        className={`flex flex-col justify-center rounded-lg border px-4 py-2 ${
-                          Number(cashReceived) >= Number(paymentAmount)
-                            ? "border-emerald-200 bg-emerald-50"
-                            : "border-zinc-200 bg-zinc-50"
-                        }`}
-                      >
-                        <p className="text-xs font-semibold text-zinc-500">Dar de vuelto</p>
-                        <p className={`text-2xl font-bold ${
-                          Number(cashReceived) >= Number(paymentAmount)
-                            ? "text-emerald-700"
-                            : "text-zinc-400"
-                        }`}>
-                          {Number(cashReceived) >= Number(paymentAmount)
-                            ? formatPriceARS(Number(cashReceived) - Number(paymentAmount))
-                            : "—"}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* F-012: Propina */}
-                  {selectedCuenta.estado !== "pagada" && (
-                    <div className="mt-3 flex items-center gap-3">
-                      <label className="text-xs font-semibold text-zinc-500 shrink-0">
-                        Propina (opcional)
-                      </label>
-                      <input
-                        value={tipAmount}
-                        onChange={(e) => setTipAmount(e.target.value)}
-                        type="number"
-                        min={0}
-                        placeholder="$ 0"
-                        className="h-9 w-32 rounded-lg border border-zinc-200 px-3 text-sm"
-                      />
-                      {Number(tipAmount) > 0 && (
-                        <span className="text-xs font-semibold text-emerald-600">
-                          +{formatPriceARS(Number(tipAmount))} propina
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  {selectedCuenta.tip != null && selectedCuenta.tip > 0 && (
-                    <p className="mt-2 text-xs font-semibold text-emerald-600">
-                      Propina registrada: {formatPriceARS(selectedCuenta.tip)}
-                    </p>
-                  )}
-
-                  {isPaymentAmountInvalid && selectedCuenta.estado !== "pagada" && (
-                    <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
-                      Ingresá un monto mayor a cero.
-                    </p>
-                  )}
-                  {!isPaymentAmountInvalid && currentPaymentAmount < remainingAmount && selectedCuenta.estado !== "pagada" && (
-                    <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">
-                      Pago parcial — quedará un saldo de {formatPriceARS(remainingAmount - currentPaymentAmount)}.
-                    </p>
-                  )}
-
-                  {selectedCuenta.payments &&
-                    selectedCuenta.payments.length > 0 && (
-                      <div className="mt-4 space-y-2">
-                        {selectedCuenta.payments.map((payment) => (
-                          <div
-                            key={payment.id}
-                            className="flex items-center justify-between rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3"
-                          >
-                            <span className="font-semibold">
-                              {paymentLabels[payment.method] || payment.method}
-                            </span>
-                            <strong>{formatPriceARS(payment.amount)}</strong>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                  {/* FC-010: Toggle factura inline en el flujo de cobro */}
-                  {selectedCuenta.estado !== "pagada" && !selectedCuenta.invoice?.status && (
-                    <div className="mt-3">
-                      <button
-                        type="button"
-                        onClick={() => setShowInvoiceInline((v) => !v)}
-                        className="flex items-center gap-2 text-sm font-semibold text-zinc-600 hover:text-zinc-900"
-                      >
-                        <span className={`flex h-5 w-5 items-center justify-center rounded border-2 text-xs ${showInvoiceInline ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-300"}`}>
-                          {showInvoiceInline ? "✓" : ""}
-                        </span>
-                        ¿El cliente necesita factura?
-                      </button>
-                      {showInvoiceInline && (
-                        <div className="mt-3 grid gap-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3 sm:grid-cols-2">
-                          <select
-                            value={invoiceType}
-                            onChange={(e) => setInvoiceType(e.target.value as "A" | "B" | "C" | "ticket")}
-                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
-                          >
-                            <option value="ticket">Ticket / comprobante</option>
-                            <option value="A">Factura A</option>
-                            <option value="B">Factura B</option>
-                            <option value="C">Factura C</option>
-                          </select>
-                          <input
-                            value={invoiceCustomerName}
-                            onChange={(e) => setInvoiceCustomerName(e.target.value)}
-                            placeholder="Nombre / Razón social"
-                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
+                      {/* A1 Descuento / Ajuste */}
+                      <div className="rounded-lg border border-white/10">
+                        <button
+                          onClick={() => setShowDiscountAccordion((v) => !v)}
+                          className="flex w-full items-center justify-between px-4 py-3 text-sm font-bold text-zinc-400 hover:text-white"
+                        >
+                          <span>A1 · Descuento / Ajuste</span>
+                          <Plus
+                            size={14}
+                            className={`transition-transform duration-150 ${showDiscountAccordion ? "rotate-45" : ""}`}
                           />
-                          <select
-                            value={invoiceDocumentType}
-                            onChange={(e) => setInvoiceDocumentType(e.target.value as "DNI" | "CUIT" | "CUIL" | "PASSPORT")}
-                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
-                          >
-                            <option value="DNI">DNI</option>
-                            <option value="CUIT">CUIT</option>
-                            <option value="CUIL">CUIL</option>
-                            <option value="PASSPORT">Pasaporte</option>
-                          </select>
-                          <div className="flex flex-col gap-1">
+                        </button>
+                        {showDiscountAccordion && (
+                          <div className="border-t border-white/10 px-4 pb-4 pt-3 space-y-2">
+                            <select
+                              value={discountType}
+                              onChange={(e) => setDiscountType(e.target.value as CashierDiscountType)}
+                              className="h-10 w-full rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white outline-none"
+                            >
+                              <option value="none" className="bg-zinc-900">Sin descuento</option>
+                              <option value="fixed" className="bg-zinc-900">Descuento fijo</option>
+                              <option value="percentage" className="bg-zinc-900">Descuento %</option>
+                            </select>
                             <input
-                              value={invoiceDocumentNumber}
-                              onChange={(e) => setInvoiceDocumentNumber(e.target.value)}
-                              placeholder="Número de documento"
-                              className={`h-10 rounded-lg border px-3 text-sm bg-white ${cuitError ? "border-red-400 ring-1 ring-red-400" : "border-zinc-200"}`}
+                              value={discountValue}
+                              onChange={(e) => setDiscountValue(e.target.value)}
+                              type="number"
+                              min={0}
+                              placeholder="Valor del descuento"
+                              className="h-10 w-full rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-zinc-600 outline-none"
                             />
-                            {cuitError && (
-                              <p className="text-xs text-red-600 font-medium">CUIT inválido — verificá los 11 dígitos</p>
+                            <input
+                              value={discountReason}
+                              onChange={(e) => setDiscountReason(e.target.value)}
+                              placeholder="Motivo obligatorio si hay descuento"
+                              className="h-10 w-full rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-zinc-600 outline-none"
+                            />
+                            <input
+                              value={manualExtraAmount}
+                              onChange={(e) => setManualExtraAmount(e.target.value)}
+                              type="number"
+                              min={0}
+                              placeholder="Extra manual opcional"
+                              className="h-10 w-full rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-zinc-600 outline-none"
+                            />
+                            <input
+                              value={manualExtraReason}
+                              onChange={(e) => setManualExtraReason(e.target.value)}
+                              placeholder="Motivo del extra"
+                              className="h-10 w-full rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-zinc-600 outline-none"
+                            />
+                            <button
+                              onClick={saveAdjustments}
+                              disabled={processing || !isOnline}
+                              className="h-10 w-full rounded-lg bg-white/10 text-sm font-bold text-white hover:bg-white/15 disabled:opacity-50"
+                            >
+                              Guardar ajustes
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* A2 Dividir cuenta */}
+                      <div className="rounded-lg border border-white/10">
+                        <button
+                          onClick={() => setShowSplitBill((v) => !v)}
+                          className="flex w-full items-center justify-between px-4 py-3 text-sm font-bold text-zinc-400 hover:text-white"
+                        >
+                          <span>A2 · Dividir cuenta</span>
+                          <Plus
+                            size={14}
+                            className={`transition-transform duration-150 ${showSplitBill ? "rotate-45" : ""}`}
+                          />
+                        </button>
+                        {showSplitBill && (
+                          <div className="border-t border-white/10 px-4 pb-4 pt-3 space-y-3">
+                            {/* Mode tabs */}
+                            <div className="flex rounded-lg border border-white/15 p-0.5">
+                              {(["partes", "productos"] as const).map((mode) => (
+                                <button
+                                  key={mode}
+                                  onClick={() => { setSplitMode(mode); setSplitProductSelection({}); }}
+                                  className={`flex-1 rounded-md py-1.5 text-xs font-bold transition ${splitMode === mode ? "bg-white text-zinc-950" : "text-zinc-500 hover:text-zinc-200"}`}
+                                >
+                                  {mode === "partes" ? "Por partes iguales" : "Por productos"}
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* Partial payments progress */}
+                            {(selectedCuenta.payments?.length ?? 0) > 0 && (
+                              <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2">
+                                <p className="text-xs font-semibold text-emerald-400">
+                                  Cobrado: {formatPriceARS(paidTotal)} · Saldo: {formatPriceARS(remainingAmount)}
+                                </p>
+                                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-emerald-900">
+                                  <div
+                                    className="h-full rounded-full bg-emerald-400 transition-all"
+                                    style={{ width: `${Math.min(100, (paidTotal / finalTotal) * 100)}%` }}
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Por partes */}
+                            {splitMode === "partes" && (
+                              <div className="space-y-2">
+                                <div className="flex items-center gap-3">
+                                  <label className="text-sm text-zinc-400">Dividir entre</label>
+                                  <input
+                                    type="number"
+                                    min={2}
+                                    max={20}
+                                    value={splitParts}
+                                    onChange={(e) => setSplitParts(e.target.value)}
+                                    className="h-9 w-20 rounded-lg border border-white/15 bg-white/5 px-3 text-center text-sm font-bold text-white outline-none"
+                                  />
+                                  <span className="text-sm text-zinc-400">personas</span>
+                                </div>
+                                {Number(splitParts) >= 2 && remainingAmount > 0 && (
+                                  <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+                                    <p className="text-xs text-zinc-500">Cada persona paga</p>
+                                    <p className="text-2xl font-bold text-white">
+                                      {formatPriceARS(Math.ceil(remainingAmount / Number(splitParts)))}
+                                    </p>
+                                    <p className="mt-1 text-xs text-zinc-600">
+                                      {formatPriceARS(remainingAmount)} ÷ {splitParts} personas
+                                    </p>
+                                    <button
+                                      onClick={() => setPaymentAmount(String(Math.ceil(remainingAmount / Number(splitParts))))}
+                                      className="mt-2 w-full rounded-lg border border-white/15 bg-white/10 py-2 text-xs font-bold text-zinc-200 hover:bg-white/15"
+                                    >
+                                      Cobrar esta parte ({formatPriceARS(Math.ceil(remainingAmount / Number(splitParts)))})
+                                    </button>
+                                  </div>
+                                )}
+                                {remainingAmount <= 0 && (
+                                  <p className="text-xs font-semibold text-emerald-400">Cuenta completamente cobrada.</p>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Por productos */}
+                            {splitMode === "productos" && (
+                              <div className="space-y-2">
+                                <p className="text-xs text-zinc-500">Seleccioná los productos a cobrar en esta parte:</p>
+                                {selectedItems.filter((i) => !i._cancelled).flatMap((item) => {
+                                  const itemKey = `${item._pedidoId}:${item._itemIndex}`;
+                                  const qty = getItemQuantity(item as CashierOrderItem);
+                                  const itemSubtotal = getItemSubtotal(item as CashierOrderItem);
+                                  const unitPrice = qty > 0 ? itemSubtotal / qty : 0;
+                                  const name = getItemName(item as CashierOrderItem);
+                                  return Array.from({ length: qty }, (_, unitIdx) => {
+                                    const key = `${itemKey}:${unitIdx}`;
+                                    const paid = !!splitPaidKeys[key];
+                                    const checked = !paid && !!splitProductSelection[key];
+                                    return (
+                                      <label
+                                        key={key}
+                                        className={`flex items-center justify-between rounded-lg border px-3 py-2 ${paid ? "cursor-default border-white/5 opacity-40" : "cursor-pointer border-white/10 hover:border-white/20"}`}
+                                      >
+                                        <div className="flex items-center gap-2">
+                                          <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            disabled={paid}
+                                            onChange={(e) =>
+                                              !paid && setSplitProductSelection((prev) => ({ ...prev, [key]: e.target.checked }))
+                                            }
+                                            className="h-4 w-4 accent-white disabled:cursor-not-allowed"
+                                          />
+                                          <span className={`text-sm font-semibold ${paid ? "line-through text-zinc-600" : "text-zinc-200"}`}>
+                                            {name}{qty > 1 ? ` (${unitIdx + 1}/${qty})` : ""}
+                                          </span>
+                                          {paid && <span className="text-xs text-zinc-600">Ya cobrado</span>}
+                                        </div>
+                                        <span className={`text-sm font-bold ${paid ? "text-zinc-600" : "text-zinc-300"}`}>
+                                          {formatPriceARS(unitPrice)}
+                                        </span>
+                                      </label>
+                                    );
+                                  });
+                                })}
+                                {splitProductSubtotal > 0 && (
+                                  <div className="rounded-lg border border-white/15 bg-white/5 px-4 py-3">
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-sm font-semibold text-zinc-400">Subtotal selección</span>
+                                      <span className="text-lg font-bold text-white">{formatPriceARS(splitProductSubtotal)}</span>
+                                    </div>
+                                    <button
+                                      onClick={() => {
+                                        const keysBeingPaid = Object.keys(splitProductSelection).filter((k) => splitProductSelection[k]);
+                                        setSplitPaidKeys((prev) => {
+                                          const next = { ...prev };
+                                          for (const k of keysBeingPaid) next[k] = true;
+                                          return next;
+                                        });
+                                        setPaymentAmount(String(Math.round(splitProductSubtotal)));
+                                        setSplitProductSelection({});
+                                      }}
+                                      className="mt-2 w-full rounded-lg bg-white/15 py-2 text-xs font-bold text-white hover:bg-white/20"
+                                    >
+                                      Cobrar esta selección ({formatPriceARS(splitProductSubtotal)})
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             )}
                           </div>
-                          <input
-                            value={invoiceIvaCondition}
-                            onChange={(e) => setInvoiceIvaCondition(e.target.value)}
-                            placeholder="Condición IVA"
-                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
+                        )}
+                      </div>
+
+                      {/* A3 Nota interna */}
+                      <div className="rounded-lg border border-white/10">
+                        <button
+                          onClick={() => setShowNotaAccordion((v) => !v)}
+                          className="flex w-full items-center justify-between px-4 py-3 text-sm font-bold text-zinc-400 hover:text-white"
+                        >
+                          <span>A3 · Nota interna</span>
+                          <Plus
+                            size={14}
+                            className={`transition-transform duration-150 ${showNotaAccordion ? "rotate-45" : ""}`}
                           />
-                          <input
-                            value={invoiceFiscalRegime}
-                            onChange={(e) => setInvoiceFiscalRegime(e.target.value)}
-                            placeholder="Régimen fiscal"
-                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
-                          />
-                          <input
-                            value={invoiceFiscalAddress}
-                            onChange={(e) => setInvoiceFiscalAddress(e.target.value)}
-                            placeholder="Dirección fiscal"
-                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
-                          />
-                          <input
-                            value={invoicePostalCode}
-                            onChange={(e) => setInvoicePostalCode(e.target.value)}
-                            placeholder="Código postal"
-                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
-                          />
-                          <input
-                            value={invoiceProvince}
-                            onChange={(e) => setInvoiceProvince(e.target.value)}
-                            placeholder="Provincia"
-                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
-                          />
-                          <input
-                            value={invoiceCity}
-                            onChange={(e) => setInvoiceCity(e.target.value)}
-                            placeholder="Localidad"
-                            className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm"
-                          />
-                          <div className="col-span-full flex flex-col gap-1">
-                            <label className="text-xs font-bold text-zinc-600">
-                              Email del cliente <span className="text-red-500">*</span>
-                              <span className="ml-1 font-normal text-zinc-400">— se envía la factura electrónica automáticamente</span>
-                            </label>
+                        </button>
+                        {showNotaAccordion && (
+                          <div className="border-t border-white/10 px-4 pb-4 pt-3 space-y-2">
+                            <div className="flex gap-2">
+                              <input
+                                value={internalNote}
+                                onChange={(e) => setInternalNote(e.target.value)}
+                                placeholder="Ej: cliente VIP, no cobrar cubierto..."
+                                className="h-10 flex-1 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-zinc-600 outline-none"
+                              />
+                              <button
+                                onClick={handleSaveInternalNote}
+                                disabled={processing}
+                                className="h-10 rounded-lg border border-white/15 bg-white/10 px-4 text-xs font-bold text-zinc-300 hover:bg-white/15 disabled:opacity-50"
+                              >
+                                Guardar
+                              </button>
+                            </div>
+                            {selectedCuenta.internalNote && (
+                              <p className="text-xs text-zinc-500">
+                                Nota actual: <span className="font-semibold text-zinc-300">{selectedCuenta.internalNote}</span>
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* ── RIGHT: Summary + Payment ─────────── */}
+                  <div className="p-6 space-y-6">
+
+                    {/* Saldo a cobrar */}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="h-1.5 w-1.5 rounded-full bg-lime-400" />
+                        <span className="text-xs font-bold uppercase tracking-[0.2em] text-zinc-400">
+                          Saldo a cobrar
+                        </span>
+                        <span className="ml-auto text-xs font-bold text-zinc-600">ARS</span>
+                      </div>
+                      <p className="mt-2 text-[3.5rem] font-bold leading-none tracking-tight text-white">
+                        {formatPriceARS(remainingAmount)}
+                      </p>
+                      <div className="mt-4 space-y-2.5">
+                        <div className="flex justify-between text-sm">
+                          <span className="text-zinc-500">Subtotal</span>
+                          <span className="font-semibold text-zinc-300">{formatPriceARS(realSubtotal)}</span>
+                        </div>
+                        {discountAmount > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-zinc-500">Descuento</span>
+                            <span className="font-semibold text-red-400">−{formatPriceARS(discountAmount)}</span>
+                          </div>
+                        )}
+                        {twoForOneDiscount > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-zinc-500">2×1</span>
+                            <span className="font-semibold text-red-400">−{formatPriceARS(twoForOneDiscount)}</span>
+                          </div>
+                        )}
+                        {extraAmount > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-zinc-500">Extras</span>
+                            <span className="font-semibold text-zinc-300">+{formatPriceARS(extraAmount)}</span>
+                          </div>
+                        )}
+                        {paidTotal > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-zinc-500">Pagado</span>
+                            <span className="font-semibold text-emerald-400">−{formatPriceARS(paidTotal)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between border-t border-white/10 pt-2.5">
+                          <span className="text-xs font-bold uppercase tracking-wide text-zinc-500">Total final</span>
+                          <span className="font-bold text-white">{formatPriceARS(finalTotal)}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 03 Registrar pago */}
+                    <div>
+                      <p className="mb-3 text-xs font-bold uppercase tracking-[0.2em] text-zinc-500">
+                        03 Registrar pago
+                      </p>
+
+                      {/* Method buttons */}
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {(
+                          [
+                            ["cash", "Efectivo"],
+                            ["debit", "Débito"],
+                            ["credit", "Crédito"],
+                            ["transfer", "Transfer."],
+                            ["mercado_pago", "M.Pago"],
+                            ["mixed", "Mixto"],
+                          ] as [CashierPaymentMethod, string][]
+                        ).map(([m, label]) => (
+                          <button
+                            key={m}
+                            onClick={() => { setPaymentMethod(m); setCashReceived(""); }}
+                            className={`rounded-lg border py-2.5 text-xs font-bold transition ${
+                              paymentMethod === m
+                                ? "border-white/40 bg-white text-zinc-950"
+                                : "border-white/10 bg-white/5 text-zinc-400 hover:border-white/20 hover:text-zinc-200"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Amount + quick buttons */}
+                      <div className="mt-3 space-y-2">
+                        <input
+                          value={paymentAmount}
+                          onChange={(e) => setPaymentAmount(e.target.value)}
+                          type="number"
+                          min={0.01}
+                          placeholder="$ 0,00"
+                          className={`h-12 w-full rounded-lg border bg-white/5 px-4 text-lg font-bold text-white placeholder-zinc-600 outline-none focus:ring-1 focus:ring-white/20 ${
+                            isPaymentAmountInvalid ? "border-red-500/50" : "border-white/15"
+                          }`}
+                        />
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {[2000, 5000, 10000].map((v) => (
+                            <button
+                              key={v}
+                              onClick={() => setPaymentAmount(String((Number(paymentAmount) || 0) + v))}
+                              className="rounded-lg border border-white/10 bg-white/5 py-2 text-xs font-bold text-zinc-400 hover:border-white/20 hover:text-zinc-200"
+                            >
+                              +{v >= 1000 ? `${v / 1000}k` : v}
+                            </button>
+                          ))}
+                          <button
+                            onClick={() => { setPaymentAmount(String(remainingAmount)); setCashReceived(""); }}
+                            className="rounded-lg border border-white/20 bg-white/10 py-2 text-xs font-bold text-zinc-200 hover:bg-white/15"
+                          >
+                            Exacto
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Cash change */}
+                      {paymentMethod === "cash" && Number(paymentAmount) >= remainingAmount && remainingAmount > 0 && (
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="mb-1 block text-xs font-semibold text-zinc-500">Efectivo recibido</label>
                             <input
-                              value={invoiceEmail}
-                              onChange={(e) => setInvoiceEmail(e.target.value)}
-                              type="email"
-                              placeholder="cliente@email.com"
-                              className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm"
+                              value={cashReceived}
+                              onChange={(e) => setCashReceived(e.target.value)}
+                              type="number"
+                              min={Number(paymentAmount)}
+                              placeholder={formatPriceARS(Number(paymentAmount))}
+                              className="h-10 w-full rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-zinc-600 outline-none"
                             />
                           </div>
-                          <button
-                            onClick={handleRequestInvoice}
-                            disabled={processing || !isOnline || !!cuitError}
-                            className="col-span-full h-10 rounded-lg bg-zinc-900 text-sm font-bold text-white disabled:opacity-50"
+                          <div
+                            className={`flex flex-col justify-center rounded-lg border px-3 py-1 ${
+                              Number(cashReceived) >= Number(paymentAmount)
+                                ? "border-emerald-500/30 bg-emerald-500/10"
+                                : "border-white/10 bg-white/5"
+                            }`}
                           >
-                            Guardar solicitud de factura
-                          </button>
-                          {selectedCuenta.invoice?.status === "issued" && selectedCuenta.invoice.cae ? (
-                            <div className="col-span-full rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                              <p className="text-xs font-bold text-emerald-700 uppercase tracking-wide">Factura emitida ✓</p>
-                              <p className="mt-1 font-mono text-xs text-emerald-900">
-                                {selectedCuenta.invoice.invoiceType} N° {String(selectedCuenta.invoice.invoiceNumber).padStart(8, "0")}
-                              </p>
-                              <p className="mt-0.5 font-mono text-xs text-emerald-700">CAE: {selectedCuenta.invoice.cae}</p>
-                              <p className="mt-0.5 text-xs text-emerald-600">Vence: {selectedCuenta.invoice.caeExpiry}</p>
-                            </div>
-                          ) : selectedCuenta.invoice?.status === "requested" ? (
-                            <p className="col-span-full text-sm font-semibold text-amber-600">Solicitud de factura pendiente</p>
-                          ) : null}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {/* FC-005: Reabrir cuenta pagada */}
-                  {selectedCuenta.estado === "pagada" && (
-                    <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
-                      {!showReopenModal ? (
-                        <button
-                          onClick={() => setShowReopenModal(true)}
-                          className="text-sm font-semibold text-amber-700 hover:underline"
-                        >
-                          ¿Error de cobro? Reabrir cuenta
-                        </button>
-                      ) : (
-                        <div className="space-y-2">
-                          <p className="text-xs font-semibold text-amber-800">
-                            Motivo de reapertura (obligatorio)
-                          </p>
-                          <input
-                            value={reopenReason}
-                            onChange={(e) => setReopenReason(e.target.value)}
-                            placeholder="Ej: error en método de pago, monto incorrecto..."
-                            className="h-10 w-full rounded-lg border border-amber-300 bg-white px-3 text-sm"
-                          />
-                          <div className="flex gap-2">
-                            <button
-                              onClick={handleReopenBill}
-                              disabled={processing}
-                              className="rounded-lg bg-amber-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
-                            >
-                              Reabrir
-                            </button>
-                            <button
-                              onClick={() => { setShowReopenModal(false); setReopenReason(""); }}
-                              className="rounded-lg border border-amber-300 px-4 py-2 text-xs font-semibold text-amber-700"
-                            >
-                              Cancelar
-                            </button>
+                            <p className="text-xs text-zinc-500">Dar de vuelto</p>
+                            <p className={`text-xl font-bold ${Number(cashReceived) >= Number(paymentAmount) ? "text-emerald-400" : "text-zinc-600"}`}>
+                              {Number(cashReceived) >= Number(paymentAmount)
+                                ? formatPriceARS(Number(cashReceived) - Number(paymentAmount))
+                                : "—"}
+                            </p>
                           </div>
                         </div>
                       )}
-                    </div>
-                  )}
-                </div>
 
-              </div>
+                      {/* Propina */}
+                      {selectedCuenta.estado !== "pagada" && (
+                        <div className="mt-3 flex items-center gap-3">
+                          <label className="text-xs text-zinc-500 shrink-0">Propina (opcional)</label>
+                          <input
+                            value={tipAmount}
+                            onChange={(e) => setTipAmount(e.target.value)}
+                            type="number"
+                            min={0}
+                            placeholder="$ 0"
+                            className="h-9 w-28 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-zinc-600 outline-none"
+                          />
+                          {Number(tipAmount) > 0 && (
+                            <span className="text-xs font-semibold text-emerald-400">
+                              +{formatPriceARS(Number(tipAmount))}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {selectedCuenta.tip != null && selectedCuenta.tip > 0 && (
+                        <p className="mt-1 text-xs font-semibold text-emerald-500">
+                          Propina registrada: {formatPriceARS(selectedCuenta.tip)}
+                        </p>
+                      )}
+
+                      {/* Payments already made */}
+                      {selectedCuenta.payments && selectedCuenta.payments.length > 0 && (
+                        <div className="mt-3 space-y-1.5">
+                          {selectedCuenta.payments.map((payment) => (
+                            <div
+                              key={payment.id}
+                              className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2"
+                            >
+                              <span className="text-sm font-semibold text-zinc-400">
+                                {paymentLabels[payment.method] || payment.method}
+                              </span>
+                              <span className="font-bold text-zinc-200">{formatPriceARS(payment.amount)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Warnings */}
+                      {isPaymentAmountInvalid && selectedCuenta.estado !== "pagada" && (
+                        <p className="mt-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-400">
+                          Ingresá un monto mayor a cero.
+                        </p>
+                      )}
+                      {!isPaymentAmountInvalid && currentPaymentAmount < remainingAmount && selectedCuenta.estado !== "pagada" && (
+                        <p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-400">
+                          Pago parcial — quedará un saldo de {formatPriceARS(remainingAmount - currentPaymentAmount)}.
+                        </p>
+                      )}
+
+                      {/* COBRAR button */}
+                      <button
+                        onClick={handleMarkPaid}
+                        disabled={
+                          processing ||
+                          !isOnline ||
+                          selectedCuenta.estado === "pagada" ||
+                          isPaymentAmountInvalid
+                        }
+                        className="mt-4 flex h-14 w-full items-center justify-center gap-3 rounded-xl bg-[#b5f23d] font-bold text-zinc-950 text-lg transition hover:bg-[#c8ff50] disabled:opacity-40"
+                      >
+                        <Wallet size={20} />
+                        COBRAR AHORA · {formatPriceARS(Number(paymentAmount) || remainingAmount)}
+                      </button>
+
+                      {/* Invoice */}
+                      {selectedCuenta.estado !== "pagada" && !selectedCuenta.invoice?.status && (
+                        <div className="mt-4">
+                          <button
+                            type="button"
+                            onClick={() => setShowInvoiceInline((v) => !v)}
+                            className="flex items-center gap-2 text-sm font-semibold text-zinc-500 hover:text-zinc-300"
+                          >
+                            <span
+                              className={`flex h-4 w-4 items-center justify-center rounded border text-xs ${
+                                showInvoiceInline
+                                  ? "border-zinc-400 bg-zinc-400 text-zinc-950"
+                                  : "border-zinc-600"
+                              }`}
+                            >
+                              {showInvoiceInline ? "✓" : ""}
+                            </span>
+                            ¿El cliente necesita factura?
+                          </button>
+                          {showInvoiceInline && (
+                            <div className="mt-3 grid gap-2 rounded-lg border border-white/10 bg-white/5 p-3 sm:grid-cols-2">
+                              <select
+                                value={invoiceType}
+                                onChange={(e) => setInvoiceType(e.target.value as "A" | "B" | "C" | "ticket")}
+                                className="h-10 rounded-lg border border-white/15 bg-zinc-900 px-3 text-sm text-white"
+                              >
+                                <option value="ticket">Ticket / comprobante</option>
+                                <option value="A">Factura A</option>
+                                <option value="B">Factura B</option>
+                                <option value="C">Factura C</option>
+                              </select>
+                              <input
+                                value={invoiceCustomerName}
+                                onChange={(e) => setInvoiceCustomerName(e.target.value)}
+                                placeholder="Nombre / Razón social"
+                                className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-zinc-600 outline-none"
+                              />
+                              <select
+                                value={invoiceDocumentType}
+                                onChange={(e) => setInvoiceDocumentType(e.target.value as "DNI" | "CUIT" | "CUIL" | "PASSPORT")}
+                                className="h-10 rounded-lg border border-white/15 bg-zinc-900 px-3 text-sm text-white"
+                              >
+                                <option value="DNI">DNI</option>
+                                <option value="CUIT">CUIT</option>
+                                <option value="CUIL">CUIL</option>
+                                <option value="PASSPORT">Pasaporte</option>
+                              </select>
+                              <div className="flex flex-col gap-1">
+                                <input
+                                  value={invoiceDocumentNumber}
+                                  onChange={(e) => setInvoiceDocumentNumber(e.target.value)}
+                                  placeholder="Número de documento"
+                                  className={`h-10 rounded-lg border px-3 text-sm text-white bg-white/5 placeholder-zinc-600 outline-none ${cuitError ? "border-red-500/60" : "border-white/15"}`}
+                                />
+                                {cuitError && (
+                                  <p className="text-xs text-red-400 font-medium">CUIT inválido — verificá los 11 dígitos</p>
+                                )}
+                              </div>
+                              <input value={invoiceIvaCondition} onChange={(e) => setInvoiceIvaCondition(e.target.value)} placeholder="Condición IVA" className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-zinc-600 outline-none" />
+                              <input value={invoiceFiscalRegime} onChange={(e) => setInvoiceFiscalRegime(e.target.value)} placeholder="Régimen fiscal" className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-zinc-600 outline-none" />
+                              <input value={invoiceFiscalAddress} onChange={(e) => setInvoiceFiscalAddress(e.target.value)} placeholder="Dirección fiscal" className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-zinc-600 outline-none" />
+                              <input value={invoicePostalCode} onChange={(e) => setInvoicePostalCode(e.target.value)} placeholder="Código postal" className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-zinc-600 outline-none" />
+                              <input value={invoiceProvince} onChange={(e) => setInvoiceProvince(e.target.value)} placeholder="Provincia" className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-zinc-600 outline-none" />
+                              <input value={invoiceCity} onChange={(e) => setInvoiceCity(e.target.value)} placeholder="Localidad" className="h-10 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-zinc-600 outline-none" />
+                              <div className="col-span-full flex flex-col gap-1">
+                                <label className="text-xs font-bold text-zinc-400">
+                                  Email del cliente <span className="text-red-400">*</span>
+                                  <span className="ml-1 font-normal text-zinc-600">— se envía la factura electrónica automáticamente</span>
+                                </label>
+                                <input
+                                  value={invoiceEmail}
+                                  onChange={(e) => setInvoiceEmail(e.target.value)}
+                                  type="email"
+                                  placeholder="cliente@email.com"
+                                  className="h-10 w-full rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white placeholder-zinc-600 outline-none"
+                                />
+                              </div>
+                              <button
+                                onClick={handleRequestInvoice}
+                                disabled={processing || !isOnline || !!cuitError}
+                                className="col-span-full h-10 rounded-lg bg-white/10 text-sm font-bold text-white hover:bg-white/15 disabled:opacity-50"
+                              >
+                                Guardar solicitud de factura
+                              </button>
+                              {selectedCuenta.invoice?.status === "issued" && selectedCuenta.invoice.cae ? (
+                                <div className="col-span-full rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
+                                  <p className="text-xs font-bold text-emerald-400 uppercase tracking-wide">Factura emitida ✓</p>
+                                  <p className="mt-1 font-mono text-xs text-emerald-300">
+                                    {selectedCuenta.invoice.invoiceType} N° {String(selectedCuenta.invoice.invoiceNumber).padStart(8, "0")}
+                                  </p>
+                                  <p className="mt-0.5 font-mono text-xs text-emerald-400">CAE: {selectedCuenta.invoice.cae}</p>
+                                  <p className="mt-0.5 text-xs text-emerald-500">Vence: {selectedCuenta.invoice.caeExpiry}</p>
+                                </div>
+                              ) : selectedCuenta.invoice?.status === "requested" ? (
+                                <p className="col-span-full text-sm font-semibold text-amber-400">Solicitud de factura pendiente</p>
+                              ) : null}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Reabrir cuenta */}
+                      {selectedCuenta.estado === "pagada" && (
+                        <div className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/5 p-3">
+                          {!showReopenModal ? (
+                            <button
+                              onClick={() => setShowReopenModal(true)}
+                              className="text-sm font-semibold text-amber-400 hover:underline"
+                            >
+                              ¿Error de cobro? Reabrir cuenta
+                            </button>
+                          ) : (
+                            <div className="space-y-2">
+                              <p className="text-xs font-semibold text-amber-400">Motivo de reapertura (obligatorio)</p>
+                              <input
+                                value={reopenReason}
+                                onChange={(e) => setReopenReason(e.target.value)}
+                                placeholder="Ej: error en método de pago, monto incorrecto..."
+                                className="h-9 w-full rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 text-sm text-amber-200 placeholder-amber-700 outline-none"
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={handleReopenBill}
+                                  disabled={processing}
+                                  className="rounded-lg bg-amber-500 px-4 py-1.5 text-xs font-bold text-zinc-950 disabled:opacity-50"
+                                >
+                                  Reabrir
+                                </button>
+                                <button
+                                  onClick={() => { setShowReopenModal(false); setReopenReason(""); }}
+                                  className="rounded-lg border border-amber-500/30 px-4 py-1.5 text-xs font-semibold text-amber-400"
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
           </section>
         </div>
       </div>
     </div>
+
+    {/* Add product modal */}
+    {showAddProductModal && selectedCuenta && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+        <div className="w-full max-w-sm rounded-xl border border-white/15 bg-[#1a1a1a] p-6 shadow-2xl">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-lg font-bold text-white">Agregar producto</h2>
+            <button
+              onClick={() => { setShowAddProductModal(false); setAddSelectedMenuId(""); setAddQuantity("1"); }}
+              className="flex h-8 w-8 items-center justify-center rounded-lg border border-white/15 text-zinc-400 hover:text-white"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <div className="space-y-3">
+            <select
+              value={addSelectedMenuId}
+              onChange={(e) => setAddSelectedMenuId(e.target.value)}
+              className="h-12 w-full rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white outline-none"
+            >
+              <option value="" className="bg-zinc-900">Seleccionar producto</option>
+              {menuItems.map((item) => (
+                <option key={item.id} value={item.id} className="bg-zinc-900">
+                  {item.name} · {formatPriceARS(item.price)}
+                </option>
+              ))}
+            </select>
+            <div className="flex items-center gap-3">
+              <label className="text-sm text-zinc-400 shrink-0">Cantidad</label>
+              <input
+                value={addQuantity}
+                onChange={(e) => setAddQuantity(e.target.value)}
+                type="number"
+                min={1}
+                className="h-10 w-24 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white outline-none"
+              />
+            </div>
+            <button
+              onClick={async () => {
+                await addItemToSelectedBill();
+                setShowAddProductModal(false);
+              }}
+              disabled={processing || !isOnline}
+              className="h-12 w-full rounded-xl bg-[#b5f23d] font-bold text-zinc-950 transition hover:bg-[#c8ff50] disabled:opacity-50"
+            >
+              Confirmar
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* Opening cash dialog */}
     {showOpeningDialog && (
