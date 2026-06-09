@@ -195,6 +195,71 @@ export const deleteStockItem = async (
   await batch.commit();
 };
 
+export const updateStockItem = async (
+  restaurantId: string,
+  item: StockItem,
+  changes: { costPerUnit?: number | null; supplier?: string; unit?: StockUnit },
+  actor: AuditActor
+) => {
+  const stockDoc = doc(db, "restaurants", restaurantId, "stock", item.id);
+  const batch = writeBatch(db);
+  const updateData: Record<string, unknown> = { updatedAt: serverTimestamp() };
+  if (changes.supplier !== undefined) updateData.supplier = changes.supplier;
+  if (changes.unit !== undefined) updateData.unit = changes.unit;
+  if (changes.costPerUnit !== undefined) {
+    updateData.costPerUnit = changes.costPerUnit != null ? Number(changes.costPerUnit) : null;
+  }
+  batch.update(stockDoc, updateData);
+  writeAuditLog(batch, {
+    restaurantId,
+    action: "stock_item_actualizado",
+    ...actor,
+    entityType: "stock_item",
+    entityId: item.id,
+    description: `Se actualizó insumo ${item.name}`,
+    changes: {
+      before: { supplier: item.supplier ?? "", unit: item.unit, costPerUnit: item.costPerUnit ?? null },
+      after: changes,
+    },
+  });
+  await batch.commit();
+};
+
+export const bulkUpdateSupplierCost = async (
+  restaurantId: string,
+  supplier: string,
+  percentageIncrease: number,
+  items: StockItem[],
+  actor: AuditActor
+): Promise<number> => {
+  const affected = items.filter(
+    (i) =>
+      (i.supplier ?? "").toLowerCase() === supplier.toLowerCase() &&
+      (i.costPerUnit ?? 0) > 0
+  );
+  if (affected.length === 0) return 0;
+  const batch = writeBatch(db);
+  for (const item of affected) {
+    const newCost = (item.costPerUnit ?? 0) * (1 + percentageIncrease / 100);
+    const stockDoc = doc(db, "restaurants", restaurantId, "stock", item.id);
+    batch.update(stockDoc, { costPerUnit: newCost, updatedAt: serverTimestamp() });
+    writeAuditLog(batch, {
+      restaurantId,
+      action: "stock_item_actualizado",
+      ...actor,
+      entityType: "stock_item",
+      entityId: item.id,
+      description: `Aumento masivo ${percentageIncrease}% proveedor "${supplier}" — ${item.name}`,
+      changes: {
+        before: { costPerUnit: item.costPerUnit ?? 0 },
+        after: { costPerUnit: newCost },
+      },
+    });
+  }
+  await batch.commit();
+  return affected.length;
+};
+
 export const toggleStockItem = async (
   restaurantId: string,
   item: StockItem,
