@@ -1729,14 +1729,10 @@ window.onload = () => { window.print(); };
 
   if (!restaurantId) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-100 p-6">
-        <div className="rounded-xl border border-red-200 bg-white p-6 text-center shadow-sm">
-          <h1 className="text-lg font-bold text-zinc-950">
-            Falta restaurante activo
-          </h1>
-          <p className="mt-2 text-sm text-zinc-600">
-            Entrá con una URL que tenga restaurantId.
-          </p>
+      <div className="flex min-h-screen items-center justify-center bg-[#0d0d0d] p-6">
+        <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-6 text-center">
+          <h1 className="text-lg font-bold text-white">Falta restaurante activo</h1>
+          <p className="mt-2 text-sm text-zinc-400">Entrá con una URL que tenga restaurantId.</p>
         </div>
       </div>
     );
@@ -1744,67 +1740,63 @@ window.onload = () => { window.print(); };
 
   return (
     <>
-    <div className="min-h-screen bg-zinc-100">
+    <div className="min-h-screen bg-[#0d0d0d]">
       <div className="mx-auto max-w-7xl px-4 py-6">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.25em] text-zinc-500">
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-zinc-600">
               WANT POS
             </p>
-            <h1 className="mt-1 text-4xl font-bold tracking-tight text-zinc-950">
+            <h1 className="mt-1 text-4xl font-bold tracking-tight text-white">
               Caja
             </h1>
             <p className="mt-2 text-sm text-zinc-500">
               Cuentas, cobros, descuentos, carga manual e impresión.
             </p>
             <div
-              className={`mt-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-bold border ${
+              className={`mt-3 inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-bold ${
                 isOnline
-                  ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                  : "bg-red-50 text-red-700 border-red-200"
+                  ? "border-lime-500/30 bg-lime-500/10 text-lime-400"
+                  : "border-red-500/30 bg-red-500/10 text-red-400"
               }`}
             >
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  isOnline ? "bg-emerald-500" : "bg-red-500"
-                }`}
-              />
+              <span className={`h-1.5 w-1.5 rounded-full ${isOnline ? "bg-lime-400" : "bg-red-400"}`} />
               {isOnline ? "Online" : "Offline"}
             </div>
           </div>
 
           <div className="flex flex-col items-stretch gap-3 sm:items-end">
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              <div className="rounded-xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
+              <div className="rounded-xl border border-white/10 bg-white/5 px-5 py-4">
                 <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">
                   Pendientes
                 </p>
-                <p className="mt-1 text-3xl font-bold text-zinc-950">
+                <p className="mt-1 text-3xl font-bold text-white">
                   {pendingBills.length}
                 </p>
               </div>
 
-              <div className="rounded-xl border border-zinc-200 bg-white px-5 py-4 shadow-sm">
+              <div className="rounded-xl border border-white/10 bg-white/5 px-5 py-4">
                 <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">
                   Sesiones activas
                 </p>
-                <p className="mt-1 text-3xl font-bold text-zinc-950">
+                <p className="mt-1 text-3xl font-bold text-white">
                   {activeBills.length}
                 </p>
               </div>
 
               <Link
                 to={invoiceRequestsPath}
-                className="col-span-2 flex rounded-xl border border-zinc-950 bg-zinc-950 px-5 py-4 text-white shadow-sm transition hover:bg-zinc-800 sm:col-span-1"
+                className="col-span-2 flex rounded-xl border border-white/10 bg-white/5 px-5 py-4 transition hover:bg-white/10 sm:col-span-1"
               >
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-wide text-white/70">
+                  <p className="text-xs font-bold uppercase tracking-wide text-zinc-500">
                     Facturas
                   </p>
-                  <p className="mt-1 text-3xl font-bold">
+                  <p className="mt-1 text-3xl font-bold text-white">
                     {invoiceRequestsCount}
                   </p>
-                  <p className="mt-1 text-xs font-bold text-white/70">
+                  <p className="mt-1 text-xs font-bold text-zinc-500">
                     Ver solicitudes
                   </p>
                 </div>
@@ -1814,24 +1806,23 @@ window.onload = () => { window.print(); };
             <div className="flex gap-2">
               <Link
                 to={waitlistPath}
-                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-5 font-bold text-zinc-800 shadow-sm transition hover:bg-zinc-50 sm:flex-none"
+                className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 text-sm font-bold text-zinc-300 transition hover:border-white/20 hover:text-white sm:flex-none"
               >
-                <Users size={17} />
+                <Users size={15} />
                 Lista de espera
               </Link>
 
               <button
                 onClick={() => setShowCierreModal(true)}
-                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-lg border border-zinc-300 bg-white px-5 font-bold text-zinc-800 shadow-sm transition hover:bg-zinc-50 sm:flex-none"
+                className="flex h-10 flex-1 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 text-sm font-bold text-zinc-300 transition hover:border-white/20 hover:text-white sm:flex-none"
               >
-                <BarChart3 size={17} />
+                <BarChart3 size={15} />
                 Cierre de caja
               </button>
 
-              {/* FC-009: Toggle modo compacto */}
               <button
                 onClick={() => setCompactMode((v) => !v)}
-                className={`hidden md:flex h-12 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-bold shadow-sm transition ${compactMode ? "border-zinc-900 bg-zinc-900 text-white" : "border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-50"}`}
+                className={`hidden md:flex h-10 items-center justify-center gap-1.5 rounded-lg border px-3 text-xs font-bold transition ${compactMode ? "border-lime-500/40 bg-lime-500/15 text-lime-400" : "border-white/10 bg-white/5 text-zinc-500 hover:text-zinc-300"}`}
                 title="Vista compacta"
               >
                 Compacto
@@ -1840,60 +1831,58 @@ window.onload = () => { window.print(); };
               <button
                 onClick={handleLogout}
                 disabled={loggingOut}
-                className="flex h-12 items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-white px-4 font-bold text-zinc-500 shadow-sm transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                className="flex h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 text-sm font-bold text-zinc-500 transition hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
               >
-                <LogOut size={16} />
+                <LogOut size={15} />
                 {loggingOut ? "Saliendo..." : "Cerrar sesión"}
               </button>
             </div>
           </div>
         </div>
         {!isOnline && (
-          <div className="mb-5 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-bold text-red-700">
+          <div className="mb-5 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-bold text-red-400">
             Sin conexión. Estás viendo datos guardados localmente. Los cobros,
             facturas y modificaciones están deshabilitados hasta reconectar.
           </div>
         )}
         {error && (
-          <div className="mb-5 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+          <div className="mb-5 rounded-lg border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-400">
             {error}
           </div>
         )}
 
         <div className={`grid gap-6 lg:grid-cols-[390px_1fr] ${compactMode ? "text-sm [&_h3]:text-sm [&_.rounded-xl]:rounded-lg [&_p-4]:p-3 [&_p-6]:p-4" : ""}`}>
           <div className="space-y-6">
-            <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <section className="rounded-xl border border-white/10 bg-[#1a1a1a] p-4">
               <div className="mb-4 flex items-center gap-2">
-                <Receipt size={20} />
-                <h2 className="text-lg font-bold text-zinc-950">
+                <Receipt size={18} className="text-zinc-500" />
+                <h2 className="text-sm font-bold uppercase tracking-[0.15em] text-zinc-400">
                   Cuentas activas
                 </h2>
               </div>
 
               {loading ? (
-                <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-500">
+                <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm text-zinc-500">
                   Cargando cuentas...
                 </div>
               ) : activeBills.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-6 text-center">
-                  <AlertTriangle className="mx-auto mb-3 text-zinc-400" />
-                  <p className="font-semibold text-zinc-700">
-                    No hay cuentas activas
-                  </p>
+                <div className="rounded-lg border border-dashed border-white/10 p-6 text-center">
+                  <AlertTriangle className="mx-auto mb-3 text-zinc-600" />
+                  <p className="font-semibold text-zinc-500">No hay cuentas activas</p>
                 </div>
               ) : (
                 <div>
                   {stalePendingBills.length > 0 && (
-                    <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-                      <AlertTriangle size={15} className="shrink-0 text-amber-600" />
-                      <span className="text-sm font-semibold text-amber-800">
+                    <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2">
+                      <AlertTriangle size={14} className="shrink-0 text-amber-400" />
+                      <span className="text-xs font-semibold text-amber-400">
                         {stalePendingBills.length === 1
                           ? `Mesa ${stalePendingBills[0].mesa} lleva más de ${BILL_WARN_MINUTES} min abierta`
                           : `${stalePendingBills.length} cuentas llevan más de ${BILL_WARN_MINUTES} min sin cobrar`}
                       </span>
                     </div>
                   )}
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {activeBills.map((cuenta) => {
                     const selected = selectedCuenta?.id === cuenta.id;
                     const ageMins = getBillAgeMinutes(cuenta);
@@ -1904,40 +1893,32 @@ window.onload = () => { window.print(); };
                       <div key={cuenta.id} className="relative">
                         <button
                           onClick={() => setSelectedCuentaId(cuenta.id)}
-                          className={`w-full rounded-xl border py-4 pl-4 pr-14 text-left transition ${
+                          className={`w-full rounded-xl border py-4 pl-4 pr-12 text-left transition ${
                             selected
-                              ? "border-zinc-950 bg-zinc-950 text-white"
+                              ? "border-lime-500/40 bg-white/10 text-white"
                               : isDangerBill
-                              ? "border-red-300 bg-red-50 hover:border-red-400"
+                              ? "border-red-500/30 bg-red-500/10 hover:border-red-500/50"
                               : isStale
-                              ? "border-amber-300 bg-amber-50 hover:border-amber-400"
-                              : "border-zinc-200 bg-white hover:border-zinc-300"
+                              ? "border-amber-500/30 bg-amber-500/10 hover:border-amber-500/50"
+                              : "border-white/10 bg-white/5 hover:border-white/20"
                           }`}
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <p className={`text-xs font-bold uppercase tracking-wide ${selected ? "text-white/70" : "text-zinc-500"}`}>
-                                Mesa
-                              </p>
-                              <h3 className="text-3xl font-bold">{cuenta.mesa}</h3>
-                              <p className={`mt-1 text-xs font-semibold ${selected ? "text-white/70" : "text-zinc-500"}`}>
-                                {cuenta.estado}
-                              </p>
+                              <p className="text-xs font-bold uppercase tracking-wide text-zinc-600">Mesa</p>
+                              <h3 className="text-3xl font-bold text-white">{cuenta.mesa}</h3>
+                              <p className="mt-1 text-xs font-semibold text-zinc-500">{cuenta.estado}</p>
                             </div>
                             <div className="text-right">
-                              <p className={`text-xs font-bold uppercase tracking-wide ${selected ? "text-white/70" : "text-zinc-500"}`}>
-                                Total
-                              </p>
-                              <p className="text-xl font-bold">{formatPriceARS(cuenta.total)}</p>
+                              <p className="text-xs font-bold uppercase tracking-wide text-zinc-600">Total</p>
+                              <p className="text-xl font-bold text-zinc-200">{formatPriceARS(cuenta.total)}</p>
                               {ageMins > 0 && (
                                 <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-bold ${
-                                  selected
-                                    ? "bg-white/20 text-white"
-                                    : isDangerBill
-                                    ? "bg-red-100 text-red-700"
+                                  isDangerBill
+                                    ? "bg-red-500/15 text-red-400"
                                     : isStale
-                                    ? "bg-amber-100 text-amber-700"
-                                    : "bg-zinc-100 text-zinc-500"
+                                    ? "bg-amber-500/15 text-amber-400"
+                                    : "bg-white/10 text-zinc-500"
                                 }`}>
                                   {ageMins}m
                                 </span>
@@ -1945,7 +1926,6 @@ window.onload = () => { window.print(); };
                             </div>
                           </div>
                         </button>
-                        {/* FC-007: Imprimir ticket sin abrir el detalle */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1985,7 +1965,7 @@ window.onload = () => { window.print(); };
                               restaurantName: restaurant?.name || restaurantId,
                             });
                           }}
-                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-lg border border-zinc-200 bg-white text-zinc-500 shadow-sm hover:bg-zinc-50"
+                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-zinc-500 hover:border-white/20 hover:text-zinc-300"
                           title="Imprimir ticket"
                         >
                           <Printer size={13} />
@@ -1998,33 +1978,33 @@ window.onload = () => { window.print(); };
               )}
             </section>
 
-            <section className="rounded-xl border border-zinc-200 bg-white p-4 shadow-sm">
+            <section className="rounded-xl border border-white/10 bg-[#1a1a1a] p-4">
               <div className="mb-4 flex items-center gap-2">
-                <Plus size={20} />
-                <h2 className="text-lg font-bold text-zinc-950">
+                <Plus size={16} className="text-zinc-500" />
+                <h2 className="text-sm font-bold uppercase tracking-[0.15em] text-zinc-400">
                   Crear cuenta manual
                 </h2>
               </div>
 
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <input
                   value={manualMesa}
                   onChange={(e) => setManualMesa(e.target.value)}
                   type="number"
                   min={1}
                   placeholder="Número de mesa"
-                  className="h-12 w-full rounded-lg border border-zinc-200 px-4 outline-none focus:ring-2 focus:ring-black/10"
+                  className="h-11 w-full rounded-lg border border-white/15 bg-white/5 px-4 text-sm text-white placeholder-zinc-600 outline-none focus:ring-1 focus:ring-white/20"
                 />
 
-                <div className="grid grid-cols-[1fr_90px] gap-2">
+                <div className="grid grid-cols-[1fr_80px] gap-2">
                   <select
                     value={manualSelectedMenuId}
                     onChange={(e) => setManualSelectedMenuId(e.target.value)}
-                    className="h-12 rounded-lg border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+                    className="h-11 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white outline-none"
                   >
-                    <option value="">Seleccionar producto</option>
+                    <option value="" className="bg-zinc-900">Seleccionar producto</option>
                     {menuItems.map((item) => (
-                      <option key={item.id} value={item.id}>
+                      <option key={item.id} value={item.id} className="bg-zinc-900">
                         {item.name} · {formatPriceARS(item.price)}
                       </option>
                     ))}
@@ -2035,45 +2015,37 @@ window.onload = () => { window.print(); };
                     onChange={(e) => setManualQuantity(e.target.value)}
                     type="number"
                     min={1}
-                    className="h-12 rounded-lg border border-zinc-200 px-3 outline-none focus:ring-2 focus:ring-black/10"
+                    className="h-11 rounded-lg border border-white/15 bg-white/5 px-3 text-sm text-white outline-none"
                   />
                 </div>
 
                 <button
                   onClick={addDraftManualItem}
-                  className="h-11 w-full rounded-lg border border-zinc-200 bg-zinc-50 font-bold text-zinc-800"
+                  className="h-10 w-full rounded-lg border border-white/15 bg-white/5 text-sm font-bold text-zinc-300 hover:bg-white/10"
                 >
-                  Agregar producto
+                  + Agregar producto
                 </button>
 
                 {manualItems.length > 0 && (
-                  <div className="space-y-2 rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+                  <div className="space-y-1.5 rounded-lg border border-white/10 bg-white/5 p-3">
                     {manualItems.map((item) => (
-                      <div
-                        key={item.menuItem.id}
-                        className="flex items-center justify-between gap-3 text-sm"
-                      >
-                        <span className="font-semibold text-zinc-800">
-                          {item.menuItem.name} x{item.quantity}
+                      <div key={item.menuItem.id} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="font-semibold text-zinc-300">
+                          {item.menuItem.name} ×{item.quantity}
                         </span>
-
                         <button
                           onClick={() =>
                             setManualItems((prev) =>
-                              prev.filter(
-                                (current) =>
-                                  current.menuItem.id !== item.menuItem.id
-                              )
+                              prev.filter((current) => current.menuItem.id !== item.menuItem.id)
                             )
                           }
-                          className="text-red-600"
+                          className="text-red-500/60 hover:text-red-400"
                         >
-                          <Trash2 size={16} />
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     ))}
-
-                    <div className="border-t border-zinc-200 pt-2 text-right font-bold">
+                    <div className="border-t border-white/10 pt-2 text-right text-sm font-bold text-zinc-200">
                       {formatPriceARS(manualTotal)}
                     </div>
                   </div>
@@ -2082,7 +2054,7 @@ window.onload = () => { window.print(); };
                 <button
                   onClick={createManualBill}
                   disabled={processing || !isOnline}
-                  className="h-12 w-full rounded-lg bg-zinc-950 font-bold text-white disabled:opacity-50"
+                  className="h-11 w-full rounded-lg bg-white/10 text-sm font-bold text-white hover:bg-white/15 disabled:opacity-50"
                 >
                   Crear cuenta
                 </button>
