@@ -687,13 +687,21 @@ const Cashier = () => {
     !Number.isFinite(currentPaymentAmount) || currentPaymentAmount <= 0;
 
   const splitProductSubtotal = useMemo(() => {
-    return selectedItems
-      .filter(
-        (item) =>
-          !item._cancelled &&
-          splitProductSelection[`${item._pedidoId}:${item._itemIndex}`]
-      )
-      .reduce((sum, item) => sum + getItemSubtotal(item as CashierOrderItem), 0);
+    const unitPriceMap = new Map<string, number>();
+    for (const item of selectedItems) {
+      if (!item._cancelled) {
+        const itemKey = `${item._pedidoId}:${item._itemIndex}`;
+        const qty = getItemQuantity(item as CashierOrderItem);
+        const subtotal = getItemSubtotal(item as CashierOrderItem);
+        unitPriceMap.set(itemKey, qty > 0 ? subtotal / qty : 0);
+      }
+    }
+    return Object.entries(splitProductSelection)
+      .filter(([, checked]) => checked)
+      .reduce((sum, [key]) => {
+        const itemKey = key.split(":").slice(0, 2).join(":");
+        return sum + (unitPriceMap.get(itemKey) ?? 0);
+      }, 0);
   }, [selectedItems, splitProductSelection]);
 
   const manualTotal = useMemo(() => {
@@ -2461,34 +2469,40 @@ window.onload = () => { window.print(); };
                       {splitMode === "productos" && (
                         <div className="space-y-2">
                           <p className="text-xs text-zinc-500">Seleccioná los productos a cobrar en esta parte:</p>
-                          {selectedItems.filter((i) => !i._cancelled).map((item) => {
-                            const key = `${item._pedidoId}:${item._itemIndex}`;
-                            const paid = !!splitPaidKeys[key];
-                            const checked = !paid && !!splitProductSelection[key];
-                            const subtotal = getItemSubtotal(item as CashierOrderItem);
-                            return (
-                              <label
-                                key={key}
-                                className={`flex items-center justify-between rounded-lg border px-3 py-2 ${paid ? "cursor-default border-zinc-100 bg-zinc-50 opacity-50" : "cursor-pointer border-zinc-200 bg-zinc-50"}`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    disabled={paid}
-                                    onChange={(e) =>
-                                      !paid && setSplitProductSelection((prev) => ({ ...prev, [key]: e.target.checked }))
-                                    }
-                                    className="h-4 w-4 rounded accent-zinc-900 disabled:cursor-not-allowed"
-                                  />
-                                  <span className={`text-sm font-semibold ${paid ? "line-through text-zinc-400" : "text-zinc-800"}`}>
-                                    {getItemName(item as CashierOrderItem)} × {getItemQuantity(item as CashierOrderItem)}
-                                  </span>
-                                  {paid && <span className="text-xs text-zinc-400">Ya cobrado</span>}
-                                </div>
-                                <span className={`text-sm font-bold ${paid ? "text-zinc-400" : ""}`}>{formatPriceARS(subtotal)}</span>
-                              </label>
-                            );
+                          {selectedItems.filter((i) => !i._cancelled).flatMap((item) => {
+                            const itemKey = `${item._pedidoId}:${item._itemIndex}`;
+                            const qty = getItemQuantity(item as CashierOrderItem);
+                            const itemSubtotal = getItemSubtotal(item as CashierOrderItem);
+                            const unitPrice = qty > 0 ? itemSubtotal / qty : 0;
+                            const name = getItemName(item as CashierOrderItem);
+                            return Array.from({ length: qty }, (_, unitIdx) => {
+                              const key = `${itemKey}:${unitIdx}`;
+                              const paid = !!splitPaidKeys[key];
+                              const checked = !paid && !!splitProductSelection[key];
+                              return (
+                                <label
+                                  key={key}
+                                  className={`flex items-center justify-between rounded-lg border px-3 py-2 ${paid ? "cursor-default border-zinc-100 bg-zinc-50 opacity-50" : "cursor-pointer border-zinc-200 bg-zinc-50"}`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      disabled={paid}
+                                      onChange={(e) =>
+                                        !paid && setSplitProductSelection((prev) => ({ ...prev, [key]: e.target.checked }))
+                                      }
+                                      className="h-4 w-4 rounded accent-zinc-900 disabled:cursor-not-allowed"
+                                    />
+                                    <span className={`text-sm font-semibold ${paid ? "line-through text-zinc-400" : "text-zinc-800"}`}>
+                                      {name}{qty > 1 ? ` (${unitIdx + 1}/${qty})` : ""}
+                                    </span>
+                                    {paid && <span className="text-xs text-zinc-400">Ya cobrado</span>}
+                                  </div>
+                                  <span className={`text-sm font-bold ${paid ? "text-zinc-400" : ""}`}>{formatPriceARS(unitPrice)}</span>
+                                </label>
+                              );
+                            });
                           })}
                           {splitProductSubtotal > 0 && (
                             <div className="rounded-lg border border-zinc-200 bg-white px-4 py-3">
