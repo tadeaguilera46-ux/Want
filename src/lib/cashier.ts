@@ -438,6 +438,17 @@ export const reopenCashierBill = async ({
       reopenedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+
+    // Unlock session so Caja can add new items via crearPedido
+    if (cuenta.sessionId) {
+      const sessionRef = doc(db, "restaurants", restaurantId, "sessions", cuenta.sessionId);
+      transaction.update(sessionRef, {
+        ordersLocked: false,
+        billRequested: false,
+        updatedAt: serverTimestamp(),
+      });
+    }
+
     writeAuditLog(transaction, {
       restaurantId,
       action: "cashier_bill_reopened",
